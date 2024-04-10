@@ -1,0 +1,284 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <title>hoge</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=RocknRoll+One&display=swap" rel="stylesheet">
+        <style>
+            body { 
+            
+            background-color: rgba(0, 0, 0, 0.99);
+            margin: 0px;
+            padding: 0px;
+            overflow: hidden;
+            font-family: 'RocknRoll One', sans-serif;
+            color:#aaddff;   
+            font-size: 64px;
+            color: #fff;
+            text-shadow: 6px 6px 0 #000,
+                         -2px 2px 0 #000,
+                         2px -2px 0 #000,
+                         -2px -2px 0 #000;
+            }
+            div#all{
+                height:100%;
+                background-color: rgba(0, 0, 0, 0);
+            }
+            table#title {
+                color: #aaddff;
+                background-color: rgba(0, 0, 100, 0.95);
+                background-color: #222;
+                background: linear-gradient(
+                    180deg
+                    ,rgba(0,0,60,0.9)
+                    ,rgba(35,85,155,0.9)
+                );
+                font-size: 64px;
+                line-height: 130%;
+                width:100%;
+            }
+            table#title td {
+                padding-left: 20px;
+                font-family:"LINE Seed JP App_TTF ExtraBold";
+            }
+            table#title tr:nth-child(1) {
+                padding: 50px;
+                font-size: 96px;
+                color: #ffffff;
+            }
+            table#title td:nth-child(2) {
+                color: #ffffff;
+            }
+            table#result {
+            	width:100%;
+                background-image: url("stat_bg.png");
+                background-color: rgba(0, 0, 30, 0.8);
+                background-repeat: repeat;
+                background-size: cover;
+                background-position: center;
+                background-blend-mode:overlay;
+            }
+            table#result td {
+            	white-space:nowrap;
+            }
+            table#result td:nth-child(1) {
+            	width:225px;
+                color: #ffddaa;
+                text-align: center;
+                padding-right:20px;
+            }
+            table#result td:nth-child(2) {
+            	width:40px;
+                padding-right:20px;
+            }
+            table#result td:nth-child(3) {
+            	overflow:hidden;
+            	text-overflow:ellipsis;
+            	max-width:90px;
+                color: #bbffee;
+            }
+            table#result td:nth-child(4) {
+                color: #aa22aa;
+            	width:10%;
+                text-align: right;
+                padding-right: 20px;
+            }
+            table#result td:nth-child(5) {
+            	width:15%;
+                font-size:48px;
+            }
+            .MAX{
+                animation-name: flashmax;
+                animation-duration: 0.4s;
+                animation-iteration-count: infinite;
+            }
+            @keyframes flashmax {
+                0%   { color: #ff2828; }
+                20%  { color: #d5ff28; }
+                40%  { color: #28ff7e; }
+                60%  { color: #2872ff; }
+                80%  { color: #d528ff; }
+                100% { color: #ff2828; }
+            }
+            .AAA{
+                color:#ffff28;
+            }
+            .AA{
+                color:#cccccc;
+            }
+            .A{
+                color:#2ddf71;
+            }
+            .B{
+                color:#aa22aa;
+            }
+            .C{
+                color:#aa22aa;
+                font-size: 0px; /* この行を消せば初Cも表示 */
+            }
+            .D{
+                color:#aa22aa;
+                font-size: 0px; /* この行を消せば初Dも表示 */
+            }
+            .E{
+                color:#aa22aa;
+                font-size: 0px; /* この行を消せば初Eも表示 */
+            }
+            .F{
+                color:#aa22aa;
+                font-size: 0px; /* この行を消せば初Fも表示 */
+            }
+            .fc{
+                animation-name: flashfc;
+                animation-duration: 0.2s;
+                animation-iteration-count: infinite;
+            }
+            @keyframes flashfc {
+                0%   { background-color: #ff2828; }
+                20%  { background-color: #d5ff28; }
+                40%  { background-color: #28ff7e; }
+                60%  { background-color: #2872ff; }
+                80%  { background-color: #d528ff; }
+                100% { background-color: #ff2828; }
+            }
+            .failed{
+                animation-name: flashfailed;
+                animation-duration: 0.08s;
+                animation-iteration-count: infinite;
+            }
+            @keyframes flashfailed {
+                0%   { background-color: #ff2828; }
+                50%  { background-color: #282828; }
+                100% { background-color: #ff2828; }
+            }
+            .ac{background-color: #ff66ff;}
+            .ec{background-color: #22ff22;}
+            .nc{background-color: #22ccff;}
+            .hc{background-color: #ffffff;}
+            .exh{
+                animation-name: flashexh;
+                animation-duration: 0.08s;
+                animation-iteration-count: infinite;
+            }
+            @keyframes flashexh {
+                0%   { background-color: #ff2828; }
+                50%  { background-color: #ffff28; }
+                100% { background-color: #ff2828; }
+            }
+            /* SP☆12地力表用のスタイル */
+            sp12hard{
+                color:#ff86b4;
+                padding: 0px;
+                font-size: 50px;
+            }
+            sp12clear{
+                color:#9ee7ff;
+                padding: 0px;
+                display: none;
+                font-size: 50px;
+            }
+        </style>
+    <body>
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+        <script>
+        function loadXml() {
+            var getxml = $.ajax({
+                url: './history.xml',
+                type: 'GET',
+                dataType: 'xml',
+                cache: false
+            });
+            getxml.done(function(xml){
+                // xmlデータからほしいデータをfindで探し処理
+                var out = "";
+                var notes = $(xml).find('Items notes');
+                var date = $(xml).find('Items date').text();
+                $($(xml).find("Items Result").get().reverse()).each(function(index, item){
+                    var lv = $(item).find('lv').text();
+                    var title = $(item).find('title').text();
+                    var lamp = $(item).find('lamp').text();
+                    var score = $(item).find('score').text();
+                    var diff = $(item).find('diff').text();
+                    var score_rate = parseFloat($(item).find('score_rate').text());
+                    if (lamp == "FAILED"){
+                        lamp = '<span class="failed">　</span>'
+                    }
+                    else if (lamp == "A-CLEAR"){
+                        lamp = '<span class="ac">　</span>'
+                    }
+                    else if (lamp == "E-CLEAR"){
+                        lamp = '<span class="ec">　</span>'
+                    }
+                    else if (lamp == "CLEAR"){
+                        lamp = '<span class="nc">　</span>'
+                    }
+                    else if (lamp == "H-CLEAR"){
+                        lamp = '<span class="hc">　</span>'
+                    }
+                    else if (lamp == "EXH-CLEAR"){
+                        lamp = '<span class="exh">　</span>'
+                    }
+                    else if (lamp == "F-COMBO"){
+                        lamp = '<span class="fc">　</span>'
+                    }
+                    else{ // Failed, No playは何も表示しない
+                        lamp = ''
+                    }
+                    if (score_rate > 88.88){
+                        score = '<span class="AAA">'+score+'</span>';
+                    }
+                    else if (score_rate > 77.77){
+                        score = '<span class="AA">'+score+'</span>';
+                    }
+                    else if (score_rate > 66.66){
+                        score = '<span class="A">'+score+'</span>';
+                    }
+                    else {
+                        score = '<span class="B">'+score+'</span>';
+                    }
+                    // テーブルに追加
+                    if (index == 26){ // 直近の27曲だけ表示としている。曲数はここから変更可能。
+                        return false;
+                    }
+                    out += '<tr>';
+                    out += '<td>'+lv+'</td>';
+                    out += '<td>'+lamp+'</td>';
+                    out += '<td>'+title+'</td>';
+                    out += '<td>'+score+'</td>';
+                    out += '<td>('+score_rate.toFixed(2)+'%)</td></tr>';
+                    out += '</tr>';
+                    });
+                $('notes').html(notes);
+                $('date').html(date);
+                $('#result tbody').html(out);
+            });
+            getxml.fail(function(err) {
+                // alert('failed');
+            });
+        }
+
+        window.addEventListener('DOMContentLoaded', function() {
+            var roopTimer = setInterval(loadXml, 1000);
+        });
+
+</script>
+</head>
+<body>
+  <div id="all">
+    <table id="title">
+      <tr>
+        <td><date></date></td>
+      </tr>
+      <tr>
+        <td>notes: <notes></notes></td>
+      </tr>
+    </table>
+    <table id="result">
+      <tbody>
+      </tbody>
+    </table>
+  </div>
+</body>
+</html>
