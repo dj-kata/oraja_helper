@@ -81,10 +81,10 @@ class Misc:
             txt (str): 変更後の文字列
         """
         try:
-            if src in self.gui.window.key_dict.keys():
-                self.gui.window[src].update(txt)
+            if src in self.window.key_dict.keys():
+                self.window[src].update(txt)
         except Exception:
-            pass
+            logger.debug(traceback.format_exc())
     
     def reload_score(self):
         conn = sqlite3.connect(self.settings.db_scorelog)
@@ -356,10 +356,18 @@ class Misc:
         ]
         layout = [
             [sg.Menubar(menuitems, key='menu')],
+            [par_text('playdata:'), par_text('OOO', key='db_state')],
             [par_text('date:'), par_text(f"{self.start_time.year}/{self.start_time.month:02d}/{self.start_time.day:02d}")],
             [par_text('notes:'), par_text(self.notes, key='notes')],
         ]
         self.window = sg.Window('oraja_helper', layout, grab_anywhere=True,return_keyboard_events=True,resizable=False,finalize=True,enable_close_attempted_event=True,icon=self.ico,location=(self.settings.lx, self.settings.ly))
+        if self.settings.is_valid():
+            self.update_text('db_state', 'OK')
+            self.window['db_state'].update(text_color='#0000ff')
+        else:
+            self.update_text('db_state', '見つかりません。beatoraja設定を確認してください。')
+            self.window['db_state'].update(text_color='#ff0000')
+
 
     def main(self):
         self.gui_main()
