@@ -54,6 +54,7 @@ class Misc:
         self.last = (datetime.datetime.now() - datetime.timedelta(minutes=0)).timestamp()
         self.result_log = []
         self.notes = 0
+        self.last_notes = 0
         self.ico=self.ico_path('icon.ico')
         self.write_xml()
 
@@ -271,6 +272,7 @@ class Misc:
                 f.write("<Items>\n")
                 f.write(f"    <date>{self.start_time.year}/{self.start_time.month:02d}/{self.start_time.day:02d}</date>\n")
                 f.write(f'    <notes>{self.notes}</notes>\n')
+                f.write(f'    <last_notes>{self.last_notes}</last_notes>\n')
                 for r in self.result_log:
                     title_esc = r[1].replace('&', '&amp;').replace('<','&lt;').replace('>','&gt;').replace('"','&quot;').replace("'",'&apos;')
                     f.write(f'    <Result>\n')
@@ -296,6 +298,7 @@ class Misc:
                     self.result_log.append(t)
                     judge = t[-1]
                     self.notes += judge[0] + judge[1] + judge[2]
+                    self.last_notes = judge[0] + judge[1] + judge[2]
 
     def update_settings(self, ev, val):
         """GUIから値を取得し、設定の更新を行う。
