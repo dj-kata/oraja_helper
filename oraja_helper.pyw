@@ -256,13 +256,19 @@ class Misc:
             title (str): 曲名
         """
         ans = None
-        for s in self.table_sl+self.table_insane:
+        for s in self.table_sl:
             if s[-1] == hash:
                 ans = s[0]
                 break
             #if s[1] == title:
             #    ans = s[0]
             #    break
+        if ans == None: # slで見つからなかった
+            md5 = self.df_song[self.df_song['sha256']==hash].tail(1).md5.values[0]
+            for s in self.table_insane:
+                if s[-1] == md5:
+                    ans = s[0]
+                    break
         return (ans, title)
     
     def write_xml(self):
