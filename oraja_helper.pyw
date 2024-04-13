@@ -210,13 +210,13 @@ class Misc:
             #self.update_info('存在しないURLが入力されました。ご確認をお願いします。')
 
     def parse(self, tmpdat):
-        hsh=tmpdat['sha256']
+        hsh=tmpdat['sha256'].values[0]
         tmpsc = self.df_sc[self.df_sc['sha256'] == hsh].tail(1)
         tmp = self.df_log[self.df_log['sha256'] == hsh].tail(1)
         #pre_score = tmp.oldscore.values[0]
         pre_score = (tmpsc.epg.values[0]+tmpsc.lpg.values[0])*2+(tmpsc.egr.values[0]+tmpsc.lgr.values[0])
         notes = tmpsc.notes.values[0]
-        info = self.df_song[self.df_song['sha256'] == hsh]
+        info = self.df_song[self.df_song['sha256'] == hsh].tail(1)
         title = info.title.values[0]
         lampid = tmpdat.clear#.values[0]
         judge = [
@@ -243,7 +243,7 @@ class Misc:
                     d = ''
                 ret.append([d, title, lamp[lampid], score, score-pre_score, score_rate, date, judge])
             except Exception:
-                continue
+                logger.debug(traceback.format_exc())
         return ret
 
     def get_difficulty(self, hash, title):
