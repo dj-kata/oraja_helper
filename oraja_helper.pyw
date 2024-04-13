@@ -87,6 +87,8 @@ class Misc:
             logger.debug(traceback.format_exc())
     
     def reload_score(self):
+        """プレーヤーのdbを一通りリロード
+        """
         conn = sqlite3.connect(self.settings.db_scorelog)
         self.df_log =pd.read_sql('SELECT * FROM scorelog', conn)
         conn = sqlite3.connect(self.settings.db_score)
@@ -294,13 +296,13 @@ class Misc:
     def check_db(self):
         update_time = os.path.getmtime(self.settings.db_score)
         if update_time > self.last: # 1曲プレーした時に通る
-            print('exec')
+            logger.debug('db updated')
             self.reload_score()
             self.last = update_time
             tmp = self.get_new_update(1)
             for t in tmp:
                 if t not in self.result_log:
-                    print('ret =',t)
+                    logger.debug('added: {t}')
                     self.result_log.append(t)
                     judge = t[-1]
                     self.notes += judge[0] + judge[1] + judge[2]
