@@ -271,6 +271,7 @@ class Misc:
                 if s[-1] == md5:
                     ans = s[0]
                     break
+        logger.debug(f'hash={hash}, ans={ans}, title={title}')
         return (ans, title)
     
     def write_xml(self):
@@ -302,11 +303,12 @@ class Misc:
             tmp = self.get_new_update(1)
             for t in tmp:
                 if t not in self.result_log:
-                    logger.debug('added: {t}')
+                    logger.debug(f'added: {t}')
                     self.result_log.append(t)
                     judge = t[-1]
                     self.notes += judge[0] + judge[1] + judge[2]
                     self.last_notes = judge[0] + judge[1] + judge[2]
+                    self.write_xml()
 
     def update_settings(self, ev, val):
         """GUIから値を取得し、設定の更新を行う。
@@ -411,7 +413,6 @@ class Misc:
     def check(self):
         while True:
             self.check_db()
-            self.write_xml()
             time.sleep(1)
 
 a = Misc()
