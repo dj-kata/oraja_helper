@@ -57,6 +57,7 @@ class Misc:
         self.last_notes = 0
         self.ico=self.ico_path('icon.ico')
         self.write_xml()
+        logger.debug('constructor end')
 
     def ico_path(self, relative_path:str):
         """アイコン表示用
@@ -97,6 +98,8 @@ class Misc:
         self.df_data =pd.read_sql('SELECT * FROM scoredatalog', conn)
 
     def load(self):
+        """DB(スコア、曲情報)及び難易度表を読み込む
+        """
         if self.settings.is_valid():
             conn = sqlite3.connect(self.settings.db_songdata)
             self.df_song =pd.read_sql('SELECT * FROM song', conn)
@@ -105,14 +108,7 @@ class Misc:
             conn = sqlite3.connect(self.settings.db_songinfo)
             self.df_info =pd.read_sql('SELECT * FROM information', conn)
 
-            conn = sqlite3.connect(self.settings.db_scorelog)
-            self.df_log =pd.read_sql('SELECT * FROM scorelog', conn)
-
-            conn = sqlite3.connect(self.settings.db_score)
-            self.df_sc =pd.read_sql('SELECT * FROM score', conn)
-
-            conn = sqlite3.connect(self.settings.db_scoredatalog)
-            self.df_data =pd.read_sql('SELECT * FROM scoredatalog', conn)
+            self.reload_score()
 
             self.table_sl = self.update_table("https://stellabms.xyz/sl/table.html")
             self.table_insane = self.update_table("https://mirai-yokohama.sakura.ne.jp/bms/insane_bms.html")
