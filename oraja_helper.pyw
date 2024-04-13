@@ -208,7 +208,10 @@ class Misc:
             #self.update_info('存在しないURLが入力されました。ご確認をお願いします。')
 
     def parse(self, tmpdat):
-        hsh=tmpdat['sha256'].values[0]
+        if type(tmpdat['sha256']) == str:
+            hsh = tmpdat['sha256']
+        else:
+            hsh=tmpdat['sha256'].values[0]
         tmpsc = self.df_sc[self.df_sc['sha256'] == hsh].tail(1)
         tmp = self.df_log[self.df_log['sha256'] == hsh].tail(1)
         #pre_score = tmp.oldscore.values[0]
