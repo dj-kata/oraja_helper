@@ -10,6 +10,7 @@ import logging, logging.handlers
 from functools import partial
 from tkinter import filedialog
 import threading
+import subprocess
 
 FONT = ('Meiryo',12)
 FONTs = ('Meiryo',8)
@@ -37,6 +38,12 @@ class gui_mode(Enum):
     init = 0
     main = 1
     settings = 2
+
+try:
+    with open('version.txt', 'r') as f:
+        SWVER = f.readline().strip()
+except Exception:
+    SWVER = "v?.?.?"
 
 class Misc:
     SONGDATA = '/mnt/d/bms/beatoraja/songdata.db'
@@ -74,6 +81,22 @@ class Misc:
             base_path = os.path.abspath(".")
         return os.path.join(base_path, relative_path)
 
+    def get_latest_version(self):
+        """GitHubから最新版のバージョンを取得する。
+
+        Returns:
+            str: バージョン番号
+        """
+        ret = None
+        url = 'https://github.com/dj-kata/oraja_helper/tags'
+        r = requests.get(url)
+        soup = BeautifulSoup(r.text,features="html.parser")
+        for tag in soup.find_all('a'):
+            if 'releases/tag/v.' in tag['href']:
+                ret = tag['href'].split('/')[-1]
+                break # 1番上が最新なので即break
+        return ret
+
     def update_text(self, src, txt):
         """sg.Textの更新用
 
@@ -81,11 +104,14 @@ class Misc:
             src (str): ソース名
             txt (str): 変更後の文字列
         """
+        ret = False
         try:
             if src in self.window.key_dict.keys():
                 self.window[src].update(txt)
+                ret = True
         except Exception:
             logger.debug(traceback.format_exc())
+        return ret
     
     def reload_score(self):
         """プレーヤーのdbを一通りリロード
@@ -304,9 +330,8 @@ class Misc:
     def check_db(self):
         if not self.settings.is_valid():
             logger.debug('設定ファイルが読み込めません')
-            self.update_text('db_state', '見つかりません。beatoraja設定を確認してください。')
-            self.window['db_state'].update(text_color='#ff0000')
-            return False
+            if self.update_text('db_state', '見つかりません。beatoraja設定を確認してください。'):
+                self.window['db_state'].update(text_color='#ff0000')
         update_time = os.path.getmtime(self.settings.db_score)
         if update_time > self.last: # 1曲プレーした時に通る
             logger.debug('dbfile updated')
@@ -374,7 +399,7 @@ class Misc:
         if self.window:
             self.window.close()
         menuitems = [
-            ['file',['settings', 'exit']]
+            ['file',['settings', 'アップデートを確認', 'exit']]
         ]
         layout = [
             [sg.Menubar(menuitems, key='menu')],
@@ -393,6 +418,7 @@ class Misc:
 
     def main(self):
         self.gui_main()
+        self.window.write_event_value('アップデートを確認', " ")
         self.th = threading.Thread(target=self.check, daemon=True)
         self.th.start()
         while True:
@@ -420,6 +446,22 @@ class Misc:
                 if tmp != '':
                     self.settings.dir_player = tmp
                     self.window['txt_dir_player'].update(tmp)
+
+            elif ev == 'アップデートを確認':
+                ver = self.get_latest_version()
+                if ver != SWVER:
+                    print(f'現在のバージョン: {SWVER}, 最新版:{ver}')
+                    ans = sg.popup_yes_no(f'アップデートが見つかりました。\n\n{SWVER} -> {ver}\n\nアプリを終了して更新します。', icon=self.ico)
+                    if ans == "Yes":
+                        #self.control_obs_sources('quit')
+                        if os.path.exists('update.exe'):
+                            logger.info('アップデート確認のため終了します')
+                            res = subprocess.Popen('update.exe')
+                            break
+                        else:
+                            sg.popup_error('update.exeがありません', icon=self.ico)
+                else:
+                    print(f'お使いのバージョンは最新です({SWVER})')
 
     def check(self):
         while True:
