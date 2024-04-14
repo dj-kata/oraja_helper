@@ -233,6 +233,14 @@ class Misc:
         return title, lampid, score, pre_score, score_rate, tmpdat.date, judge
 
     def get_new_update(self, num):
+        """df_dataから指定された個数の最新リザルトをreadして返す
+
+        Args:
+            num (int): いくつ読み込むか
+
+        Returns:
+            list: 1エントリが[難易度,タイトル,ランプ,スコア,スコア更新分,スコアレート,日付,判定内訳]のリスト
+        """
         ret = []
         for i in range(num):
             try:
@@ -294,9 +302,14 @@ class Misc:
                 f.write("</Items>\n")
 
     def check_db(self):
+        if not self.settings.is_valid():
+            logger.debug('設定ファイルが読み込めません')
+            self.update_text('db_state', '見つかりません。beatoraja設定を確認してください。')
+            self.window['db_state'].update(text_color='#ff0000')
+            return False
         update_time = os.path.getmtime(self.settings.db_score)
         if update_time > self.last: # 1曲プレーした時に通る
-            logger.debug('db updated')
+            logger.debug('dbfile updated')
             self.reload_score()
             self.last = update_time
             tmp = self.get_new_update(1)
@@ -386,7 +399,6 @@ class Misc:
             ev,val = self.window.read()
             self.update_settings(ev, val)
             self.settings.save()
-            self.update_text('notes', self.notes)
             if ev in (sg.WIN_CLOSED, 'Escape:27', '-WINDOW CLOSE ATTEMPTED-', 'exit'):
                 # 終了
                 if self.gui_mode == gui_mode.main:
@@ -412,6 +424,7 @@ class Misc:
     def check(self):
         while True:
             self.check_db()
+            self.update_text('notes', self.notes)
             time.sleep(1)
 
 a = Misc()
