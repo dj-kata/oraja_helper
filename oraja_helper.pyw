@@ -407,6 +407,7 @@ class Misc:
         layout = [
             [sg.Menubar(menuitems, key='menu')],
             [par_text('playdata:'), par_text('OOO', key='db_state')],
+            [par_text('難易度表: '), par_text(str(len(self.settings.table_url))), par_text(f'({len(self.difftable):,}譜面)')],
             [par_text('date:'), par_text(f"{self.start_time.year}/{self.start_time.month:02d}/{self.start_time.day:02d}")],
             [par_text('notes:'), par_text(self.notes, key='notes')],
         ]
