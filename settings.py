@@ -16,6 +16,7 @@ class BmsMiscSettings:
         self.port = ''
         self.host = 'localhost'
         self.wspass = ''
+        self.table_url = ['https://stellabms.xyz/sl/table.html', 'https://mirai-yokohama.sakura.ne.jp/bms/insane_bms.html']
         self.load()
         self.save()
 

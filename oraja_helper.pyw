@@ -4,6 +4,7 @@ import time, sys
 import pandas as pd
 from bs4 import BeautifulSoup
 from settings import *
+from obssocket import *
 import PySimpleGUI as sg
 from enum import Enum
 import logging, logging.handlers
@@ -55,6 +56,7 @@ class Misc:
         self.gui_mode = gui_mode.init
         self.window = None
         self.settings = BmsMiscSettings()
+        self.difftable = []
         self.update_db_settings()
         self.load()
         self.start_time = datetime.datetime.now()
@@ -126,6 +128,9 @@ class Misc:
     def load(self):
         """DB(スコア、曲情報)及び難易度表を読み込む
         """
+        if os.path.exists('difftable.pkl'):
+            with open('difftable.pkl', 'rb') as f:
+                self.difftable = pickle.load(f)
         if self.settings.is_valid():
             conn = sqlite3.connect(self.settings.db_songdata)
             self.df_song =pd.read_sql('SELECT * FROM song', conn)
@@ -135,9 +140,6 @@ class Misc:
             self.df_info =pd.read_sql('SELECT * FROM information', conn)
 
             self.reload_score()
-
-            self.table_sl = self.update_table("https://stellabms.xyz/sl/table.html")
-            self.table_insane = self.update_table("https://mirai-yokohama.sakura.ne.jp/bms/insane_bms.html")
 
     def check_url(self, url):
         flag = True
@@ -188,50 +190,56 @@ class Misc:
         else:
             print(f" (同梱譜面)")
 
-    def update_table(self, url):
-        try:
-            header_filename = self.get_header_filename(url)
-            if ('http://' in header_filename) or ('https://' in header_filename):
-                url_header = header_filename
-            else:
-                url_header = re.sub(url.split('/')[-1], header_filename, url)
-            ### header情報から難易度名などを取得
-            info = self.read_table_json(url_header)
-            if ('http://' in info['data_url']) or ('https://' in info['data_url']):
-                url_dst = info['data_url']
-            else:
-                url_dst = re.sub(url.split('/')[-1], info['data_url'], url)
-            self.songs = self.read_table_json(url_dst)
-            #print(f'url_header = {url_header}')
-            #print(f'url_dst = {url_dst}')
-
-            self.name = info['name']
-            self.symbol = info['symbol']
-            #print(f"name:{self.name}, symbol:{self.symbol}")
-
-            data = []
-            for s in self.songs:
-                has_sabun = ''
-                if s['url_diff'] != "":
-                    has_sabun = '○'
-                if 'proposer' in s.keys():
-                    proposer = s['proposer']
+    def update_table(self):
+        difftable = []
+        for url in self.settings.table_url:
+            logger.debug(f'getting: {url}')
+            try:
+                header_filename = self.get_header_filename(url)
+                if ('http://' in header_filename) or ('https://' in header_filename):
+                    url_header = header_filename
                 else:
-                    proposer = ''
-                if 'sha256' in s.keys():
-                    hashval = s['sha256']
-                elif 'md5' in s.keys():
-                    hashval = s['md5']
+                    url_header = re.sub(url.split('/')[-1], header_filename, url)
+                ### header情報から難易度名などを取得
+                info = self.read_table_json(url_header)
+                if ('http://' in info['data_url']) or ('https://' in info['data_url']):
+                    url_dst = info['data_url']
                 else:
-                    hashval = ''
-                onesong = [self.symbol+s['level'], s['title'], s['artist'], has_sabun, proposer, hashval]
-                data.append(onesong)
-            #self.window['table'].update(data)
-            #self.update_info(f'難易度表読み込み完了。({self.name})')
-            return data
-        except: # URLがおかしい
-            traceback.print_exc()
-            #self.update_info('存在しないURLが入力されました。ご確認をお願いします。')
+                    url_dst = re.sub(url.split('/')[-1], info['data_url'], url)
+                self.songs = self.read_table_json(url_dst)
+                #print(f'url_header = {url_header}')
+                #print(f'url_dst = {url_dst}')
+
+                self.name = info['name']
+                self.symbol = info['symbol']
+                #print(f"name:{self.name}, symbol:{self.symbol}")
+
+                for s in self.songs:
+                    has_sabun = ''
+                    if s['url_diff'] != "":
+                        has_sabun = '○'
+                    if 'proposer' in s.keys():
+                        proposer = s['proposer']
+                    else:
+                        proposer = ''
+                    if 'sha256' in s.keys():
+                        hashval = s['sha256']
+                    elif 'md5' in s.keys():
+                        hashval = s['md5']
+                    else:
+                        hashval = ''
+                    onesong = [self.symbol+s['level'], s['title'], s['artist'], has_sabun, proposer, hashval]
+                    difftable.append(onesong)
+                #self.window['table'].update(data)
+                #self.update_info(f'難易度表読み込み完了。({self.name})')
+            except: # URLがおかしい
+                traceback.print_exc()
+                #self.update_info('存在しないURLが入力されました。ご確認をお願いします。')
+        self.difftable = difftable
+        logger.debug('end')
+        with open('difftable.pkl', 'wb') as f:
+            pickle.dump(difftable, f)
+        return difftable
 
     def parse(self, tmpdat):
         if type(tmpdat['sha256']) == str:
@@ -281,7 +289,7 @@ class Misc:
                 logger.debug(traceback.format_exc())
         return ret
 
-    def get_difficulty(self, hash, title):
+    def get_difficulty(self, sha256, title):
         """self.df_logのidxを受けて、その譜面の難易度を返す
 
         Args:
@@ -291,20 +299,13 @@ class Misc:
             title (str): 曲名
         """
         ans = None
-        for s in self.table_sl:
-            if s[-1] == hash:
+        md5 = '' # 初期化しておく
+        for s in self.difftable:
+            md5 = self.df_song[self.df_song['sha256']==sha256].tail(1).md5.values[0]
+            if s[-1] in (sha256, md5):
                 ans = s[0]
                 break
-            #if s[1] == title:
-            #    ans = s[0]
-            #    break
-        if ans == None: # slで見つからなかった
-            md5 = self.df_song[self.df_song['sha256']==hash].tail(1).md5.values[0]
-            for s in self.table_insane:
-                if s[-1] == md5:
-                    ans = s[0]
-                    break
-        logger.debug(f'hash={hash}, ans={ans}, title={title}')
+        logger.debug(f'sha256={sha256}, md5={md5}, ans={ans}, title={title}')
         return (ans, title)
     
     def write_xml(self):
@@ -391,6 +392,8 @@ class Misc:
             [sg.Text(self.settings.dir_oraja, key='txt_dir_oraja')],
             [par_text('playerフォルダ'), sg.Button('変更', key='btn_dir_player')],
             [sg.Text(self.settings.dir_player, key='txt_dir_player')],
+            [par_text('難易度表URL'), sg.Input('', key='input_url', size=(50,1))],
+            [sg.Listbox(self.settings.table_url, key='list_url', size=(50,4)), sg.Column([[par_btn('add', key='add_url'), par_btn('del', key='del_url'), par_btn('reload', key='reload_table')]])],
         ]
         self.window = sg.Window('oraja_helper', layout, grab_anywhere=True,return_keyboard_events=True,resizable=False,finalize=True,enable_close_attempted_event=True,icon=self.ico,location=(self.settings.lx, self.settings.ly))
 
@@ -446,6 +449,17 @@ class Misc:
                 if tmp != '':
                     self.settings.dir_player = tmp
                     self.window['txt_dir_player'].update(tmp)
+            
+            elif ev == 'add_url': # 難易度表追加
+                self.settings.table_url.append(val['input_url'])
+                self.settings.table_url = sorted(list(set(self.settings.table_url)))
+                self.window['list_url'].update(self.settings.table_url)
+            elif ev == 'del_url': # 難易度表削除
+                idx = self.settings.table_url.index(val['list_url'][0])
+                self.settings.table_url.pop(idx)
+                self.window['list_url'].update(self.settings.table_url)
+            elif ev == 'reload_table':
+                self.update_table()
 
             elif ev == 'アップデートを確認':
                 ver = self.get_latest_version()
@@ -471,8 +485,9 @@ class Misc:
 
 a = Misc()
 if a.settings.is_valid():
-    x = a.get_new_update(1)
-    print(x)
+    x = a.get_new_update(3)
+    for xx in x:
+        print(xx)
 #
 #tmpdat = a.df_data.tail(1)
 #hsh=tmpdat.sha256.values[0]
