@@ -383,6 +383,22 @@ class Misc:
         else:
             print('Error! dbファイル登録失敗')
 
+    def tweet(self):
+        sum_judge = [0, 0, 0, 0, 0, 0]
+        for t in self.result_log:
+            judge = t[-1]
+            for i in range(6):
+                sum_judge[i] += judge[i]
+        today_notes = sum_judge[0]+sum_judge[1]+sum_judge[2]
+        score_rate = 0
+        if (sum_judge[0]+sum_judge[1]+sum_judge[2]+sum_judge[-1]) > 0:
+            score_rate = 100*sum_judge[0]*2+sum_judge[1] / (sum_judge[0]+sum_judge[1]+sum_judge[2]+sum_judge[-1]) / 2
+        msg = f"今日は{today_notes:,}ノーツ叩きました。スコアレート: {score_rate:.2f}%\n"
+        msg += f"(PG: {sum_judge[0]:,}, GR: {sum_judge[1]:,}, GD: {sum_judge[2]:,}, BD: {sum_judge[3]:,}, PR: {sum_judge[4]:,}, MISS: {sum_judge[5]:,})\n"
+        msg += '#oraja_helper\n'
+        encoded_msg = urllib.parse.quote(msg)
+        webbrowser.open(f"https://twitter.com/intent/tweet?text={encoded_msg}")
+
     def gui_settings(self):
         self.gui_mode = gui_mode.settings
         if self.window:
@@ -402,7 +418,7 @@ class Misc:
         if self.window:
             self.window.close()
         menuitems = [
-            ['file',['settings', 'アップデートを確認', 'exit']]
+            ['file',['今日の結果をツイート', 'settings', 'アップデートを確認', 'exit']]
         ]
         layout = [
             [sg.Menubar(menuitems, key='menu')],
@@ -477,6 +493,8 @@ class Misc:
                             sg.popup_error('update.exeがありません', icon=self.ico)
                 else:
                     print(f'お使いのバージョンは最新です({SWVER})')
+            elif ev == '今日の結果をツイート':
+                self.tweet()
 
     def check(self):
         while True:
