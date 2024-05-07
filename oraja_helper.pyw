@@ -449,6 +449,7 @@ class Misc:
                 # 終了
                 if self.gui_mode == gui_mode.main:
                     print('quit!')
+                    self.tweet()
                     #self.save_settings()
                     break
                 else:
