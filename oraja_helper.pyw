@@ -344,8 +344,8 @@ class Misc:
                     logger.debug(f'added: {t}')
                     self.result_log.append(t)
                     judge = t[-1]
-                    self.notes += judge[0] + judge[1] + judge[2]
-                    self.last_notes = judge[0] + judge[1] + judge[2]
+                    self.notes += judge[0] + judge[1] + judge[2] + judge[3] + judge[4]
+                    self.last_notes = judge[0] + judge[1] + judge[2] + judge[3] + judge[4]
                     self.write_xml()
 
     def update_settings(self, ev, val):
@@ -391,8 +391,8 @@ class Misc:
                 sum_judge[i] += judge[i]
         today_notes = sum_judge[0]+sum_judge[1]+sum_judge[2]
         score_rate = 0
-        if (sum_judge[0]+sum_judge[1]+sum_judge[2]+sum_judge[-1]) > 0:
-            score_rate = 100*sum_judge[0]*2+sum_judge[1] / (sum_judge[0]+sum_judge[1]+sum_judge[2]+sum_judge[-1]) / 2
+        if (sum_judge[0]+sum_judge[1]+sum_judge[2]+sum_judge[3]+sum_judge[4]) > 0:
+            score_rate = 100*(sum_judge[0]*2+sum_judge[1]) / (sum_judge[0]+sum_judge[1]+sum_judge[2]+sum_judge[3]+sum_judge[4]) / 2
         msg = f"今日は{today_notes:,}ノーツ叩きました。スコアレート: {score_rate:.2f}%\n"
         msg += f"(PG: {sum_judge[0]:,}, GR: {sum_judge[1]:,}, GD: {sum_judge[2]:,}, BD: {sum_judge[3]:,}, PR: {sum_judge[4]:,}, MISS: {sum_judge[5]:,})\n"
         msg += '#oraja_helper\n'
