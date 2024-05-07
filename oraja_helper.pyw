@@ -360,6 +360,7 @@ class Misc:
         if self.gui_mode == gui_mode.main:
             pass
         elif self.gui_mode == gui_mode.settings:
+            #self.settings.log_offset = val['log_offset']
             pass
             #self.settings['host'] = val['input_host']
             #self.settings['obs_port'] = val['obs_port']
@@ -389,7 +390,7 @@ class Misc:
             judge = t[-1]
             for i in range(6):
                 sum_judge[i] += judge[i]
-        today_notes = sum_judge[0]+sum_judge[1]+sum_judge[2]
+        today_notes = sum_judge[0]+sum_judge[1]+sum_judge[2]+sum_judge[3]+sum_judge[4]
         score_rate = 0
         if (sum_judge[0]+sum_judge[1]+sum_judge[2]+sum_judge[3]+sum_judge[4]) > 0:
             score_rate = 100*(sum_judge[0]*2+sum_judge[1]) / (sum_judge[0]+sum_judge[1]+sum_judge[2]+sum_judge[3]+sum_judge[4]) / 2
@@ -398,6 +399,26 @@ class Misc:
         msg += '#oraja_helper\n'
         encoded_msg = urllib.parse.quote(msg)
         webbrowser.open(f"https://twitter.com/intent/tweet?text={encoded_msg}")
+
+    def load_old_results(self):
+        """過去のリザルト(指定オフセット時刻まで)を本日のリザルトとして登録
+        """
+        date_target = self.start_time - datetime.timedelta(hours=float(self.settings.log_offset))
+        for _,row in self.df_data.iterrows():
+            if datetime.datetime.fromtimestamp(row['date']) >= date_target:
+                title, lampid, score, pre_score, score_rate, date, judge = self.parse(row)
+                d,t = self.get_difficulty(row['sha256'], title)
+                if d == None:
+                    d = ''
+                self.result_log.append([d, title, lamp[lampid], score, score-pre_score, score_rate, date, judge])
+        sum_judge = [0, 0, 0, 0, 0, 0]
+        for t in self.result_log:
+            judge = t[-1]
+            for i in range(6):
+                sum_judge[i] += judge[i]
+        self.notes = sum_judge[0]+sum_judge[1]+sum_judge[2]+sum_judge[3]+sum_judge[4]
+        self.update_text('notes', self.notes)
+        self.write_xml()
 
     def gui_settings(self):
         self.gui_mode = gui_mode.settings
@@ -408,6 +429,7 @@ class Misc:
             [sg.Text(self.settings.dir_oraja, key='txt_dir_oraja')],
             [par_text('playerフォルダ'), sg.Button('変更', key='btn_dir_player')],
             [sg.Text(self.settings.dir_player, key='txt_dir_player')],
+            #[par_text('起動時刻より前のリザルトも含める'), sg.Spin([i for i in range(25)],readonly=True, default_value=self.settings.log_offset,key='log_offset', enable_events=True, size=(4,1))],
             [par_text('難易度表URL'), sg.Input('', key='input_url', size=(50,1))],
             [sg.Listbox(self.settings.table_url, key='list_url', size=(50,4)), sg.Column([[par_btn('add', key='add_url'), par_btn('del', key='del_url'), par_btn('reload', key='reload_table')]])],
         ]
@@ -418,7 +440,8 @@ class Misc:
         if self.window:
             self.window.close()
         menuitems = [
-            ['file',['今日の結果をツイート', 'settings', 'アップデートを確認', 'exit']]
+            ['File',['settings', 'exit']],
+            ['Tool',['ノーツ数をTweet', 'アップデートを確認']]
         ]
         layout = [
             [sg.Menubar(menuitems, key='menu')],
@@ -434,7 +457,6 @@ class Misc:
         else:
             self.update_text('db_state', '見つかりません。beatoraja設定を確認してください。')
             self.window['db_state'].update(text_color='#ff0000')
-
 
     def main(self):
         self.gui_main()
@@ -504,15 +526,4 @@ class Misc:
             time.sleep(1)
 
 a = Misc()
-if a.settings.is_valid():
-    x = a.get_new_update(3)
-    for xx in x:
-        print(xx)
-#
-#tmpdat = a.df_data.tail(1)
-#hsh=tmpdat.sha256.values[0]
-#tmp=a.df_log[a.df_log['sha256']==hsh].tail(1)
-#tmpsc=a.df_sc[a.df_sc['sha256']==hsh].tail(1)
-
-#a.do()
 a.main()
