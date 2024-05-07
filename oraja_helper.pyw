@@ -361,6 +361,7 @@ class Misc:
             pass
         elif self.gui_mode == gui_mode.settings:
             #self.settings.log_offset = val['log_offset']
+            self.settings.tweet_on_exit = val['tweet_on_exit']
             pass
             #self.settings['host'] = val['input_host']
             #self.settings['obs_port'] = val['obs_port']
@@ -430,6 +431,7 @@ class Misc:
             [par_text('playerフォルダ'), sg.Button('変更', key='btn_dir_player')],
             [sg.Text(self.settings.dir_player, key='txt_dir_player')],
             #[par_text('起動時刻より前のリザルトも含める'), sg.Spin([i for i in range(25)],readonly=True, default_value=self.settings.log_offset,key='log_offset', enable_events=True, size=(4,1))],
+            [sg.Checkbox('終了時にツイート画面を開く', key='tweet_on_exit', default=self.settings.tweet_on_exit, enable_events=True)],
             [par_text('難易度表URL'), sg.Input('', key='input_url', size=(50,1))],
             [sg.Listbox(self.settings.table_url, key='list_url', size=(50,4)), sg.Column([[par_btn('add', key='add_url'), par_btn('del', key='del_url'), par_btn('reload', key='reload_table')]])],
         ]
@@ -471,7 +473,8 @@ class Misc:
                 # 終了
                 if self.gui_mode == gui_mode.main:
                     print('quit!')
-                    self.tweet()
+                    if self.settings.tweet_on_exit:
+                        self.tweet()
                     #self.save_settings()
                     break
                 else:
