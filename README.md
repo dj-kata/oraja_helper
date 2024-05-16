@@ -3,7 +3,7 @@ beatorajaのプレーログ及び、その日に叩いたノーツ数をOBSで�
 ゲーム画面のキャプチャではなく、beatorajaのdbファイルを監視してデータを取得しています。  
 
 リザルトからノーツ数を割り出しているので、選曲画面での空打ちがカウントされず、正確なノーツ数が出ます。  
-(pg+gr+gdのみ加算)
+(pg+gr+gd+bd+見逃しprのみ加算)
 
 OBSにこういう感じのやつが出せます。
 ![image](https://github.com/dj-kata/oraja_helper/assets/61326119/0f597d3c-27cf-48bb-8f08-5314028c195b)
@@ -14,20 +14,26 @@ https://twitter.com/cold_planet_/status/1777387654835007731/video/1
 # 設定方法
 1. [releaseページ](https://github.com/dj-kata/oraja_helper/releases)から一番上のoraja_helper.zipをDLし、好きなフォルダに解凍する
 2. oraja_helper.exeを実行する
-3. メニューバー->settingsよりbeatorajaのパスを指定する
+3. メニューバー->settingsよりbeatorajaのパス(本体、プレーヤーフォルダ)を指定する
+5. 必要に応じて、```終了時にツイート画面を開く```をチェックする。
 4. 必要に応じて、表示したい難易度表のURLを追加することもできます。reloadボタンを押すことで反映されます。
-5. OBSにtoday_result.htmlをD&Dする
+5. OBSにtoday_result.html(プレーログ表示)をD&Dする (-> 幅2000,高さ1500)
+6. 必要に応じてOBSにinfo.html(統計情報表示)をD&Dする (-> 幅1200,高さ162)
 
 初期設定後に一度再起動しないとdbの変更が取得されないかもしれません(調査中)
 
 ※一度上記設定を行っていれば、それ以降はoraja_helper.exeを実行するだけでOKです
 
 メイン画面にOKと出ていれば動いています。  
-![image](https://github.com/dj-kata/oraja_helper/assets/61326119/e7cc5707-4b93-4559-8e91-27c8e408d72a)
+![image](https://github.com/dj-kata/oraja_helper/assets/61326119/7acb4c0f-2039-42d8-8bfc-1390a830df85)
 
 beatorajaのパス設定は以下のようになっていればOKです。
-playerフォルダはdbファイルが入っているフォルダを指定してください。
-![image](https://github.com/dj-kata/oraja_helper/assets/61326119/3a8cc5f0-85f0-4ebf-ab79-abf10b788181)
+playerフォルダはdbファイルが入っているフォルダを指定してください。  
+![image](https://github.com/dj-kata/ytlive_helper/assets/61326119/6f7ee76e-77a6-4635-ac02-a3ecc102f403)
+
+自動ツイート設定をすると、oraja_helper終了時にブラウザ上で以下のようなツイート画面が出ます。  
+こちらの機能は```メニューバー内のTool->ノーツ数をTweet```からも利用できます。  
+![image](https://github.com/dj-kata/oraja_helper/assets/61326119/fb2bf031-0c06-4e1f-a963-e6997edad307)
 
 また、OBSでtoday_result.htmlのカスタムCSSに以下のプロパティを設定することで、表示する曲数を変更できます。
 
@@ -39,6 +45,11 @@ playerフォルダはdbファイルが入っているフォルダを指定して
 
 today_result.htmlは幅2000,高さ1500ぐらいを想定しています。
 (高さはもっと大きくすることもできます)
+
+info.htmlでは以下のような情報が表示されます。  
+幅1200,高さ162ぐらいを想定しています。  
+(幅はレイアウトに応じて変更してください)
+![image](https://github.com/dj-kata/oraja_helper/assets/61326119/fda9ce59-a35f-498f-b1cd-3e015520283e)
 
 # その他
 OBS連携機能も追加するかもしれません  
