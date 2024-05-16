@@ -309,12 +309,24 @@ class Misc:
         return (ans, title)
     
     def write_xml(self):
+        sum_judge = [0, 0, 0, 0, 0, 0]
+        for t in self.result_log:
+            judge = t[-1]
+            for i in range(6):
+                sum_judge[i] += judge[i]
+        score_rate = 0 # total
+        if (sum_judge[0]+sum_judge[1]+sum_judge[2]+sum_judge[3]+sum_judge[4]) > 0:
+            score_rate = 100*(sum_judge[0]*2+sum_judge[1]) / (sum_judge[0]+sum_judge[1]+sum_judge[2]+sum_judge[3]+sum_judge[4]) / 2
+        self.update_text('notes', self.notes)
+        self.update_text('score_rate', score_rate)
         if self.settings.is_valid():
             with open('history.xml', 'w', encoding='utf-8') as f:
                 f.write(f'<?xml version="1.0" encoding="utf-8"?>\n')
                 f.write("<Items>\n")
                 f.write(f"    <date>{self.start_time.year}/{self.start_time.month:02d}/{self.start_time.day:02d}</date>\n")
                 f.write(f'    <notes>{self.notes}</notes>\n')
+                f.write(f'    <total_score_rate>{score_rate:.2f}</total_score_rate>\n')
+                f.write(f'    <playcount>{len(self.result_log)}</playcount>\n')
                 f.write(f'    <last_notes>{self.last_notes}</last_notes>\n')
                 for r in self.result_log:
                     title_esc = r[1].replace('&', '&amp;').replace('<','&lt;').replace('>','&gt;').replace('"','&quot;').replace("'",'&apos;')
@@ -451,6 +463,7 @@ class Misc:
             [par_text('難易度表: '), par_text(str(len(self.settings.table_url))), par_text(f'({len(self.difftable):,}譜面)')],
             [par_text('date:'), par_text(f"{self.start_time.year}/{self.start_time.month:02d}/{self.start_time.day:02d}")],
             [par_text('notes:'), par_text(self.notes, key='notes')],
+            [par_text('score_rate:'), par_text('0.00', key='score_rate'), par_text('%')],
         ]
         self.window = sg.Window('oraja_helper', layout, grab_anywhere=True,return_keyboard_events=True,resizable=False,finalize=True,enable_close_attempted_event=True,icon=self.ico,location=(self.settings.lx, self.settings.ly))
         if self.settings.is_valid():
@@ -519,13 +532,12 @@ class Misc:
                             sg.popup_error('update.exeがありません', icon=self.ico)
                 else:
                     print(f'お使いのバージョンは最新です({SWVER})')
-            elif ev == '今日の結果をツイート':
+            elif ev == 'ノーツ数をTweet':
                 self.tweet()
 
     def check(self):
         while True:
             self.check_db()
-            self.update_text('notes', self.notes)
             time.sleep(1)
 
 a = Misc()
