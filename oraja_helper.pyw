@@ -318,7 +318,7 @@ class Misc:
         if (sum_judge[0]+sum_judge[1]+sum_judge[2]+sum_judge[3]+sum_judge[4]) > 0:
             score_rate = 100*(sum_judge[0]*2+sum_judge[1]) / (sum_judge[0]+sum_judge[1]+sum_judge[2]+sum_judge[3]+sum_judge[4]) / 2
         self.update_text('notes', self.notes)
-        self.update_text('score_rate', score_rate)
+        self.update_text('score_rate', f"{score_rate:.2f}")
         if self.settings.is_valid():
             with open('history.xml', 'w', encoding='utf-8') as f:
                 f.write(f'<?xml version="1.0" encoding="utf-8"?>\n')
