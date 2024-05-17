@@ -6,12 +6,15 @@ from bs4 import BeautifulSoup
 from settings import *
 from obssocket import *
 import PySimpleGUI as sg
+from PIL import ImageDraw, Image
 from enum import Enum
 import logging, logging.handlers
 from functools import partial
 from tkinter import filedialog
 import threading
 import subprocess
+import copy
+import imagehash
 
 FONT = ('Meiryo',12)
 FONTs = ('Meiryo',8)
@@ -39,6 +42,8 @@ class gui_mode(Enum):
     init = 0
     main = 1
     settings = 2
+    obs_control = 3
+    register_scene = 4
 
 try:
     with open('version.txt', 'r') as f:
@@ -55,6 +60,8 @@ class Misc:
     def __init__(self):
         self.gui_mode = gui_mode.init
         self.window = None
+        self.imgpath = os.getcwd()+'/out/capture.png'
+        self.obs = None
         self.settings = BmsMiscSettings()
         self.difftable = []
         self.update_db_settings()
@@ -82,6 +89,31 @@ class Misc:
         except Exception:
             base_path = os.path.abspath(".")
         return os.path.join(base_path, relative_path)
+
+    def connect_obs(self):
+        if not self.settings.enable_obs_control:
+            if self.obs != None:
+                self.obs.close()
+            self.obs = None
+            return False
+        if self.obs != None:
+            self.obs.close()
+            self.obs = None
+        try:
+            self.obs = OBSSocket(self.settings.host, self.settings.port, self.settings.passwd, self.settings.obs_source, self.imgpath)
+            if self.gui_mode == gui_mode.main:
+                self.update_text('obs_state', 'OK')
+                self.window['obs_state'].update(text_color='#0000ff')
+                logger.debug('OBSに接続しました')
+            return True
+        except:
+            logger.debug(traceback.format_exc())
+            self.obs = None
+            logger.debug('obs websocket error!')
+            if self.gui_mode == gui_mode.main:
+                self.update_text('obs_state', '接続されていません')
+                self.window['obs_state'].update(text_color='#ff0000')
+            return False
 
     def get_latest_version(self):
         """GitHubから最新版のバージョンを取得する。
@@ -374,10 +406,10 @@ class Misc:
         elif self.gui_mode == gui_mode.settings:
             #self.settings.log_offset = val['log_offset']
             self.settings.tweet_on_exit = val['tweet_on_exit']
-            pass
-            #self.settings['host'] = val['input_host']
-            #self.settings['obs_port'] = val['obs_port']
-            #self.settings['obs_password'] = val['obs_password']
+            self.settings.enable_obs_control = val['enable_obs_control']
+            self.settings.host = val['obs_host']
+            self.settings.port = val['obs_port']
+            self.settings.passwd = val['obs_passwd']
             #self.settings['on_memory'] = val['on_memory']
 
     def update_db_settings(self):
@@ -437,6 +469,12 @@ class Misc:
         self.gui_mode = gui_mode.settings
         if self.window:
             self.window.close()
+        layout_obs = [
+            [sg.Checkbox('OBS連携機能を利用する', key='enable_obs_control', default=self.settings.enable_obs_control, enable_events=True)],
+            [par_text('OBS host: '), sg.Input(self.settings.host, font=FONT, key='obs_host', size=(20,20))],
+            [par_text('OBS websocket port: '), sg.Input(self.settings.port, font=FONT, key='obs_port', size=(10,20))],
+            [par_text('OBS websocket password'), sg.Input(self.settings.passwd, font=FONT, key='obs_passwd', size=(20,20), password_char='*')],
+        ]
         layout = [
             [par_text('beatorajaインストール先'), sg.Button('変更', key='btn_dir_oraja')],
             [sg.Text(self.settings.dir_oraja, key='txt_dir_oraja')],
@@ -446,26 +484,177 @@ class Misc:
             [sg.Checkbox('終了時にツイート画面を開く', key='tweet_on_exit', default=self.settings.tweet_on_exit, enable_events=True)],
             [par_text('難易度表URL'), sg.Input('', key='input_url', size=(50,1))],
             [sg.Listbox(self.settings.table_url, key='list_url', size=(50,4)), sg.Column([[par_btn('add', key='add_url'), par_btn('del', key='del_url'), par_btn('reload', key='reload_table')]])],
+            [sg.Frame('OBS設定', layout=layout_obs, title_color='#000044')],
         ]
         self.window = sg.Window('oraja_helper', layout, grab_anywhere=True,return_keyboard_events=True,resizable=False,finalize=True,enable_close_attempted_event=True,icon=self.ico,location=(self.settings.lx, self.settings.ly))
+
+    def build_layout_one_scene(self, name, LR=None):
+        """OBS制御設定画面におけるシーン1つ分のGUIを出力する。
+
+        Args:
+            name (str): シーン名
+            LR (bool, optional): 開始、終了があるシーンかどうかを指定。 Defaults to None.
+
+        Returns:
+            list: pysimpleguiで使うレイアウトを格納した配列。
+        """
+        if LR == None:
+            sc = [
+                    sg.Column([[par_text('表示する')],[sg.Listbox(self.settings.obs_enable[name], key=f'obs_enable_{name}', size=(20,4))], [par_btn('add', key=f'add_enable_{name}'),par_btn('del', key=f'del_enable_{name}')]]),
+                    sg.Column([[par_text('消す')],[sg.Listbox(self.settings.obs_disable[name], key=f'obs_disable_{name}', size=(20,4))], [par_btn('add', key=f'add_disable_{name}'),par_btn('del', key=f'del_disable_{name}')]]),
+                ]
+        else:
+            scL = [[
+                    sg.Column([[par_text('表示する')],[sg.Listbox(self.settings.obs_enable[f'{name}0'], key=f'obs_enable_{name}0', size=(20,4))], [par_btn('add', key=f'add_enable_{name}0'),par_btn('del', key=f'del_enable_{name}0')]]),
+                    sg.Column([[par_text('消す')],[sg.Listbox(self.settings.obs_disable[f'{name}0'], key=f'obs_disable_{name}0', size=(20,4))], [par_btn('add', key=f'add_disable_{name}0'),par_btn('del', key=f'del_disable_{name}0')]]),
+                ]]
+            scR = [[
+                    sg.Column([[par_text('表示する')],[sg.Listbox(self.settings.obs_enable[f'{name}1'], key=f'obs_enable_{name}1', size=(20,4))], [par_btn('add', key=f'add_enable_{name}1'),par_btn('del', key=f'del_enable_{name}1')]]),
+                    sg.Column([[par_text('消す')],[sg.Listbox(self.settings.obs_disable[f'{name}1'], key=f'obs_disable_{name}1', size=(20,4))], [par_btn('add', key=f'add_disable_{name}1'),par_btn('del', key=f'del_disable_{name}1')]]),
+                ]]
+            sc = [
+                sg.Frame('開始時', scL, title_color='#440000'),sg.Frame('終了時', scR, title_color='#440000')
+            ]
+        layout_main = [
+                par_text('シーン:')
+                ,par_text(self.settings.obs_scene[name], size=(20, 1), key=f'obs_scene_{name}')
+                ,par_btn('set', key=f'set_scene_{name}')
+        ]
+        if LR != None:
+            layout_main.append(par_btn('シーン判定用画像登録', key=f'register_scene_{name}'))
+        ret = [
+            layout_main,
+            sc
+        ]
+        return ret
+
+    def gui_obs_control(self):
+        """OBS制御設定画面のGUIを起動する。
+        """
+        if self.obs == None:
+            sg.popup_error('OBSwebsocketの設定がされていません。\n設定画面を確認してください。')
+            return -1
+        self.gui_mode = gui_mode.init
+        if self.window:
+            self.window.close()
+        obs_scenes = []
+        obs_sources = []
+        if self.obs != None:
+            tmp = self.obs.get_scenes()
+            tmp.reverse()
+            for s in tmp:
+                obs_scenes.append(s['sceneName'])
+        layout_select = self.build_layout_one_scene('select', 0)
+        layout_play = self.build_layout_one_scene('play', 0)
+        layout_result = self.build_layout_one_scene('result', 0)
+        layout_boot = self.build_layout_one_scene('boot')
+        layout_quit = self.build_layout_one_scene('quit')
+        layout_obs2 = [
+            [par_text('シーンコレクション(起動時に切り替え):'), sg.Combo(self.obs.get_scene_collection_list(), key='scene_collection', size=(40,1), enable_events=True)],
+            [par_text('シーン:'), sg.Combo(obs_scenes, key='combo_scene', size=(40,1), enable_events=True)],
+            [par_text('ソース:'),sg.Combo(obs_sources, key='combo_source', size=(40,1))],
+            [par_text('ゲーム画面:'), par_text(self.settings.obs_source, size=(20,1), key='obs_source'), par_btn('set', key='set_obs_source')],
+            [sg.Frame('選曲画面',layout=layout_select, title_color='#000044')],
+            [sg.Frame('プレー中',layout=layout_play, title_color='#000044')],
+            [sg.Frame('リザルト画面',layout=layout_result, title_color='#000044')],
+        ]
+        layout_r = [
+            [sg.Frame('oraja_helper起動時', layout=layout_boot, title_color='#000044')],
+            [sg.Frame('oraja_helper終了時', layout=layout_quit, title_color='#000044')],
+        ]
+
+        col_l = sg.Column(layout_r)
+        col_r = sg.Column(layout_obs2)
+
+        layout = [
+            [col_l, col_r],
+            [sg.Text('', key='info', font=(None,9))]
+        ]
+        self.gui_mode = gui_mode.obs_control
+        self.window = sg.Window(f"oraja_helper - OBS制御設定", layout, grab_anywhere=True,return_keyboard_events=True,resizable=False,finalize=True,enable_close_attempted_event=True,icon=self.ico,location=(self.settings.lx, self.settings.ly))
+        if self.settings.obs_scene_collection != '':
+            self.window['scene_collection'].update(value=self.settings.obs_scene_collection)
+
+    def update_preview(self):
+        """シーン登録画面のプレビュー表示を更新する
+        """
+        self.preview = copy.copy(self.img_org)
+        self.trimmed = None
+        # 矩形を書き込む
+        try:
+            sx = int(self.window['sx'].get())
+            sy = int(self.window['sy'].get())
+            ex = int(self.window['ex'].get())
+            ey = int(self.window['ey'].get())
+            self.trimmed = self.img_org.crop((sx,sy,ex,ey))
+            self.settings.obs_target_hash[self.register_scene_name] = imagehash.average_hash(self.trimmed)
+            self.update_text('target_hash', self.settings.obs_target_hash[self.register_scene_name])
+            print(f"{self.register_scene_name}: {self.settings.obs_target_hash[self.register_scene_name]}")
+            draw = ImageDraw.Draw(self.preview)
+            draw.rectangle([(sx,sy),(ex,ey)], outline=(255,0,0),width=4)
+        except Exception:
+            print('矩形描画時にエラー。スキップします。')
+
+        # 縮小処理
+        w,h=self.preview.size
+        maxw=1200;maxh=900
+        if w > maxw:
+            h = int(maxw*h/w)
+            w = maxw
+        if h > maxh:
+            w = int(maxh*w/h)
+            h = maxh
+        self.preview = self.preview.resize((w,h))
+        # 出力
+        bio = io.BytesIO()
+        self.preview.save(bio, format='PNG')
+        self.window['image_register'].update(bio.getvalue())
+
+    def gui_register_scene(self, name):
+        self.gui_mode = gui_mode.init
+        self.register_scene_name = name # 記憶しておく
+        if self.window:
+            self.window.close()
+        layout_trim = [
+            [
+                par_text('sx'), sg.Input(self.settings.obs_trim[name][0], size=(5,1), key='sx', enable_events=True),
+                par_text('sy'), sg.Input(self.settings.obs_trim[name][1], size=(5,1), key='sy', enable_events=True),
+                par_text('ex'), sg.Input(self.settings.obs_trim[name][2], size=(5,1), key='ex', enable_events=True),
+                par_text('ey'), sg.Input(self.settings.obs_trim[name][3], size=(5,1), key='ey', enable_events=True),
+            ]
+        ]
+        layout = [
+            [
+                par_btn('保存', key='save_scene'),
+                par_btn('画像読み込み', key='read_image'),
+                sg.Frame('トリミング範囲', layout=layout_trim, title_color='#000044'),
+                par_text('hash:'),
+                par_text(self.settings.obs_target_hash[name], key='target_hash'),
+                par_text('判定しきい値'),
+                sg.Combo([i for i in range(33)], default_value=self.settings.obs_hash_threshold[name], key='hash_threshold')
+            ],
+            [sg.Image(None, key='image_register')]
+        ]
+        self.gui_mode = gui_mode.register_scene
+        self.window = sg.Window(f"oraja_helper - 判定用画像登録 (シーン:{name})", layout, grab_anywhere=True,return_keyboard_events=True,resizable=False,finalize=True,enable_close_attempted_event=True,icon=self.ico,location=(self.settings.lx, self.settings.ly), modal=True)
 
     def gui_main(self):
         self.gui_mode = gui_mode.main
         if self.window:
             self.window.close()
         menuitems = [
-            ['File',['settings', 'exit']],
+            ['File',['settings', 'OBS制御設定', 'exit']],
             ['Tool',['ノーツ数をTweet', 'アップデートを確認']]
         ]
         layout = [
             [sg.Menubar(menuitems, key='menu')],
-            [par_text('playdata:'), par_text('OOO', key='db_state')],
+            [par_text('playdata:'), par_text('OOO', key='db_state'),par_text('OBS連携:'), par_text('接続されていません', key='obs_state')],
             [par_text('難易度表: '), par_text(str(len(self.settings.table_url))), par_text(f'({len(self.difftable):,}譜面)')],
             [par_text('date:'), par_text(f"{self.start_time.year}/{self.start_time.month:02d}/{self.start_time.day:02d}")],
             [par_text('notes:'), par_text(self.notes, key='notes')],
             [par_text('score_rate:'), par_text('0.00', key='score_rate'), par_text('%')],
         ]
-        self.window = sg.Window('oraja_helper', layout, grab_anywhere=True,return_keyboard_events=True,resizable=False,finalize=True,enable_close_attempted_event=True,icon=self.ico,location=(self.settings.lx, self.settings.ly))
+        self.window = sg.Window(f'oraja_helper {SWVER}', layout, grab_anywhere=True,return_keyboard_events=True,resizable=False,finalize=True,enable_close_attempted_event=True,icon=self.ico,location=(self.settings.lx, self.settings.ly))
         if self.settings.is_valid():
             self.update_text('db_state', 'OK')
             self.window['db_state'].update(text_color='#0000ff')
@@ -476,6 +665,7 @@ class Misc:
     def main(self):
         self.gui_main()
         self.window.write_event_value('アップデートを確認', " ")
+        self.connect_obs()
         self.th = threading.Thread(target=self.check, daemon=True)
         self.th.start()
         while True:
@@ -490,11 +680,16 @@ class Misc:
                         self.tweet()
                     #self.save_settings()
                     break
+                elif self.gui_mode == gui_mode.register_scene:
+                    self.gui_obs_control()
                 else:
                     self.update_db_settings()
                     self.gui_main()
+                    self.connect_obs()
             elif ev == 'settings':
                 self.gui_settings()
+            elif ev == 'OBS制御設定':
+                self.gui_obs_control()
             elif ev == 'btn_dir_oraja':
                 tmp = filedialog.askdirectory()
                 if tmp != '':
@@ -516,6 +711,90 @@ class Misc:
                 self.window['list_url'].update(self.settings.table_url)
             elif ev == 'reload_table':
                 self.update_table()
+
+            elif ev.startswith('register_scene_'):
+                key = ev.split('register_scene_')[-1]
+                self.gui_register_scene(key)
+            elif ev == 'read_image':
+                tmp = filedialog.askopenfilename(filetypes=[(f'{self.register_scene_name}画面の判定用画像ファイル', "*.png;*.jpg;*.bmp")])
+                if tmp != '':
+                    self.img_org = Image.open(tmp)
+                    self.update_preview()
+            elif ev in ('sx', 'sy', 'ex', 'ey'):
+                self.update_preview()
+            elif ev == 'save_scene':
+                sx = self.window['sx'].get()
+                sy = self.window['sy'].get()
+                ex = self.window['ex'].get()
+                ey = self.window['ey'].get()
+                if sx.strip() != '':
+                    self.settings.obs_trim[self.register_scene_name][0] = sx
+                if sy.strip() != '':
+                    self.settings.obs_trim[self.register_scene_name][1] = sy
+                if ex.strip() != '':
+                    self.settings.obs_trim[self.register_scene_name][2] = ex
+                if ey.strip() != '':
+                    self.settings.obs_trim[self.register_scene_name][3] = ey
+                hash = self.window['target_hash'].get()
+                if hash != '':
+                    self.settings.obs_target_hash[self.register_scene_name] = hash
+                threshold = self.window['hash_threshold'].get()
+                if threshold != '':
+                    self.settings.obs_hash_threshold[self.register_scene_name] = threshold
+            elif ev == 'combo_scene': # シーン選択時にソース一覧を更新
+                if self.obs != None:
+                    sources = self.obs.get_sources(val['combo_scene'])
+                    self.window['combo_source'].update(values=sources)
+            elif ev == 'set_obs_source':
+                tmp = val['combo_source'].strip()
+                if tmp != "":
+                    self.settings.obs_source = tmp
+                    self.window['obs_source'].update(tmp)
+            elif ev.startswith('set_scene_'): # 各画面のシーンsetボタン押下時
+                tmp = val['combo_scene'].strip()
+                self.settings.obs_scene[ev.split('_')[-1]] = tmp
+                self.window[ev.replace('set_scene', 'obs_scene')].update(tmp)
+            elif ev.startswith('add_enable_') or ev.startswith('add_disable_'):
+                table_key = ev.replace('add', 'obs') # GUI上の要素名
+                tmp = val['combo_source'].strip() # play1みたいな識別子
+                key = ev.split('_')[-1]
+                if tmp != "":
+                    if 'enable' in ev:
+                        if tmp not in self.settings.obs_enable[key]:
+                            self.settings.obs_enable[key].append(tmp)
+                            self.window[table_key].update(self.settings.obs_enable[key])
+                    else:
+                        if tmp not in self.settings.obs_disable[key]:
+                            self.settings.obs_disable[key].append(tmp)
+                            self.window[table_key].update(self.settings.obs_disable[key])
+            elif ev.startswith('del_enable_') or ev.startswith('del_disable_'):
+                table_key = ev.replace('del', 'obs') # GUI上の要素名
+                key = ev.split('_')[-1] # play1みたいな識別子
+                if len(val[table_key]) > 0:
+                    tmp = val[table_key][0]
+                    if tmp != "":
+                        if 'enable' in ev:
+                            if tmp in self.settings.obs_enable[key]:
+                                self.settings.obs_enable[key].pop(self.settings.obs_enable[key].index(tmp))
+                                self.window[table_key].update(self.settings.obs_enable[key])
+                        else:
+                            if tmp in self.settings.obs_disable[key]:
+                                self.settings.obs_disable[key].pop(self.settings.obs_disable[key].index(tmp))
+                                self.window[table_key].update(self.settings.obs_disable[key])
+            elif ev == 'set_obs_source':
+                tmp = val['combo_source'].strip()
+                if tmp != "":
+                    self.settings.obs_source = tmp
+                    self.window['obs_source'].update(tmp)
+            elif ev == 'scene_collection': # シーンコレクションを選択
+                self.settings.obs_scene_collection = val[ev]
+                self.obs.set_scene_collection(val[ev]) # そのシーンコレクションに切り替え
+                obs_scenes = []
+                tmp = self.obs.get_scenes()
+                tmp.reverse()
+                for s in tmp:
+                    obs_scenes.append(s['sceneName'])
+                self.window['combo_scene'].update(values=obs_scenes) # シーン一覧を更新
 
             elif ev == 'アップデートを確認':
                 ver = self.get_latest_version()

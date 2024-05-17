@@ -13,12 +13,39 @@ class BmsMiscSettings:
         self.db_scorelog = ''
         self.db_scoredatalog = ''
         self.db_score    = ''
-        self.port = ''
-        self.host = 'localhost'
-        self.wspass = ''
         self.tweet_on_exit = False
         #self.log_offset = '0'
         self.table_url = ['https://stellabms.xyz/sl/table.html', 'https://mirai-yokohama.sakura.ne.jp/bms/insane_bms.html']
+
+        # OBS制御関連
+        self.enable_obs_control = False # OBS連動を有効にする
+        self.obs_source = ''
+        self.obs_scene_collection = ''
+        self.host = 'localhost'
+        self.port = '4444'
+        self.passwd = ''
+
+        self.obs_enable = {}
+        self.obs_disable = {}
+        self.obs_scene = {}
+        self.obs_trim = {}
+        self.obs_target_hash = {}
+        self.obs_hash_threshold = {}
+        for k in ('boot','select','play','result','quit'):
+            self.obs_target_hash[k] = None
+            self.obs_hash_threshold[k] = 10
+            self.obs_scene[k]   = ''
+            if k not in ('boot','quit'):
+                self.obs_trim[k] = ['0','0','1920','1080']
+                for n in range(2):
+                    key = f"{k}{n}"
+                    self.obs_enable[key]  = []
+                    self.obs_disable[key] = []
+            else:
+                key = k
+                self.obs_enable[key]  = []
+                self.obs_disable[key] = []
+            
         self.load()
         self.save()
 
