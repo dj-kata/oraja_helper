@@ -8,6 +8,11 @@ beatorajaのプレーログ及び、その日に叩いたノーツ数をOBSで�
 OBSにこういう感じのやつが出せます。
 ![image](https://github.com/dj-kata/oraja_helper/assets/61326119/0f597d3c-27cf-48bb-8f08-5314028c195b)
 
+v.1.0.6からOBSソースの自動制御にも対応しました。  
+選曲画面などのキャプチャ画像を登録することで、どんなスキンを使っていてもシーン検出ができます。  
+(~~それどころか、beatoraja以外の音ゲーでも動く気がします~~)
+詳しくは[wiki](https://github.com/dj-kata/oraja_helper/wiki/OBS%E9%80%A3%E6%90%BA%E6%A9%9F%E8%83%BD%E3%81%AE%E8%A8%AD%E5%AE%9A%E6%96%B9%E6%B3%95)を参照してください。
+
 動画
 https://twitter.com/cold_planet_/status/1777387654835007731/video/1
 
@@ -19,6 +24,7 @@ https://twitter.com/cold_planet_/status/1777387654835007731/video/1
 4. 必要に応じて、表示したい難易度表のURLを追加することもできます。reloadボタンを押すことで反映されます。
 5. OBSにtoday_result.html(プレーログ表示)をD&Dする (-> 幅2000,高さ1500)
 6. 必要に応じてOBSにinfo.html(統計情報表示)をD&Dする (-> 幅1200,高さ162)
+7. シーン(選曲、プレー、リザルト)ごとにOBSソースやシーンを自動制御したい場合は[wiki](https://github.com/dj-kata/oraja_helper/wiki/OBS%E9%80%A3%E6%90%BA%E6%A9%9F%E8%83%BD%E3%81%AE%E8%A8%AD%E5%AE%9A%E6%96%B9%E6%B3%95)を参考に設定する。
 
 初期設定後に一度再起動しないとdbの変更が取得されないかもしれません(調査中)
 
