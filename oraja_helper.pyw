@@ -629,9 +629,9 @@ class Misc:
             ex = int(self.window['ex'].get())
             ey = int(self.window['ey'].get())
             self.trimmed = self.img_org.crop((sx,sy,ex,ey))
-            self.settings.obs_target_hash[self.register_scene_name] = str(imagehash.average_hash(self.trimmed))
-            self.update_text('target_hash', self.settings.obs_target_hash[self.register_scene_name])
-            print(f"{self.register_scene_name}: {self.settings.obs_target_hash[self.register_scene_name]}")
+            hash = str(imagehash.average_hash(self.trimmed))
+            self.update_text('target_hash', hash)
+            print(f"{self.register_scene_name}: {hash}")
             draw = ImageDraw.Draw(self.preview)
             draw.rectangle([(sx,sy),(ex,ey)], outline=(255,0,0),width=4)
         except Exception:
@@ -690,7 +690,8 @@ class Misc:
         ]
         layout = [
             [sg.Menubar(menuitems, key='menu')],
-            [par_text('playdata:'), par_text('OOO', key='db_state'),par_text('OBS連携:'), par_text('接続されていません', key='obs_state')],
+            [par_text('playdata:'), par_text('OOO', key='db_state')],
+            [par_text('OBS連携:'), par_text('接続されていません', key='obs_state')],
             [par_text('難易度表: '), par_text(str(len(self.settings.table_url))), par_text(f'({len(self.difftable):,}譜面)')],
             [par_text('date:'), par_text(f"{self.start_time.year}/{self.start_time.month:02d}/{self.start_time.day:02d}")],
             [par_text('notes:'), par_text(self.notes, key='notes')],
@@ -726,6 +727,8 @@ class Misc:
                     #self.save_settings()
                     break
                 elif self.gui_mode == gui_mode.register_scene:
+                    self.img_org = None
+                    self.trimmed = None
                     self.gui_obs_control()
                 else:
                     self.update_db_settings()
