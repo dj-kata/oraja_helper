@@ -447,6 +447,7 @@ class Misc:
             #self.settings.log_offset = val['log_offset']
             self.settings.tweet_on_exit = val['tweet_on_exit']
             self.settings.enable_obs_control = val['enable_obs_control']
+            self.settings.save_on_capture = val['save_on_capture']
             self.settings.host = val['obs_host']
             self.settings.port = val['obs_port']
             self.settings.passwd = val['obs_passwd']
@@ -514,6 +515,7 @@ class Misc:
             [par_text('OBS host: '), sg.Input(self.settings.host, font=FONT, key='obs_host', size=(20,20))],
             [par_text('OBS websocket port: '), sg.Input(self.settings.port, font=FONT, key='obs_port', size=(10,20))],
             [par_text('OBS websocket password'), sg.Input(self.settings.passwd, font=FONT, key='obs_passwd', size=(20,20), password_char='*')],
+            [sg.Checkbox('キャプチャ画像をファイルに保存する', key='save_on_capture', default=self.settings.save_on_capture, enable_events=True, tooltip=f'オンメモリ処理のAPIが何故か遅いため、デフォルトはファイル出力のAPIを使っています。\nHDDの寿命が気になる方は外してください。\n割と動かない環境があります。')],
         ]
         layout = [
             [par_text('beatorajaインストール先'), sg.Button('変更', key='btn_dir_oraja')],

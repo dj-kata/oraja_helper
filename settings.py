@@ -14,6 +14,7 @@ class BmsMiscSettings:
         self.db_scoredatalog = ''
         self.db_score    = ''
         self.tweet_on_exit = False
+        self.save_on_capture = True
         #self.log_offset = '0'
         self.table_url = ['https://stellabms.xyz/sl/table.html', 'https://mirai-yokohama.sakura.ne.jp/bms/insane_bms.html']
 
