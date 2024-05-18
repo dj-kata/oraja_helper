@@ -45,6 +45,12 @@ class gui_mode(Enum):
     obs_control = 3
     register_scene = 4
 
+class detect_mode(Enum):
+    init = 0
+    select = 1
+    play = 2
+    result = 3
+
 try:
     with open('version.txt', 'r') as f:
         SWVER = f.readline().strip()
@@ -59,9 +65,13 @@ class Misc:
     SCORE    = '/mnt/d/bms/beatoraja/player/player1/score.db'
     def __init__(self):
         self.gui_mode = gui_mode.init
+        self.detect_mode = detect_mode.init
         self.window = None
         self.imgpath = os.getcwd()+'/out/capture.png'
         self.obs = None
+        self.img = None
+        self.th_obs = None
+        self.stop_thread = False
         self.settings = BmsMiscSettings()
         self.difftable = []
         self.update_db_settings()
@@ -90,15 +100,45 @@ class Misc:
             base_path = os.path.abspath(".")
         return os.path.join(base_path, relative_path)
 
-    def connect_obs(self):
-        if not self.settings.enable_obs_control:
-            if self.obs != None:
-                self.obs.close()
-            self.obs = None
+    def control_obs_sources(self, name:str):
+        """OBSソースの表示・非表示及びシーン切り替えを行う。
+        nameで適切なシーン名を指定する必要がある。
+
+        Args:
+            name (str): シーン名(boot,exit,play{0,1},select{0,1},result{0,1})
+
+        Returns:
+            bool: 正常終了していればTrue
+        """
+        if self.obs == None:
+            logger.debug('cannot connect to OBS -> exit')
             return False
+        logger.debug(f"name={name} (detect_mode={self.detect_mode.name})")
+        print(f"name={name} (detect_mode={self.detect_mode.name})")
+        name_common = name
+        if name[-1] in ('0','1'):
+            name_common = name[:-1]
+        scene = self.settings.obs_scene[name_common]
+        # TODO 前のシーンと同じなら変えないようにしたい
+        if scene != '':
+            self.obs.change_scene(scene)
+        # 非表示の制御
+        for s in self.settings.obs_disable[name]:
+            tmps, tmpid = self.obs.search_itemid(scene, s)
+            self.obs.disable_source(tmps,tmpid)
+        # 表示の制御
+        for s in self.settings.obs_enable[name]:
+            tmps, tmpid = self.obs.search_itemid(scene, s)
+            #self.obs.refresh_source(s)
+            self.obs.enable_source(tmps,tmpid)
+        return True
+    
+    def connect_obs(self):
         if self.obs != None:
             self.obs.close()
             self.obs = None
+        if not self.settings.enable_obs_control:
+            return False
         try:
             self.obs = OBSSocket(self.settings.host, self.settings.port, self.settings.passwd, self.settings.obs_source, self.imgpath)
             if self.gui_mode == gui_mode.main:
@@ -587,7 +627,7 @@ class Misc:
             ex = int(self.window['ex'].get())
             ey = int(self.window['ey'].get())
             self.trimmed = self.img_org.crop((sx,sy,ex,ey))
-            self.settings.obs_target_hash[self.register_scene_name] = imagehash.average_hash(self.trimmed)
+            self.settings.obs_target_hash[self.register_scene_name] = str(imagehash.average_hash(self.trimmed))
             self.update_text('target_hash', self.settings.obs_target_hash[self.register_scene_name])
             print(f"{self.register_scene_name}: {self.settings.obs_target_hash[self.register_scene_name]}")
             draw = ImageDraw.Draw(self.preview)
@@ -666,8 +706,11 @@ class Misc:
         self.gui_main()
         self.window.write_event_value('アップデートを確認', " ")
         self.connect_obs()
+        self.control_obs_sources('boot')
         self.th = threading.Thread(target=self.check, daemon=True)
         self.th.start()
+        self.th_obs = threading.Thread(target=self.detect, daemon=True)
+        self.th_obs.start()
         while True:
             ev,val = self.window.read()
             self.update_settings(ev, val)
@@ -813,11 +856,71 @@ class Misc:
                     print(f'お使いのバージョンは最新です({SWVER})')
             elif ev == 'ノーツ数をTweet':
                 self.tweet()
+        # 終了時処理
+        self.control_obs_sources('quit')
 
     def check(self):
         while True:
             self.check_db()
             time.sleep(1)
+
+    def read_source(self):
+        self.img = None
+        try:
+            if self.settings.save_on_capture:
+                self.obs.save_screenshot()
+                self.img = Image.open(self.imgpath)
+            else:
+                self.img = self.obs.get_screenshot()
+            return True
+        except Exception:
+            return False
+
+    def detect(self):
+        print('detectスレッド開始')
+        while True:
+            if not self.read_source():
+                time.sleep(0.1)
+                continue # エラー時はスキップ
+            if self.stop_thread:
+                print('break')
+                break
+            try:
+                if self.detect_mode == detect_mode.init:
+                    for mode in ['select', 'play', 'result']:
+                        if self.settings.obs_target_hash[mode] == None:
+                            continue
+                        tmp = self.img.crop(list(map(int, self.settings.obs_trim[mode])))
+                        hash = imagehash.average_hash(tmp)
+                        diff = abs(hash - imagehash.hex_to_hash(self.settings.obs_target_hash[mode])) 
+                        if diff <= self.settings.obs_hash_threshold[mode]:
+                            if mode == 'select':
+                                self.detect_mode = detect_mode.select
+                            elif mode == 'play':
+                                self.detect_mode = detect_mode.play
+                            elif mode == 'result':
+                                self.detect_mode = detect_mode.result
+                            print(f"mode:{mode}, hash:{hash}, diff:{diff}")
+                            print(f'init -> {self.detect_mode.name}')
+                            self.control_obs_sources(f'{mode}0')
+                            break
+                else:
+                    for mode in ['select', 'play', 'result']:
+                        if self.detect_mode.name == mode:
+                            tmp = self.img.crop(list(map(int, self.settings.obs_trim[mode])))
+                            hash = imagehash.average_hash(tmp)
+                            diff = abs(hash - imagehash.hex_to_hash(self.settings.obs_target_hash[mode])) 
+                            if diff > self.settings.obs_hash_threshold[mode]:
+                                print(f"mode:{mode}, hash:{hash}, diff:{diff}")
+                                print(f'{mode} -> init')
+                                self.control_obs_sources(f'{mode}1')
+                                self.detect_mode = detect_mode.init
+                                break
+            except Exception:
+                continue
+
+            time.sleep(0.1)
+        print('end')
 
 a = Misc()
 a.main()
