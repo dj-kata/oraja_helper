@@ -10,11 +10,11 @@ OBSにこういう感じのやつが出せます。
 
 v.1.0.6からOBSソースの自動制御にも対応しました。  
 選曲画面などのキャプチャ画像を登録することで、どんなスキンを使っていてもシーン検出ができます。  
-(~~それどころか、beatoraja以外の音ゲーでも動く気がします~~)
+(~~それどころか、beatoraja以外の音ゲーでも動く気がします~~)  
 詳しくは[wiki](https://github.com/dj-kata/oraja_helper/wiki/OBS%E9%80%A3%E6%90%BA%E6%A9%9F%E8%83%BD%E3%81%AE%E8%A8%AD%E5%AE%9A%E6%96%B9%E6%B3%95)を参照してください。
 
-動画
-https://twitter.com/cold_planet_/status/1777387654835007731/video/1
+プレーログ(today_result.html)+統計情報(info.html)+OBS制御の動作例(動画)  
+https://x.com/cold_planet_/status/1791741023158460618
 
 # 設定方法
 1. [releaseページ](https://github.com/dj-kata/oraja_helper/releases)から一番上のoraja_helper.zipをDLし、好きなフォルダに解凍する
