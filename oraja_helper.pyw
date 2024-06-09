@@ -77,6 +77,7 @@ class Misc:
         self.update_db_settings()
         self.load()
         self.start_time = datetime.datetime.now()
+        self.playtime = datetime.timedelta(seconds=0)
         self.last = (datetime.datetime.now() - datetime.timedelta(minutes=0)).timestamp()
         self.result_log = []
         self.notes = 0
@@ -482,6 +483,10 @@ class Misc:
             score_rate = 100*(sum_judge[0]*2+sum_judge[1]) / (sum_judge[0]+sum_judge[1]+sum_judge[2]+sum_judge[3]+sum_judge[4]) / 2
         msg = f"今日は{today_notes:,}ノーツ叩きました。スコアレート: {score_rate:.2f}%\n"
         msg += f"(PG: {sum_judge[0]:,}, GR: {sum_judge[1]:,}, GD: {sum_judge[2]:,}, BD: {sum_judge[3]:,}, PR: {sum_judge[4]:,}, MISS: {sum_judge[5]:,})\n"
+        if self.obs != None:
+            msg += f"uptime: {str(self.ontime).split('.')[0]}, playtime: {str(self.playtime).split('.')[0]}\n"
+        else:
+            msg += f"uptime: {str(self.ontime).split('.')[0]}\n"
         msg += '#oraja_helper\n'
         encoded_msg = urllib.parse.quote(msg)
         webbrowser.open(f"https://twitter.com/intent/tweet?text={encoded_msg}")
@@ -693,9 +698,10 @@ class Misc:
             [par_text('playdata:'), par_text('OOO', key='db_state')],
             [par_text('OBS連携:'), par_text('接続されていません', key='obs_state')],
             [par_text('難易度表: '), par_text(str(len(self.settings.table_url))), par_text(f'({len(self.difftable):,}譜面)')],
-            [par_text('date:'), par_text(f"{self.start_time.year}/{self.start_time.month:02d}/{self.start_time.day:02d}")],
+            [par_text('date:'), par_text(f"{self.start_time.year}/{self.start_time.month:02d}/{self.start_time.day:02d}"), par_text('(00:00:00)', key='ontime')],
             [par_text('notes:'), par_text(self.notes, key='notes')],
             [par_text('score_rate:'), par_text('0.00', key='score_rate'), par_text('%')],
+            [par_text('playtime:'), par_text('-', key='playtime')],
         ]
         self.window = sg.Window(f'oraja_helper {SWVER}', layout, grab_anywhere=True,return_keyboard_events=True,resizable=False,finalize=True,enable_close_attempted_event=True,icon=self.ico,location=(self.settings.lx, self.settings.ly))
         if self.settings.is_valid():
@@ -709,6 +715,8 @@ class Misc:
         self.gui_main()
         self.window.write_event_value('アップデートを確認', " ")
         self.connect_obs()
+        if type(self.obs) == OBSSocket:
+            self.obs.set_scene_collection(self.settings.obs_scene_collection)
         self.control_obs_sources('boot')
         self.th = threading.Thread(target=self.check, daemon=True)
         self.th.start()
@@ -834,6 +842,10 @@ class Misc:
                 if tmp != "":
                     self.settings.obs_source = tmp
                     self.window['obs_source'].update(tmp)
+            elif ev == '-ONTIME-':
+                self.update_text('ontime', f'({val[ev]})')
+            elif ev == '-PLAYTIME-':
+                self.update_text('playtime', f'{val[ev]}')
             elif ev == 'scene_collection': # シーンコレクションを選択
                 self.settings.obs_scene_collection = val[ev]
                 self.obs.set_scene_collection(val[ev]) # そのシーンコレクションに切り替え
@@ -867,6 +879,8 @@ class Misc:
     def check(self):
         while True:
             self.check_db()
+            self.ontime = datetime.datetime.now() - self.start_time
+            self.window.write_event_value('-ONTIME-', str(self.ontime).split('.')[0])
             time.sleep(1)
 
     def read_source(self):
@@ -903,6 +917,7 @@ class Misc:
                                 self.detect_mode = detect_mode.select
                             elif mode == 'play':
                                 self.detect_mode = detect_mode.play
+                                self.play_st = datetime.datetime.now()
                             elif mode == 'result':
                                 self.detect_mode = detect_mode.result
                             print(f"mode:{mode}, hash:{hash}, diff:{diff}")
@@ -920,10 +935,13 @@ class Misc:
                                 print(f'{mode} -> init')
                                 self.control_obs_sources(f'{mode}1')
                                 self.detect_mode = detect_mode.init
+                                if mode == 'play':
+                                    self.playtime += datetime.datetime.now() - self.play_st
                                 break
             except Exception:
                 continue
-
+            if self.detect_mode == detect_mode.play:
+                self.window.write_event_value('-PLAYTIME-', str(self.playtime + datetime.datetime.now() - self.play_st).split('.')[0])
             time.sleep(0.1)
         print('end')
 
