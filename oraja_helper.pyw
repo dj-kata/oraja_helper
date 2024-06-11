@@ -318,15 +318,19 @@ class Misc:
         if type(tmpdat['sha256']) == str:
             hsh = tmpdat['sha256']
         else:
-            hsh=tmpdat['sha256'].values[0]
+            hsh=tmpdat['sha256'].iloc[0]
         tmpsc = self.df_sc[self.df_sc['sha256'] == hsh].tail(1)
         tmp = self.df_log[self.df_log['sha256'] == hsh].tail(1)
-        #pre_score = tmp.oldscore.values[0]
-        pre_score = (tmpsc.epg.values[0]+tmpsc.lpg.values[0])*2+(tmpsc.egr.values[0]+tmpsc.lgr.values[0])
-        notes = tmpsc.notes.values[0]
+        #pre_score = tmp.oldscore.iloc[0]
+        pre_score = (tmpsc.epg.iloc[0]+tmpsc.lpg.iloc[0])*2+(tmpsc.egr.iloc[0]+tmpsc.lgr.iloc[0])
+        notes = tmpsc.notes.iloc[0]
+        logger.debug(f'hsh:{hsh}\n')
         info = self.df_song[self.df_song['sha256'] == hsh].tail(1)
-        title = info.title.values[0]
-        lampid = tmpdat.clear#.values[0]
+        logger.debug(f'type(info):{type(info)}')
+        if type(info) == pd.DataFrame:
+            logger.debug(f'info.shape:{info.shape}')
+        title = info.title.iloc[0]
+        lampid = tmpdat.clear#.iloc[0]
         judge = [
             tmpdat.epg+tmpdat.lpg,
             tmpdat.egr+tmpdat.lgr,
@@ -374,7 +378,7 @@ class Misc:
         ans = None
         md5 = '' # 初期化しておく
         for s in self.difftable:
-            md5 = self.df_song[self.df_song['sha256']==sha256].tail(1).md5.values[0]
+            md5 = self.df_song[self.df_song['sha256']==sha256].tail(1).md5.iloc[0]
             if s[-1] in (sha256, md5):
                 ans = s[0]
                 break
