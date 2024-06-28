@@ -186,6 +186,7 @@ class Misc:
                 ret = True
         except Exception:
             logger.debug(traceback.format_exc())
+            logger.debug(f'ops...src:{src}, txt:{txt}')
         return ret
     
     def reload_score(self):
@@ -329,7 +330,11 @@ class Misc:
         logger.debug(f'type(info):{type(info)}')
         if type(info) == pd.DataFrame:
             logger.debug(f'info.shape:{info.shape}')
-        title = info.title.iloc[0]
+        if info.shape[0] > 0:
+            title = info.title.iloc[0]
+        else:
+            title = info.title
+            logger.debug(f'shape[0]==0!!!, title={title}')
         lampid = tmpdat.clear#.iloc[0]
         judge = [
             tmpdat.epg+tmpdat.lpg,
@@ -394,8 +399,9 @@ class Misc:
         score_rate = 0 # total
         if (sum_judge[0]+sum_judge[1]+sum_judge[2]+sum_judge[3]+sum_judge[4]) > 0:
             score_rate = 100*(sum_judge[0]*2+sum_judge[1]) / (sum_judge[0]+sum_judge[1]+sum_judge[2]+sum_judge[3]+sum_judge[4]) / 2
-        self.update_text('notes', self.notes)
-        self.update_text('score_rate', f"{score_rate:.2f}")
+        if self.gui_mode == gui_mode.main:
+            self.update_text('notes', self.notes)
+            self.update_text('score_rate', f"{score_rate:.2f}")
         if self.settings.is_valid():
             with open('history.xml', 'w', encoding='utf-8') as f:
                 f.write(f'<?xml version="1.0" encoding="utf-8"?>\n')
@@ -405,6 +411,13 @@ class Misc:
                 f.write(f'    <total_score_rate>{score_rate:.2f}</total_score_rate>\n')
                 f.write(f'    <playcount>{len(self.result_log)}</playcount>\n')
                 f.write(f'    <last_notes>{self.last_notes}</last_notes>\n')
+                if self.playtime.seconds == 0:
+                    f.write(f'    <playtime>0</playtime>\n') # HTML側で処理しやすくしている
+                    f.write(f'    <pace>0</pace>\n')
+                else:
+                    f.write(f'    <playtime>{str(self.playtime).split(".")[0]}</playtime>\n')
+                    f.write(f'    <pace>{int(3600*self.notes/self.playtime.seconds)}</pace>\n')
+
                 for r in self.result_log:
                     title_esc = r[1].replace('&', '&amp;').replace('<','&lt;').replace('>','&gt;').replace('"','&quot;').replace("'",'&apos;')
                     f.write(f'    <Result>\n')
@@ -485,10 +498,14 @@ class Misc:
         score_rate = 0
         if (sum_judge[0]+sum_judge[1]+sum_judge[2]+sum_judge[3]+sum_judge[4]) > 0:
             score_rate = 100*(sum_judge[0]*2+sum_judge[1]) / (sum_judge[0]+sum_judge[1]+sum_judge[2]+sum_judge[3]+sum_judge[4]) / 2
+        if self.playtime.seconds == 0:
+            pace = 0
+        else:
+            pace = int(3600*self.notes/self.playtime.seconds)
         msg = f"今日は{today_notes:,}ノーツ叩きました。スコアレート: {score_rate:.2f}%\n"
         msg += f"(PG: {sum_judge[0]:,}, GR: {sum_judge[1]:,}, GD: {sum_judge[2]:,}, BD: {sum_judge[3]:,}, PR: {sum_judge[4]:,}, MISS: {sum_judge[5]:,})\n"
         if self.obs != None:
-            msg += f"uptime: {str(self.ontime).split('.')[0]}, playtime: {str(self.playtime).split('.')[0]}\n"
+            msg += f"uptime: {str(self.ontime).split('.')[0]}, playtime: {str(self.playtime).split('.')[0]}, pace: {pace:,}notes/h\n"
         else:
             msg += f"uptime: {str(self.ontime).split('.')[0]}\n"
         msg += '#oraja_helper\n'
@@ -901,6 +918,8 @@ class Misc:
 
     def detect(self):
         print('detectスレッド開始')
+        #self.obs.change_text('oraja_helper_playtime', "00:00:00")
+        #self.obs.change_text('oraja_helper_pace', f"0notes/h")
         while True:
             if not self.read_source():
                 time.sleep(0.1)
@@ -945,7 +964,11 @@ class Misc:
             except Exception:
                 continue
             if self.detect_mode == detect_mode.play:
-                self.window.write_event_value('-PLAYTIME-', str(self.playtime + datetime.datetime.now() - self.play_st).split('.')[0])
+                ret_playtime = str(self.playtime + datetime.datetime.now() - self.play_st).split('.')[0]
+                self.window.write_event_value('-PLAYTIME-', ret_playtime)
+                #self.obs.change_text('oraja_helper_playtime', ret_playtime)
+                #if (self.playtime + datetime.datetime.now() - self.play_st).seconds > 0:
+                #    self.obs.change_text('oraja_helper_pace', f"pace: {int(3600*self.notes/(self.playtime + datetime.datetime.now() - self.play_st).seconds)}notes/h")
             time.sleep(0.1)
         print('end')
 
