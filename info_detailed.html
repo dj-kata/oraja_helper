@@ -1,0 +1,119 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <title>hoge</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=RocknRoll+One&display=swap" rel="stylesheet">
+        <style>
+            body { 
+            
+            background-color: rgba(0, 0, 0, 0);
+            margin: 0px;
+            padding: 0px;
+            overflow: hidden;
+            font-family: 'RocknRoll One', sans-serif;
+            color:#aaddff;   
+            font-size: 64px;
+            color: #fff;
+            text-shadow: 6px 6px 0 #000,
+                         -2px 2px 0 #000,
+                         2px -2px 0 #000,
+                         -2px -2px 0 #000;
+            }
+            :root{
+                --num: 20;
+            }
+            div#all{
+                min-height:1480px;
+                background-color: rgba(0, 0, 0, 0);
+                overflow: hidden;
+            }
+            table#title {
+                color: #aaddff;
+                background-color: rgba(0, 0, 100, 0.95);
+                background-color: #222;
+                background: linear-gradient(
+                    180deg
+                    ,rgba(0,0,30,0.98)
+                    ,rgba(15,45,155,0.98)
+                );
+                font-size: 64px;
+                line-height: 100%;
+                text-align: center;
+                width:100%;
+                padding: 5px;
+                border: 4px solid #0c0c44;
+            }
+            table#title td {
+                font-family:"LINE Seed JP App_TTF ExtraBold";
+                width: 20%;
+            }
+            table#title tr:nth-child(1) {
+                font-size: 33px;
+                color: #ffffaa;
+            }
+            table#title tr:nth-child(2) {
+                font-size: 64px;
+                color: #ffffff;
+            }
+        </style>
+    <body>
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+        <script>
+        function loadXml() {
+            var getxml = $.ajax({
+                url: './history.xml',
+                type: 'GET',
+                dataType: 'xml',
+                cache: false
+            });
+            getxml.done(function(xml){
+                // xmlデータからほしいデータをfindで探し処理
+                var notes = $(xml).find('Items notes');
+                var date = $(xml).find('Items date').text();
+                var sr = $(xml).find('Items total_score_rate').text();
+                var plays = $(xml).find('Items playcount').text();
+                var playtime = $(xml).find('Items playtime').text();
+                var pace = $(xml).find('Items pace').text();
+
+                $('notes').html(notes);
+                $('plays').html(plays);
+                $('score_rate').html(sr);
+                $('date').html(date);
+                $('playtime').html(playtime);
+                $('pace').html(pace);
+            });
+            getxml.fail(function(err) {
+                // alert('failed');
+            });
+        }
+
+        window.addEventListener('DOMContentLoaded', function() {
+            var roopTimer = setInterval(loadXml, 1000);
+        });
+
+</script>
+</head>
+<body>
+  <div id="all">
+    <table id="title">
+      <tr>
+        <td>playtime</td>
+        <td>plays</td>
+        <td>notes</td>
+        <td>pace(n/h)</td>
+        <td>score rate</td>
+      </tr>
+      <tr>
+        <td><playtime></playtime></td>
+        <td><plays></plays></td>
+        <td><notes></notes></td>
+        <td><pace></pace></td>
+        <td><score_rate></score_rate> %</td>
+      </tr>
+    </table>
+  </div>
+</body>
+</html>
