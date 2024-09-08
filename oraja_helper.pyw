@@ -780,7 +780,7 @@ class Misc:
             
             elif ev == 'add_url': # 難易度表追加
                 self.settings.table_url.append(val['input_url'])
-                self.settings.table_url = sorted(list(set(self.settings.table_url)))
+                self.settings.table_url = list(set(self.settings.table_url))
                 self.window['list_url'].update(self.settings.table_url)
             elif ev == 'del_url': # 難易度表削除
                 idx = self.settings.table_url.index(val['list_url'][0])
