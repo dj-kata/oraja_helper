@@ -273,20 +273,26 @@ class Misc:
                 if ('http://' in header_filename) or ('https://' in header_filename):
                     url_header = header_filename
                 else:
-                    url_header = re.sub(url.split('/')[-1], header_filename, url)
+                    if url[-1] == '/': # 乱打難易度表など
+                        url_header = url + header_filename
+                    else:
+                        url_header = re.sub(url.split('/')[-1], header_filename, url)
                 ### header情報から難易度名などを取得
                 info = self.read_table_json(url_header)
+                logger.debug(info)
                 if ('http://' in info['data_url']) or ('https://' in info['data_url']):
                     url_dst = info['data_url']
                 else:
                     url_dst = re.sub(url.split('/')[-1], info['data_url'], url)
                 self.songs = self.read_table_json(url_dst)
-                #print(f'url_header = {url_header}')
-                #print(f'url_dst = {url_dst}')
+                logger.debug(f'url_header = {url_header}')
+                logger.debug(f'url_dst = {url_dst}')
 
                 self.name = info['name']
                 self.symbol = info['symbol']
-                #print(f"name:{self.name}, symbol:{self.symbol}")
+                if self.symbol == ' ':
+                    self.symbol = ''
+                logger.debug(f"name:{self.name}, symbol:{self.symbol}")
 
                 for s in self.songs:
                     has_sabun = ''
@@ -305,10 +311,10 @@ class Misc:
                     onesong = [self.symbol+s['level'], s['title'], s['artist'], has_sabun, proposer, hashval]
                     difftable.append(onesong)
                 #self.window['table'].update(data)
-                #self.update_info(f'難易度表読み込み完了。({self.name})')
+                logger.debug(f'難易度表読み込み完了。({self.name})')
             except: # URLがおかしい
                 traceback.print_exc()
-                #self.update_info('存在しないURLが入力されました。ご確認をお願いします。')
+                logger.debug('存在しないURLが入力されました。ご確認をお願いします。')
         self.difftable = difftable
         logger.debug('end')
         with open('difftable.pkl', 'wb') as f:
@@ -780,7 +786,7 @@ class Misc:
             
             elif ev == 'add_url': # 難易度表追加
                 self.settings.table_url.append(val['input_url'])
-                self.settings.table_url = list(set(self.settings.table_url))
+                #self.settings.table_url = list(set(self.settings.table_url))
                 self.window['list_url'].update(self.settings.table_url)
             elif ev == 'del_url': # 難易度表削除
                 idx = self.settings.table_url.index(val['list_url'][0])
