@@ -740,7 +740,6 @@ class Misc:
 
     def main(self):
         self.gui_main()
-        self.window.write_event_value('アップデートを確認', " ")
         self.connect_obs()
         if type(self.obs) == OBSSocket:
             self.obs.set_scene_collection(self.settings.obs_scene_collection)
@@ -749,6 +748,7 @@ class Misc:
         self.th.start()
         self.th_obs = threading.Thread(target=self.detect, daemon=True)
         self.th_obs.start()
+        self.window.write_event_value('アップデートを確認', " ")
         while True:
             ev,val = self.window.read()
             self.update_settings(ev, val)
