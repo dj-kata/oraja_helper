@@ -139,6 +139,18 @@
                 color:#aa22aa;
                 font-size: 0px; /* この行を消せば初Fも表示 */
             }
+            .perfect{
+                animation-name: flashperfect;
+                animation-duration: 0.2s;
+                animation-iteration-count: infinite;
+            }
+            @keyframes flashperfect {
+                0%   { background-color: #ffff77; }
+                25%  { background-color: #dddd33; }
+                50%  { background-color: #aaaa00; }
+                75%  { background-color: #dddd33; }
+                100% { background-color: #ffff77; }
+            }
             .fc{
                 animation-name: flashfc;
                 animation-duration: 0.2s;
@@ -233,6 +245,9 @@
                     }
                     else if (lamp == "F-COMBO"){
                         lamp = '<span class="fc">　</span>'
+                    }
+                    else if (lamp == "PERFECT"){
+                        lamp = '<span class="perfect">　</span>'
                     }
                     else{ // Failed, No playは何も表示しない
                         lamp = ''
