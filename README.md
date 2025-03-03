@@ -39,7 +39,8 @@ playerフォルダはdbファイルが入っているフォルダを指定して
 
 自動ツイート設定をすると、oraja_helper終了時にブラウザ上で以下のようなツイート画面が出ます。  
 こちらの機能は```メニューバー内のTool->ノーツ数をTweet```からも利用できます。  
-![image](https://github.com/dj-kata/oraja_helper/assets/61326119/fb2bf031-0c06-4e1f-a963-e6997edad307)
+![image](https://github.com/user-attachments/assets/b30eb7f1-6740-4321-88e6-0e218a734269)  
+※playtime(プレイ画面のみの合計時間)はOBS制御設定からプレイ画面の判定条件を登録した場合のみ表示されます。
 
 また、OBSでtoday_result.htmlのカスタムCSSに以下のプロパティを設定することで、表示する曲数を変更できます。
 
