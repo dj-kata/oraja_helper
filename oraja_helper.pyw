@@ -61,9 +61,9 @@ except Exception:
 class OneResult: 
     def __init__(self, title=None, difficulties=None
                  ,one_difficulty=None
-                 ,score=None, pre_score=None
-                 ,bp=None, pre_bp=None
-                 ,lamp=None, pre_lamp = None
+                 ,score=None, pre_score=0
+                 ,bp=None, pre_bp=999999
+                 ,lamp=None, pre_lamp = 0
                  ,score_rate=None, date=None, judge=None
                 ):
         self.title = title
@@ -343,6 +343,14 @@ class Misc:
         return difftable
 
     def parse(self, tmpdat) -> OneResult:
+        """df_dataの1エントリを受けてOneResultに格納して返す
+
+        Args:
+            tmpdat (DataFrame): 1プレイ分のデータ。判定はepg,lpgなどに入っている。
+
+        Returns:
+            OneResult: parseの結果
+        """
         if type(tmpdat['sha256']) == str:
             hsh = tmpdat['sha256']
         else:
@@ -350,8 +358,6 @@ class Misc:
         tmpsc = self.df_sc[self.df_sc['sha256'] == hsh].tail(1)
         tmp = self.df_log[self.df_log['sha256'] == hsh].tail(1)
         #pre_score = tmp.oldscore.iloc[0]
-        pre_score = (tmpsc.epg.iloc[0]+tmpsc.lpg.iloc[0])*2+(tmpsc.egr.iloc[0]+tmpsc.lgr.iloc[0])
-        pre_bp = tmpsc.ebd.iloc[0]+tmpsc.lbd.iloc[0]+tmpsc.epr.iloc[0]+tmpsc.lpr.iloc[0]+tmpsc.ems.iloc[0]+tmpsc.lms.iloc[0]
         notes = tmpsc.notes.iloc[0]
         logger.debug(f'hsh:{hsh}\n')
         info = self.df_song[self.df_song['sha256'] == hsh].tail(1)
@@ -374,8 +380,13 @@ class Misc:
         ]
         score = judge[0]*2+judge[1]
         bp    = judge[3]+judge[4]+judge[5]
+        bp   += (notes-judge[0]-judge[1]-judge[2]-judge[3]-judge[4]) # 完走していない場合は引く
         score_rate = f"{score/notes*100/2:.2f}"
-        ret = OneResult(title=title, lamp=lampid, score=score, pre_score=pre_score, score_rate=score_rate, date=tmpdat.date, judge=judge) # 使わない部分があってもとりあえずこいつに入れる
+        ret = OneResult(title=title, lamp=lampid, score=score, score_rate=score_rate, date=tmpdat.date, judge=judge, bp=bp)
+        if tmpdat['playcount'] > 1:
+            ret.pre_score = tmp.oldscore.max()
+            ret.pre_bp = tmp.oldminbp.min()
+            ret.pre_lamp = tmp.oldclear.max()
         return ret
         #return title, lampid, score, pre_score, score_rate, tmpdat.date, judge
 
@@ -425,7 +436,7 @@ class Misc:
     def write_xml(self):
         sum_judge = [0, 0, 0, 0, 0, 0]
         for t in self.result_log:
-            judge = t[-1]
+            judge = t.judge
             for i in range(6):
                 sum_judge[i] += judge[i]
         score_rate = 0 # total
@@ -451,14 +462,18 @@ class Misc:
                     f.write(f'    <pace>{int(3600*self.notes/self.playtime.seconds)}</pace>\n')
 
                 for r in self.result_log:
-                    title_esc = r[1].replace('&', '&amp;').replace('<','&lt;').replace('>','&gt;').replace('"','&quot;').replace("'",'&apos;')
+                    title_esc = r.title.replace('&', '&amp;').replace('<','&lt;').replace('>','&gt;').replace('"','&quot;').replace("'",'&apos;')
                     f.write(f'    <Result>\n')
-                    f.write(f'        <lv>{r[0]}</lv>\n')
+                    f.write(f'        <lv>{r.one_difficulty}</lv>\n')
                     f.write(f'        <title>{title_esc}</title>\n')
-                    f.write(f'        <lamp>{r[2]}</lamp>\n')
-                    f.write(f'        <score>{r[3]}</score>\n')
-                    f.write(f'        <diff>{r[4]:+}</diff>\n')
-                    f.write(f'        <score_rate>{float(r[5]):.2f}</score_rate>\n')
+                    f.write(f'        <lamp>{r.lamp}</lamp>\n')
+                    f.write(f'        <pre_lamp>{r.pre_lamp}</pre_lamp>\n')
+                    f.write(f'        <score>{r.score}</score>\n')
+                    f.write(f'        <pre_score>{r.pre_score}</pre_score>\n')
+                    f.write(f'        <bp>{r.bp}</bp>\n')
+                    f.write(f'        <pre_bp>{r.pre_bp}</pre_bp>\n')
+                    f.write(f'        <diff>{r.score-r.pre_score:+}</diff>\n')
+                    f.write(f'        <score_rate>{float(r.score_rate):.2f}</score_rate>\n')
                     f.write('    </Result>\n')
                 f.write("</Items>\n")
 
@@ -523,7 +538,7 @@ class Misc:
     def tweet(self):
         sum_judge = [0, 0, 0, 0, 0, 0]
         for t in self.result_log:
-            judge = t[-1]
+            judge = t.judge
             for i in range(6):
                 sum_judge[i] += judge[i]
         today_notes = sum_judge[0]+sum_judge[1]+sum_judge[2]+sum_judge[3]+sum_judge[4]
