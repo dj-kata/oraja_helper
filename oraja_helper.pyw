@@ -57,6 +57,27 @@ try:
 except Exception:
     SWVER = "v?.?.?"
 
+# 1つのリザルトに対応
+class OneResult: 
+    def __init__(self, title=None, difficulties=None
+                 ,one_difficulty=None
+                 ,score=None, pre_score=None
+                 ,bp=None, pre_bp=None
+                 ,lamp=None, pre_lamp = None
+                 ,score_rate=None, date=None, judge=None
+                ):
+        self.title = title
+        self.difficulties = difficulties
+        self.one_difficulty = one_difficulty
+        self.score = score
+        self.pre_score = pre_score
+        self.bp = bp
+        self.pre_bp = pre_bp
+        self.lamp = lamp
+        self.pre_lamp = pre_lamp
+        self.score_rate = score_rate
+        self.date = date
+        self.judge = judge
 class Misc:
     SONGDATA = '/mnt/d/bms/beatoraja/songdata.db'
     SONGINFO = '/mnt/d/bms/beatoraja/songinfo.db'
@@ -321,7 +342,7 @@ class Misc:
             pickle.dump(difftable, f)
         return difftable
 
-    def parse(self, tmpdat):
+    def parse(self, tmpdat) -> OneResult:
         if type(tmpdat['sha256']) == str:
             hsh = tmpdat['sha256']
         else:
@@ -330,6 +351,7 @@ class Misc:
         tmp = self.df_log[self.df_log['sha256'] == hsh].tail(1)
         #pre_score = tmp.oldscore.iloc[0]
         pre_score = (tmpsc.epg.iloc[0]+tmpsc.lpg.iloc[0])*2+(tmpsc.egr.iloc[0]+tmpsc.lgr.iloc[0])
+        pre_bp = tmpsc.ebd.iloc[0]+tmpsc.lbd.iloc[0]+tmpsc.epr.iloc[0]+tmpsc.lpr.iloc[0]+tmpsc.ems.iloc[0]+tmpsc.lms.iloc[0]
         notes = tmpsc.notes.iloc[0]
         logger.debug(f'hsh:{hsh}\n')
         info = self.df_song[self.df_song['sha256'] == hsh].tail(1)
@@ -351,8 +373,11 @@ class Misc:
             tmpdat.ems+tmpdat.lms,
         ]
         score = judge[0]*2+judge[1]
+        bp    = judge[3]+judge[4]+judge[5]
         score_rate = f"{score/notes*100/2:.2f}"
-        return title, lampid, score, pre_score, score_rate, tmpdat.date, judge
+        ret = OneResult(title=title, lamp=lampid, score=score, pre_score=pre_score, score_rate=score_rate, date=tmpdat.date, judge=judge) # 使わない部分があってもとりあえずこいつに入れる
+        return ret
+        #return title, lampid, score, pre_score, score_rate, tmpdat.date, judge
 
     def get_new_update(self, num):
         """df_dataから指定された個数の最新リザルトをreadして返す
@@ -368,11 +393,12 @@ class Misc:
             try:
                 idx = len(self.df_data) - num + i
                 tmp = self.df_data.loc[idx, :]
-                title, lampid, score, pre_score, score_rate, date, judge = self.parse(tmp)
-                d,t = self.get_difficulty(tmp.sha256, title)
+                ret_one = self.parse(tmp)
+                d,t = self.get_difficulty(tmp.sha256, ret_one.title)
                 if d == None:
                     d = ''
-                ret.append([d, title, lamp[lampid], score, score-pre_score, score_rate, date, judge])
+                ret_one.one_difficulty = d
+                ret.append(ret_one)
             except Exception:
                 logger.debug(traceback.format_exc())
         return ret
@@ -451,7 +477,7 @@ class Misc:
                 if t not in self.result_log:
                     logger.debug(f'added: {t}')
                     self.result_log.append(t)
-                    judge = t[-1]
+                    judge = t.judge
                     self.notes += judge[0] + judge[1] + judge[2] + judge[3] + judge[4]
                     self.last_notes = judge[0] + judge[1] + judge[2] + judge[3] + judge[4]
                     self.write_xml()
@@ -524,14 +550,16 @@ class Misc:
         date_target = self.start_time - datetime.timedelta(hours=float(self.settings.log_offset))
         for _,row in self.df_data.iterrows():
             if datetime.datetime.fromtimestamp(row['date']) >= date_target:
-                title, lampid, score, pre_score, score_rate, date, judge = self.parse(row)
-                d,t = self.get_difficulty(row['sha256'], title)
+                #title, lampid, score, pre_score, score_rate, date, judge = self.parse(row)
+                out = self.parse(row)
+                d,t = self.get_difficulty(row['sha256'], out.title)
                 if d == None:
                     d = ''
-                self.result_log.append([d, title, lamp[lampid], score, score-pre_score, score_rate, date, judge])
+                out.one_difficulty = d
+                self.result_log.append(out)
         sum_judge = [0, 0, 0, 0, 0, 0]
         for t in self.result_log:
-            judge = t[-1]
+            judge = t.judge
             for i in range(6):
                 sum_judge[i] += judge[i]
         self.notes = sum_judge[0]+sum_judge[1]+sum_judge[2]+sum_judge[3]+sum_judge[4]
