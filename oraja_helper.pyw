@@ -472,7 +472,14 @@ class Misc:
                     f.write(f'        <pre_score>{r.pre_score}</pre_score>\n')
                     f.write(f'        <bp>{r.bp}</bp>\n')
                     f.write(f'        <pre_bp>{r.pre_bp}</pre_bp>\n')
-                    f.write(f'        <diff>{r.score-r.pre_score:+}</diff>\n')
+                    if r.pre_score > 0:
+                        f.write(f'        <diff_score>{r.score-r.pre_score:+}</diff_score>\n')
+                    else: # 初プレイ時は空白
+                        f.write(f'        <diff_score></diff_score>\n')
+                    if r.pre_bp < 100000:
+                        f.write(f'        <diff_bp>{r.bp-r.pre_bp:+}</diff_bp>\n')
+                    else: # 初プレイ時は空白
+                        f.write(f'        <diff_bp></diff_bp>\n')
                     f.write(f'        <score_rate>{float(r.score_rate):.2f}</score_rate>\n')
                     f.write('    </Result>\n')
                 f.write("</Items>\n")

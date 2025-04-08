@@ -38,6 +38,7 @@
                 background-blend-mode:overlay;
                 */
             }
+            /* タイトル部分 */
             table#title {
                 color: #aaddff;
                 background-color: rgba(0, 0, 100, 0.95);
@@ -64,6 +65,7 @@
             table#title td:nth-child(2) {
                 color: #ffffff;
             }
+            /* リザルト部分 */
             table#result {
                 overflow: hidden;
             	width:100%;
@@ -71,6 +73,11 @@
             }
             table#result td {
             	white-space:nowrap;
+            }
+            table#result tr:nth-child(even) td{
+                color: #aaaaaa;
+                font-size: 30px;
+                text-align: center;
             }
             table#result td:nth-child(1) {
             	width:225px;
@@ -90,13 +97,26 @@
             }
             table#result td:nth-child(4) {
                 color: #aa22aa;
-            	width:10%;
+            	width:12%;
                 text-align: right;
                 padding-right: 20px;
             }
             table#result td:nth-child(5) {
-            	width:15%;
-                font-size:48px;
+            	width:10%;
+                text-align: center;
+                font-size:30px;
+            }
+            table#result td:nth-child(6) { /* bp */
+                color: #ccffcc;
+            	width:10%;
+                text-align: right;
+                font-size:50px;
+            }
+            table#result td:nth-child(7) { /* diff_bp */
+                color: #aaaaaa;
+            	width:8%;
+                text-align: center;
+                font-size:30px;
             }
             .MAX{
                 animation-name: flashmax;
@@ -188,6 +208,7 @@
                 50%  { background-color: #ffff28; }
                 100% { background-color: #ff2828; }
             }
+            .updated{ color: #ffcccc} /* BPやスコアの更新した場合につける色*/
             /* SP☆12地力表用のスタイル */
             sp12hard{
                 color:#ff86b4;
@@ -221,9 +242,14 @@
                 $($(xml).find("Items Result").get().reverse()).each(function(index, item){
                     var lv = $(item).find('lv').text();
                     var title = $(item).find('title').text();
-                    var lamp = $(item).find('lamp').text();
-                    var score = $(item).find('score').text();
-                    var diff = $(item).find('diff').text();
+                    var lamp       = parseInt($(item).find('lamp').text());
+                    var pre_lamp   = parseInt($(item).find('pre_lamp').text());
+                    var score      = parseInt($(item).find('score').text());
+                    var bp         = parseInt($(item).find('bp').text());
+                    var pre_score  = parseInt($(item).find('pre_score').text());
+                    var pre_bp     = parseInt($(item).find('pre_bp').text());
+                    var diff_score = $(item).find('diff_score').text();
+                    var diff_bp    = $(item).find('diff_bp').text();
                     var score_rate = parseFloat($(item).find('score_rate').text());
                     if (lamp == 0){
                         lamp = ''
@@ -265,16 +291,37 @@
                     else {
                         score = '<span class="B">'+score+'</span>';
                     }
+                    if (diff_score.includes('+')){
+                        diff_score = '<span class="updated">'+diff_score+'</span>';
+                    }
+                    if (diff_bp.includes('-')){
+                        diff_bp = '<span class="updated">'+diff_bp+'</span>';
+                    }
                     // テーブルに追加
                     if (index == maxnum){ // 直近のmaxnum曲だけ表示
                         return false;
                     }
+                    //out += '<tr>';
+                    //out += '<td>'+lv+'</td>';
+                    //out += '<td>'+lamp+'</td>';
+                    //out += '<td>'+title+'</td>';
+                    //out += '<td>'+score+'</td>';
+                    //out += '<td>('+score_rate.toFixed(2)+'%)</td></tr>';
+                    //out += '</tr>';
+
+                    // 2段組にする
                     out += '<tr>';
-                    out += '<td>'+lv+'</td>';
-                    out += '<td>'+lamp+'</td>';
-                    out += '<td>'+title+'</td>';
-                    out += '<td>'+score+'</td>';
-                    out += '<td>('+score_rate.toFixed(2)+'%)</td></tr>';
+                    out += '<td rowspan="2">'+lv+'</td>';
+                    out += '<td rowspan="2">'+lamp+'</td>';
+                    out += '<td rowspan="2">'+title+'</td>';
+                    out += '<td rowspan="2">'+score+'</td>';
+                    out += '<td>('+score_rate.toFixed(2)+'%)</td>';
+                    out += '<td rowspan="2">'+bp+'</td>';
+                    out += '<td rowspan="2">'+diff_bp+'</td>';
+                    out += '</tr>';
+                    // 2段目
+                    out += '<tr>';
+                    out += '<td>'+diff_score+'</td>';
                     out += '</tr>';
                     });
                 $('notes').html(notes);
