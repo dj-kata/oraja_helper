@@ -382,7 +382,8 @@ class Misc:
         bp    = judge[3]+judge[4]+judge[5]
         bp   += (notes-judge[0]-judge[1]-judge[2]-judge[3]-judge[4]) # 完走していない場合は引く
         score_rate = f"{score/notes*100/2:.2f}"
-        ret = OneResult(title=title, lamp=lampid, score=score, score_rate=score_rate, date=tmpdat.date, judge=judge, bp=bp)
+        ret = OneResult(title=title, lamp=lampid, score=score, score_rate=score_rate, judge=judge, bp=bp)
+        #ret.date = tmpdat.date
         if tmpdat['playcount'] > 1:
             ret.pre_score = tmp.oldscore.max()
             ret.pre_bp = tmp.oldminbp.min()
