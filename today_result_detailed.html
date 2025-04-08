@@ -24,6 +24,7 @@
             }
             :root{
                 --num: 20;
+                --skip-no-update: 0; /* 1:更新のない行を飛ばす */
             }
             div#all{
                 min-height:1480px;
@@ -237,7 +238,9 @@
                 var out = "";
                 var notes = $(xml).find('Items notes');
                 var date = $(xml).find('Items date').text();
-                var maxnum = getComputedStyle(document.documentElement).getPropertyValue('--num')
+                var maxnum = getComputedStyle(document.documentElement).getPropertyValue('--num');
+                var skip_no_update = getComputedStyle(document.documentElement).getPropertyValue('--skip-no-update');
+                //var skip_no_update=1;
 
                 $($(xml).find("Items Result").get().reverse()).each(function(index, item){
                     var lv = $(item).find('lv').text();
@@ -251,6 +254,8 @@
                     var diff_score = $(item).find('diff_score').text();
                     var diff_bp    = $(item).find('diff_bp').text();
                     var score_rate = parseFloat($(item).find('score_rate').text());
+                    var org_lamp   = lamp;
+                    var org_pre_lamp = pre_lamp;
                     if (lamp == 0){
                         lamp = ''
                     }
@@ -301,28 +306,33 @@
                     if (index == maxnum){ // 直近のmaxnum曲だけ表示
                         return false;
                     }
-                    //out += '<tr>';
-                    //out += '<td>'+lv+'</td>';
-                    //out += '<td>'+lamp+'</td>';
-                    //out += '<td>'+title+'</td>';
-                    //out += '<td>'+score+'</td>';
-                    //out += '<td>('+score_rate.toFixed(2)+'%)</td></tr>';
-                    //out += '</tr>';
-
                     // 2段組にする
-                    out += '<tr>';
-                    out += '<td rowspan="2">'+lv+'</td>';
-                    out += '<td rowspan="2">'+lamp+'</td>';
-                    out += '<td rowspan="2">'+title+'</td>';
-                    out += '<td rowspan="2">'+score+'</td>';
-                    out += '<td>('+score_rate.toFixed(2)+'%)</td>';
-                    out += '<td rowspan="2">'+bp+'</td>';
-                    out += '<td rowspan="2">'+diff_bp+'</td>';
-                    out += '</tr>';
+                    var one_result = "";
+                    one_result += '<tr>';
+                    one_result += '<td rowspan="2">'+lv+'</td>';
+                    one_result += '<td rowspan="2">'+lamp+'</td>';
+                    one_result += '<td rowspan="2">'+title+'</td>';
+                    one_result += '<td rowspan="2">'+score+'</td>';
+                    one_result += '<td>('+score_rate.toFixed(2)+'%)</td>';
+                    one_result += '<td rowspan="2">'+bp+'</td>';
+                    one_result += '<td rowspan="2">'+diff_bp+'</td>';
+                    one_result += '</tr>';
                     // 2段目
-                    out += '<tr>';
-                    out += '<td>'+diff_score+'</td>';
-                    out += '</tr>';
+                    one_result += '<tr>';
+                    one_result += '<td>'+diff_score+'</td>';
+                    one_result += '</tr>';
+
+                    // スキップ処理
+                    if (skip_no_update == 1){
+                        //if ((!diff_score.includes('+')) && (!diff_bp.includes('-')) && (lamp < pre_lamp)){
+                        if (diff_score.includes('-') & diff_bp.includes('+') & (org_lamp < org_pre_lamp)){
+                            // skip
+                        }else {
+                            out += one_result;
+                        }
+                    }else{
+                        out += one_result;
+                    }
                     });
                 $('notes').html(notes);
                 $('date').html(date);
