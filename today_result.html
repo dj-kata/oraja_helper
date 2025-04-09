@@ -121,24 +121,24 @@
             }
             table#result td:nth-child(4) {
                 color: #aa22aa;
-            	width:12%;
+            	width:250px;
                 text-align: right;
                 padding-right: 20px;
             }
             table#result td:nth-child(5) {
-            	width:10%;
+            	width:230px;
                 text-align: center;
                 font-size:30px;
             }
             table#result td:nth-child(6) { /* bp */
                 color: #ccffcc;
-            	width:10%;
+            	width:150px;
                 text-align: right;
                 font-size:50px;
             }
             table#result td:nth-child(7) { /* diff_bp */
                 color: #aaaaaa;
-            	width:8%;
+            	width:110px;
                 text-align: center;
                 font-size:30px;
             }
@@ -365,7 +365,7 @@
                     // スキップ処理
                     if (skip_no_update == 1){
                         //if ((!diff_score.includes('+')) && (!diff_bp.includes('-')) && (lamp < pre_lamp)){
-                        if (diff_score.includes('-') & diff_bp.includes('+') & (org_lamp < org_pre_lamp)){
+                        if (diff_score.includes('-') & diff_bp.includes('+') & (org_lamp <= org_pre_lamp)){
                             // skip
                         }else {
                             out += one_result;
