@@ -24,6 +24,7 @@
             }
             :root{
                 --num: 20;
+                --skip-no-update: 0; /* 1:更新のない行を飛ばす */
             }
             div#all{
                 min-height:1480px;
@@ -38,6 +39,7 @@
                 background-blend-mode:overlay;
                 */
             }
+            /* タイトル部分 */
             table#title {
                 color: #aaddff;
                 background-color: rgba(0, 0, 100, 0.95);
@@ -45,25 +47,49 @@
                 background: linear-gradient(
                     180deg
                     ,rgba(0,0,60,0.9)
-                    ,rgba(35,85,155,0.9)
+                    ,rgba(12,42,77,0.9)
                 );
                 font-size: 64px;
                 line-height: 130%;
                 width:100%;
                 padding-top: 20px;
                 padding-left: 20px;
-                border: 4px solid #2222aa;
+            }
+            table#info {
+                background: linear-gradient(
+                    180deg
+                    ,rgba(12,42,77,0.9)
+                    ,rgba(35,85,155,0.9)
+                );
+                font-size: 64px;
             }
             table#title td {
                 font-family:"LINE Seed JP App_TTF ExtraBold";
             }
-            table#title tr:nth-child(1) {
+            table#title td {
                 font-size: 96px;
                 color: #ffffff;
             }
-            table#title td:nth-child(2) {
-                color: #ffffff;
+            table#info tr:nth-child(1) {
+                font-size: 45px;
             }
+            table#title tr:nth-child(2) {
+                font-size: 60px;
+            }
+            table#info td{
+                text-align: center;
+                vertical-align: top;
+                width: 500px;
+            }
+            table#info tr:nth-child(1) td{
+                color: #77ddff;
+            }
+            table#info td:nth-child(8){
+            	overflow:hidden;
+            	text-overflow:ellipsis;
+            	max-width:90px;
+            }
+            /* リザルト部分 */
             table#result {
                 overflow: hidden;
             	width:100%;
@@ -71,6 +97,11 @@
             }
             table#result td {
             	white-space:nowrap;
+            }
+            table#result tr:nth-child(even) td{
+                color: #aaaaaa;
+                font-size: 30px;
+                text-align: center;
             }
             table#result td:nth-child(1) {
             	width:225px;
@@ -90,13 +121,26 @@
             }
             table#result td:nth-child(4) {
                 color: #aa22aa;
-            	width:10%;
+            	width:12%;
                 text-align: right;
                 padding-right: 20px;
             }
             table#result td:nth-child(5) {
-            	width:15%;
-                font-size:48px;
+            	width:10%;
+                text-align: center;
+                font-size:30px;
+            }
+            table#result td:nth-child(6) { /* bp */
+                color: #ccffcc;
+            	width:10%;
+                text-align: right;
+                font-size:50px;
+            }
+            table#result td:nth-child(7) { /* diff_bp */
+                color: #aaaaaa;
+            	width:8%;
+                text-align: center;
+                font-size:30px;
             }
             .MAX{
                 animation-name: flashmax;
@@ -188,6 +232,14 @@
                 50%  { background-color: #ffff28; }
                 100% { background-color: #ff2828; }
             }
+            .updated{ color: #ffcccc} /* BPやスコアの更新した場合につける色*/
+            .stats_main{ /* 統計情報 目立つ方のやつ */
+                color: #ffffaa;
+            } 
+            .stats_sub{ /* 統計情報 目立つ方のやつ */
+                color: #aaffdd;
+                font-size:45px;
+            } 
             /* SP☆12地力表用のスタイル */
             sp12hard{
                 color:#ff86b4;
@@ -216,15 +268,34 @@
                 var out = "";
                 var notes = $(xml).find('Items notes');
                 var date = $(xml).find('Items date').text();
-                var maxnum = getComputedStyle(document.documentElement).getPropertyValue('--num')
+                var playtime = $(xml).find('Items playtime').text();
+                var pace = $(xml).find('Items pace').text();
+                var playcount = $(xml).find('Items playcount').text();
+                var maxnum = getComputedStyle(document.documentElement).getPropertyValue('--num');
+                var skip_no_update = getComputedStyle(document.documentElement).getPropertyValue('--skip-no-update');
+
+                var update_lamp = 0;
+                var update_score = 0;
+                var update_bp = 0;
+                //var skip_no_update=1;
 
                 $($(xml).find("Items Result").get().reverse()).each(function(index, item){
                     var lv = $(item).find('lv').text();
                     var title = $(item).find('title').text();
-                    var lamp = $(item).find('lamp').text();
-                    var score = $(item).find('score').text();
-                    var diff = $(item).find('diff').text();
+                    var lamp       = parseInt($(item).find('lamp').text());
+                    var pre_lamp   = parseInt($(item).find('pre_lamp').text());
+                    var score      = parseInt($(item).find('score').text());
+                    var bp         = parseInt($(item).find('bp').text());
+                    var pre_score  = parseInt($(item).find('pre_score').text());
+                    var pre_bp     = parseInt($(item).find('pre_bp').text());
+                    var diff_score = $(item).find('diff_score').text();
+                    var diff_bp    = $(item).find('diff_bp').text();
                     var score_rate = parseFloat($(item).find('score_rate').text());
+                    var org_lamp   = lamp;
+                    var org_pre_lamp = pre_lamp;
+                    if (lamp > pre_lamp){update_lamp += 1;}
+                    if (score > pre_score){update_score += 1;}
+                    if (bp < pre_bp){update_bp += 1;}
                     if (lamp == 0){
                         lamp = ''
                     }
@@ -265,20 +336,73 @@
                     else {
                         score = '<span class="B">'+score+'</span>';
                     }
+                    if (diff_score.includes('+')){
+                        diff_score = '<span class="updated">'+diff_score+'</span>';
+                    }
+                    if (diff_bp.includes('-')){
+                        diff_bp = '<span class="updated">'+diff_bp+'</span>';
+                    }
                     // テーブルに追加
                     if (index == maxnum){ // 直近のmaxnum曲だけ表示
                         return false;
                     }
-                    out += '<tr>';
-                    out += '<td>'+lv+'</td>';
-                    out += '<td>'+lamp+'</td>';
-                    out += '<td>'+title+'</td>';
-                    out += '<td>'+score+'</td>';
-                    out += '<td>('+score_rate.toFixed(2)+'%)</td></tr>';
-                    out += '</tr>';
+                    // 2段組にする
+                    var one_result = "";
+                    one_result += '<tr>';
+                    one_result += '<td rowspan="2">'+lv+'</td>';
+                    one_result += '<td rowspan="2">'+lamp+'</td>';
+                    one_result += '<td rowspan="2">'+title+'</td>';
+                    one_result += '<td rowspan="2">'+score+'</td>';
+                    one_result += '<td>('+score_rate.toFixed(2)+'%)</td>';
+                    one_result += '<td rowspan="2">'+bp+'</td>';
+                    one_result += '<td rowspan="2">'+diff_bp+'</td>';
+                    one_result += '</tr>';
+                    // 2段目
+                    one_result += '<tr>';
+                    one_result += '<td>'+diff_score+'</td>';
+                    one_result += '</tr>';
+
+                    // スキップ処理
+                    if (skip_no_update == 1){
+                        //if ((!diff_score.includes('+')) && (!diff_bp.includes('-')) && (lamp < pre_lamp)){
+                        if (diff_score.includes('-') & diff_bp.includes('+') & (org_lamp < org_pre_lamp)){
+                            // skip
+                        }else {
+                            out += one_result;
+                        }
+                    }else{
+                        out += one_result;
+                    }
                     });
+                //$('notes').html("notes: <span class='title_value'>" + notes + "</span>");
                 $('notes').html(notes);
                 $('date').html(date);
+                //$('playcount').html("&nbsp;&nbsp;&nbsp;&nbsp;plays: <span class='title_value'>" + playcount + '</span>');
+                $('playcount').html(playcount);
+                if (pace == "0"){ // playtime,paceを書かない
+                    $('header_3').html('lamp');
+                    $('header_4').html('score');
+                    $('header_5').html('bp');
+                    $('header_6').html('');
+                    $('header_7').html('');
+                    $('value_3').html('<span class="stats_sub">+'+update_lamp+'</span>');
+                    $('value_4').html('<span class="stats_sub">+'+update_score+'</span>');
+                    $('value_5').html('<span class="stats_sub">+'+update_bp+'</span>');
+                    $('value_6').html('');
+                    $('value_7').html('');
+                }else{
+                    $('header_3').html('playtime');
+                    $('header_4').html('pace');
+                    $('header_5').html('lamp');
+                    $('header_6').html('score');
+                    $('header_7').html('bp');
+                    $('value_3').html('<span class="stats_main">'+playtime+'</span>');
+                    $('value_4').html('<span class="stats_sub">'+pace+'</span>');
+                    $('value_5').html('<span class="stats_sub">+'+update_lamp+'</span>');
+                    $('value_6').html('<span class="stats_sub">+'+update_score+'</span>');
+                    $('value_7').html('<span class="stats_sub">+'+update_bp+'</span>');
+
+                }
                 $('#result tbody').html(out);
             });
             getxml.fail(function(err) {
@@ -298,8 +422,28 @@
       <tr>
         <td><date></date></td>
       </tr>
+    </table>
+    <table id="info">
+        <!--TODO 列の中身を固定せず、spanでスタイルを指定してタイトルとともに変数として書く(pace0でもレイアウトが崩れないように)-->
       <tr>
-        <td>notes: <notes></notes><lastnotes></lastnotes></td>
+        <td>notes</td><td>plays</td>
+        <td><header_3></header_3></td>
+        <td><header_4></header_4></td>
+        <td><header_5></header_5></td>
+        <td><header_6></header_6></td>
+        <td><header_7></header_7></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><span class="stats_main"><notes></notes></span></td>
+        <td><span class="stats_main"><playcount></playcount></span></td>
+
+        <td><value_3></value_3></td>
+        <td><value_4></value_4></td>
+        <td><value_5></value_5></td>
+        <td><value_6></value_6></td>
+        <td><value_7></value_7></td>
+        <td></td>
       </tr>
     </table>
     <table id="result">
