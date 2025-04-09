@@ -5,8 +5,8 @@ beatorajaのプレーログ及び、その日に叩いたノーツ数をOBSで�
 リザルトからノーツ数を割り出しているので、選曲画面での空打ちがカウントされず、正確なノーツ数が出ます。  
 (pg+gr+gd+bd+見逃しprのみ加算)
 
-OBSにこういう感じのやつが出せます。
-![image](https://github.com/dj-kata/oraja_helper/assets/61326119/0f597d3c-27cf-48bb-8f08-5314028c195b)
+OBSにこういう感じのやつが出せます。  
+![image](https://github.com/user-attachments/assets/c45d8e91-7f53-4c8b-a3eb-44e1b5e0ec5b)  
 
 v.1.0.6からOBSソースの自動制御にも対応しました。  
 選曲画面などのキャプチャ画像を登録することで、どんなスキンを使っていてもシーン検出ができます。  
@@ -42,11 +42,16 @@ playerフォルダはdbファイルが入っているフォルダを指定して
 ![image](https://github.com/user-attachments/assets/b30eb7f1-6740-4321-88e6-0e218a734269)  
 ※playtime(プレイ画面のみの合計時間)はOBS制御設定からプレイ画面の判定条件を登録した場合のみ表示されます。
 
-また、OBSでtoday_result.htmlのカスタムCSSに以下のプロパティを設定することで、表示する曲数を変更できます。
+また、OBSでtoday_result.htmlのカスタムCSSに以下のプロパティを設定することで、表示する曲数を変更できます。  
+(2025/4/10更新)ランプ、スコア、BPが一切更新されなかったプレイを非表示にするための設定も可能です。
 
-```
+```css
 :root{
---num: 20;
+    /*   最大表示曲数を20曲に制限   */
+    --num: 20;
+
+    /*   更新のないログを表示しない   */
+    --skip-no-update: 1;
 }
 ```
 
