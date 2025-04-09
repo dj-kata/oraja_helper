@@ -61,6 +61,7 @@
                     ,rgba(12,42,77,0.9)
                     ,rgba(35,85,155,0.9)
                 );
+                font-size: 64px;
             }
             table#title td {
                 font-family:"LINE Seed JP App_TTF ExtraBold";
@@ -75,34 +76,13 @@
             table#title tr:nth-child(2) {
                 font-size: 60px;
             }
-            table#info td:nth-child(5){width: 300px;}
-            table#info td:nth-child(6){width: 300px;}
-            table#info td:nth-child(7){width: 300px;}
             table#info td{
                 text-align: center;
+                vertical-align: top;
                 width: 500px;
             }
             table#info tr:nth-child(1) td{
                 color: #77ddff;
-            }
-            table#info tr:nth-child(2) td{
-                color: #ffffaa;
-            }
-            table#info tr:nth-child(2) td:nth-child(4){
-                color: #aaffdd;
-                font-size: 50px;
-            }
-            table#info tr:nth-child(2) td:nth-child(5){
-                color: #aaffdd;
-                font-size: 50px;
-            }
-            table#info tr:nth-child(2) td:nth-child(6){
-                color: #aaffdd;
-                font-size: 50px;
-            }
-            table#info tr:nth-child(2) td:nth-child(7){
-                color: #aaffdd;
-                font-size: 50px;
             }
             table#info td:nth-child(8){
             	overflow:hidden;
@@ -253,7 +233,13 @@
                 100% { background-color: #ff2828; }
             }
             .updated{ color: #ffcccc} /* BPやスコアの更新した場合につける色*/
-            .title_value{ color: #ffffaa} /* タイトル部分の値だけ違う色にする */
+            .stats_main{ /* 統計情報 目立つ方のやつ */
+                color: #ffffaa;
+            } 
+            .stats_sub{ /* 統計情報 目立つ方のやつ */
+                color: #aaffdd;
+                font-size:45px;
+            } 
             /* SP☆12地力表用のスタイル */
             sp12hard{
                 color:#ff86b4;
@@ -393,13 +379,30 @@
                 $('date').html(date);
                 //$('playcount').html("&nbsp;&nbsp;&nbsp;&nbsp;plays: <span class='title_value'>" + playcount + '</span>');
                 $('playcount').html(playcount);
-                $('playtime').html(playtime);
-                if (pace != "0"){
-                    $('pace').html(pace);
+                if (pace == "0"){ // playtime,paceを書かない
+                    $('header_3').html('lamp');
+                    $('header_4').html('score');
+                    $('header_5').html('bp');
+                    $('header_6').html('');
+                    $('header_7').html('');
+                    $('value_3').html('<span class="stats_sub">+'+update_lamp+'</span>');
+                    $('value_4').html('<span class="stats_sub">+'+update_score+'</span>');
+                    $('value_5').html('<span class="stats_sub">+'+update_bp+'</span>');
+                    $('value_6').html('');
+                    $('value_7').html('');
+                }else{
+                    $('header_3').html('playtime');
+                    $('header_4').html('pace');
+                    $('header_5').html('lamp');
+                    $('header_6').html('score');
+                    $('header_7').html('bp');
+                    $('value_3').html('<span class="stats_main">'+playtime+'</span>');
+                    $('value_4').html('<span class="stats_sub">'+pace+'</span>');
+                    $('value_5').html('<span class="stats_sub">+'+update_lamp+'</span>');
+                    $('value_6').html('<span class="stats_sub">+'+update_score+'</span>');
+                    $('value_7').html('<span class="stats_sub">+'+update_bp+'</span>');
+
                 }
-                $('update_lamp').html('+'+update_lamp);
-                $('update_score').html('+'+update_score);
-                $('update_bp').html('+'+update_bp);
                 $('#result tbody').html(out);
             });
             getxml.fail(function(err) {
@@ -423,18 +426,23 @@
     <table id="info">
         <!--TODO 列の中身を固定せず、spanでスタイルを指定してタイトルとともに変数として書く(pace0でもレイアウトが崩れないように)-->
       <tr>
-        <td>notes</td><td>plays</td><td>playtime</td><td>pace</td>
-        <td>lamp</td><td>score</td><td>bp</td>
+        <td>notes</td><td>plays</td>
+        <td><header_3></header_3></td>
+        <td><header_4></header_4></td>
+        <td><header_5></header_5></td>
+        <td><header_6></header_6></td>
+        <td><header_7></header_7></td>
         <td></td>
       </tr>
       <tr>
-        <td><notes></notes></td>
-        <td><playcount></playcount></td>
-        <td><playtime></playtime></td>
-        <td><pace></pace></td>
-        <td><update_lamp></update_lamp></td>
-        <td><update_score></update_score></td>
-        <td><update_bp></update_bp></td>
+        <td><span class="stats_main"><notes></notes></span></td>
+        <td><span class="stats_main"><playcount></playcount></span></td>
+
+        <td><value_3></value_3></td>
+        <td><value_4></value_4></td>
+        <td><value_5></value_5></td>
+        <td><value_6></value_6></td>
+        <td><value_7></value_7></td>
         <td></td>
       </tr>
     </table>
