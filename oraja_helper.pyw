@@ -426,11 +426,14 @@ class Misc:
         """
         ans = None
         md5 = '' # 初期化しておく
-        for s in self.difftable:
-            md5 = self.df_song[self.df_song['sha256']==sha256].tail(1).md5.iloc[0]
-            if s[-1] in (sha256, md5):
-                ans = s[0]
-                break
+        try:
+            for s in self.difftable:
+                md5 = self.df_song[self.df_song['sha256']==sha256].tail(1).md5.iloc[0]
+                if s[-1] in (sha256, md5):
+                    ans = s[0]
+                    break
+        except Exception: # 新たに入れた曲の対策
+            return (None, title)
         logger.debug(f'sha256={sha256}, md5={md5}, ans={ans}, title={title}')
         return (ans, title)
     
