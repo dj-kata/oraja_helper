@@ -433,7 +433,9 @@ class Misc:
                     ans = s[0]
                     break
         except Exception: # 新たに入れた曲の対策
-            return (None, title)
+            logger.debug(traceback.format_exc())
+            if type(title) != str:
+                title = '???'
         logger.debug(f'sha256={sha256}, md5={md5}, ans={ans}, title={title}')
         return (ans, title)
     
@@ -495,6 +497,10 @@ class Misc:
                 self.window['db_state'].update(text_color='#ff0000')
         update_time = os.path.getmtime(self.settings.db_score)
         if update_time > self.last: # 1曲プレーした時に通る
+            # プレイ中にF2キーで曲を追加した場合への対処
+            if self.settings.is_valid():
+                conn = sqlite3.connect(self.settings.db_songdata)
+                self.df_song =pd.read_sql('SELECT * FROM song', conn)
             logger.debug('dbfile updated')
             self.reload_score()
             self.last = update_time
