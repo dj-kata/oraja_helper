@@ -183,6 +183,18 @@
                 color:#aa22aa;
                 font-size: 0px; /* この行を消せば初Fも表示 */
             }
+            .max{
+                animation-name: flashmax;
+                animation-duration: 0.2s;
+                animation-iteration-count: infinite;
+            }
+            @keyframes flashmax {
+                0%   { background-color: #ffaaff; }
+                25%  { background-color: #dd33dd; }
+                50%  { background-color: #aa00aa; }
+                75%  { background-color: #dd33dd; }
+                100% { background-color: #ffaaff; }
+            }
             .perfect{
                 animation-name: flashperfect;
                 animation-duration: 0.2s;
@@ -322,6 +334,9 @@
                     }
                     else if (lamp == 9){
                         lamp = '<span class="perfect">　</span>'
+                    }
+                    else if (lamp == 10){
+                        lamp = '<span class="max">　</span>'
                     }
 
                     if (score_rate > 88.88){
