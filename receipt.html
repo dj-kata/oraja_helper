@@ -1,0 +1,584 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <title>hoge</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=RocknRoll+One&display=swap" rel="stylesheet">
+        <style>
+            body { 
+            
+            background-color: rgba(0, 0, 0, 0.99);
+            margin: 0px;
+            padding: 0px;
+            overflow: hidden;
+            font-family: 'RocknRoll One', sans-serif;
+            color:#aaddff;   
+            font-size: 64px;
+            color: #fff;
+            text-shadow: 6px 6px 0 #000,
+                         -2px 2px 0 #000,
+                         2px -2px 0 #000,
+                         -2px -2px 0 #000;
+            }
+            :root{
+                --num: 20;
+                --skip-no-update: 0; /* 1:更新のない行を飛ばす */
+            }
+            div#all{
+                min-height:1480px;
+                background-color: rgba(0, 0, 0, 0.9);
+                border: 4px solid #2222aa;
+                overflow: hidden;
+                /*
+                background-image: url("stat_bg.png");
+                background-repeat: repeat;
+                background-size: cover;
+                background-position: center;
+                background-blend-mode:overlay;
+                */
+            }
+            /* タイトル部分 */
+            table#title {
+                color: #aaddff;
+                background-color: rgba(0, 0, 100, 0.95);
+                background-color: #222;
+                background: linear-gradient(
+                    180deg
+                    ,rgba(0,0,60,0.9)
+                    ,rgba(12,42,77,0.9)
+                );
+                font-size: 64px;
+                line-height: 130%;
+                width:100%;
+                padding-top: 20px;
+                padding-left: 20px;
+            }
+            table#info {
+                background: linear-gradient(
+                    180deg
+                    ,rgba(12,42,77,0.9)
+                    ,rgba(35,85,155,0.9)
+                );
+                font-size: 64px;
+            }
+            table#title td {
+                font-family:"LINE Seed JP App_TTF ExtraBold";
+            }
+            table#title td {
+                font-size: 96px;
+                color: #ffffff;
+            }
+
+            table#info {
+            	width:100%;
+            	height:100%;
+            }
+            table#info tr:nth-child(1) {
+                font-size: 45px;
+            }
+            table#title tr:nth-child(2) {
+                font-size: 60px;
+            }
+            table#info td{
+                text-align: center;
+                vertical-align: top;
+                width: 300px;
+            }
+            table#info tr:nth-child(1) td{
+                color: #77ddff;
+            }
+            table#info td:nth-child(8){
+            	overflow:hidden;
+            	text-overflow:ellipsis;
+            	max-width:90px;
+            }
+            /* リザルト部分 */
+            table.update {
+                overflow: hidden;
+            	width:100%;
+            	height:100%;
+            }
+            table.lamp {
+                overflow: hidden;
+            	width:100%;
+            	height:100%;
+            }
+            table.update td {
+            	white-space:nowrap;
+            }
+            table#max th{background-color: #aa12ff;}
+            table#perfect th{background-color: #bb328d;}
+            table#fc th{background-color: #777777}
+            table#exh th{background-color: #aaaa22}
+            table#hc th{background-color: #aa2222}
+            table#nc th{background-color: #22aaaa}
+            table#ec th{background-color: #22bb77}
+            table.update th{background-color: #472686;}
+            table.lamp td:nth-child(1){
+                color: #ffddaa;
+                width: 200px;
+                text-align: center;
+            }
+            table.update td:nth-child(1){
+                color: #ffddaa;
+                width: 200px;
+                text-align: center;
+            }
+            table.lamp td:nth-child(2) {
+            	overflow:hidden;
+            	text-overflow:ellipsis;
+            	max-width:10px;
+                color: #bbffee;
+                padding-left: 100px;
+            }
+            table.update td:nth-child(2){
+                width: 200px;
+                text-align: right;
+            }
+            table.update td:nth-child(3){
+                width: 150px;
+                text-align: center;
+            }
+            table.update td:nth-child(4){
+                width: 200px;
+                text-align: left;
+            }
+            table#bp td:nth-child(5){
+                width: 270px;
+                text-align: left;
+            }
+            table#bp td:nth-child(6) {
+            	overflow:hidden;
+            	text-overflow:ellipsis;
+            	max-width:1000px;
+                color: #bbffee;
+            }
+            table#score td:nth-child(5){
+                font-size: 40px;
+                width: 150px;
+                text-align: left;
+            }
+            table#score td:nth-child(6){
+                width: 270px;
+                text-align: left;
+                padding-left: 30px;
+            }
+            table#score td:nth-child(7) {
+            	overflow:hidden;
+            	text-overflow:ellipsis;
+            	max-width:1000px;
+                color: #bbffee;
+            }
+            .AAA{
+                color:#ffff28;
+            }
+            .AA{
+                color:#cccccc;
+            }
+            .A{
+                color:#2ddf71;
+            }
+            .B{
+                color:#aa22aa;
+            }
+            .C{
+                color:#aa22aa;
+                font-size: 0px; /* この行を消せば初Cも表示 */
+            }
+            .D{
+                color:#aa22aa;
+                font-size: 0px; /* この行を消せば初Dも表示 */
+            }
+            .E{
+                color:#aa22aa;
+                font-size: 0px; /* この行を消せば初Eも表示 */
+            }
+            .F{
+                color:#aa22aa;
+                font-size: 0px; /* この行を消せば初Fも表示 */
+            }
+            .updated{ color: #ffcccc} /* BPやスコアの更新した場合につける色*/
+            .stats_main{ /* 統計情報 目立つ方のやつ */
+                color: #ffffaa;
+            } 
+            .stats_sub{ /* 統計情報 目立つ方のやつ */
+                color: #aaffdd;
+                font-size:45px;
+            } 
+            /* SP☆12地力表用のスタイル */
+            sp12hard{
+                color:#ff86b4;
+                padding: 0px;
+                font-size: 50px;
+            }
+            sp12clear{
+                color:#9ee7ff;
+                padding: 0px;
+                display: none;
+                font-size: 50px;
+            }
+        </style>
+    <body>
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+        <script>
+        function loadXml() {
+            var getxml = $.ajax({
+                url: './history.xml',
+                type: 'GET',
+                dataType: 'xml',
+                cache: false
+            });
+            getxml.done(function(xml){
+                // xmlデータからほしいデータをfindで探し処理
+                var out = "";
+                var notes = $(xml).find('Items notes');
+                var date = $(xml).find('Items date').text();
+                var playtime = $(xml).find('Items playtime').text();
+                var pace = $(xml).find('Items pace').text();
+                var playcount = $(xml).find('Items playcount').text();
+                var maxnum = getComputedStyle(document.documentElement).getPropertyValue('--num');
+                var skip_no_update = getComputedStyle(document.documentElement).getPropertyValue('--skip-no-update');
+
+                var update_lamp = 0;
+                var update_score = 0;
+                var update_bp = 0;
+                //var skip_no_update=1;
+                var new_max = [];
+                var new_max_idx = 0;
+                var new_perfect = [];
+                var new_perfect_idx = 0;
+                var new_fc = [];
+                var new_fc_idx = 0;
+                var new_exh = [];
+                var new_exh_idx = 0;
+                var new_hc = [];
+                var new_hc_idx = 0;
+                var new_nc = [];
+                var new_nc_idx = 0;
+                var new_ec = [];
+                var new_ec_idx = 0;
+                var new_bp = [];
+                var new_bp_idx = 0;
+                var new_score = [];
+                var new_score_idx = 0;
+
+                // xmlのデータを読むループ
+                $($(xml).find("Items Result").get().reverse()).each(function(index, item){
+                    var lv = $(item).find('lv').text();
+                    var title = $(item).find('title').text();
+                    var lamp       = parseInt($(item).find('lamp').text());
+                    var pre_lamp   = parseInt($(item).find('pre_lamp').text());
+                    var score      = parseInt($(item).find('score').text());
+                    var bp         = parseInt($(item).find('bp').text());
+                    var pre_score  = parseInt($(item).find('pre_score').text());
+                    var pre_bp     = parseInt($(item).find('pre_bp').text());
+                    var diff_score = $(item).find('diff_score').text();
+                    var diff_bp    = $(item).find('diff_bp').text();
+                    var score_rate = parseFloat($(item).find('score_rate').text());
+                    var org_lamp   = lamp;
+                    var org_pre_lamp = pre_lamp;
+                    if (score_rate > 88.88){
+                        score_rate = '<span class="AAA">'+score_rate.toFixed(2)+'</span>';
+                    }
+                    else if (score_rate > 77.77){
+                        score_rate = '<span class="AA">'+score_rate.toFixed(2)+'</span>';
+                    }
+                    else if (score_rate > 66.66){
+                        score_rate = '<span class="A">'+score_rate.toFixed(2)+'</span>';
+                    }
+                    else {
+                        score_rate = '<span class="B">'+score_rate.toFixed(2)+'</span>';
+                    }
+                    if ((lamp > pre_lamp) && (lamp >= 4)){
+                        update_lamp += 1;
+                        if (lamp == 4){
+                            new_ec[new_ec_idx] = [];
+                            new_ec[new_ec_idx][0] = lv;
+                            new_ec[new_ec_idx][1] = title;
+                            new_ec_idx += 1;
+                        }
+                        else if (lamp == 5){
+                            new_nc[new_nc_idx] = [];
+                            new_nc[new_nc_idx][0] = lv;
+                            new_nc[new_nc_idx][1] = title;
+                            new_nc_idx += 1;
+                        }
+                        else if (lamp == 6){
+                            new_hc[new_hc_idx] = [];
+                            new_hc[new_hc_idx][0] = lv;
+                            new_hc[new_hc_idx][1] = title;
+                            new_hc_idx += 1;
+                        }
+                        else if (lamp == 7){
+                            new_exh[new_exh_idx] = [];
+                            new_exh[new_exh_idx][0] = lv;
+                            new_exh[new_exh_idx][1] = title;
+                            new_exh_idx += 1;
+                        }
+                        else if (lamp == 8){
+                            new_fc[new_fc_idx] = [];
+                            new_fc[new_fc_idx][0] = lv;
+                            new_fc[new_fc_idx][1] = title;
+                            new_fc_idx += 1;
+                        }
+                        else if (lamp == 9){
+                            new_perfect[new_perfect_idx] = [];
+                            new_perfect[new_perfect_idx][0] = lv;
+                            new_perfect[new_perfect_idx][1] = title;
+                            new_perfect_idx += 1;
+                        }
+                        else if (lamp == 10){
+                            new_max[new_max_idx] = [];
+                            new_max[new_max_idx][0] = lv;
+                            new_max[new_max_idx][1] = title;
+                            new_max_idx += 1;
+                        }
+                    }
+                    if (score > pre_score){
+                        update_score += 1;
+                        if (pre_bp < 999999){
+                            new_score[new_score_idx] = [];
+                            new_score[new_score_idx][0] = lv;
+                            new_score[new_score_idx][1] = title;
+                            new_score[new_score_idx][2] = pre_score.toString();
+                            new_score[new_score_idx][3] = score.toString();
+                            new_score[new_score_idx][4] = diff_score;
+                            new_score[new_score_idx][5] = score_rate;
+                            new_score_idx += 1;
+                        }
+                    }
+                    if (bp < pre_bp){
+                        update_bp += 1;
+                        if (pre_bp < 999999){
+                            new_bp[new_bp_idx] = [];
+                            new_bp[new_bp_idx][0] = lv;
+                            new_bp[new_bp_idx][1] = title;
+                            new_bp[new_bp_idx][2] = pre_bp.toString();
+                            new_bp[new_bp_idx][3] = bp.toString();
+                            new_bp[new_bp_idx][4] = diff_bp;
+                            new_bp_idx += 1;
+                        }
+                    }
+
+                    });
+                //$('notes').html("notes: <span class='title_value'>" + notes + "</span>");
+                $('notes').html(notes);
+                $('date').html(date);
+                //$('playcount').html("&nbsp;&nbsp;&nbsp;&nbsp;plays: <span class='title_value'>" + playcount + '</span>');
+                $('playcount').html(playcount);
+                if (pace == "0"){ // playtime,paceを書かない
+                    $('header_3').html('lamp');
+                    $('header_4').html('score');
+                    $('header_5').html('bp');
+                    $('header_6').html('');
+                    $('header_7').html('');
+                    $('value_3').html('<span class="stats_sub">+'+update_lamp+'</span>');
+                    $('value_4').html('<span class="stats_sub">+'+update_score+'</span>');
+                    $('value_5').html('<span class="stats_sub">+'+update_bp+'</span>');
+                    $('value_6').html('');
+                    $('value_7').html('');
+                }
+                else{
+                    $('header_3').html('playtime');
+                    $('header_4').html('pace');
+                    $('header_5').html('lamp');
+                    $('header_6').html('score');
+                    $('header_7').html('bp');
+                    $('value_3').html('<span class="stats_main">'+playtime+'</span>');
+                    $('value_4').html('<span class="stats_sub">'+pace+'</span>');
+                    $('value_5').html('<span class="stats_sub">+'+update_lamp+'</span>');
+                    $('value_6').html('<span class="stats_sub">+'+update_score+'</span>');
+                    $('value_7').html('<span class="stats_sub">+'+update_bp+'</span>');
+
+                }
+                $('#result tbody').html(out);
+                // 各項目を書き込む
+                var out = "";
+
+                out = "";
+                if (new_max.length >= 1){ // BP更新がある場合
+                    out = '<table id="bp"><tr><th colspan="6">New MAX</th></tr>';
+                    for (let i=0; i<new_max.length; i++){
+                        out += '<tr>'
+                        out += '<td>' + new_max[i][0] + '</td>' // lv
+                        out += '<td>' + new_max[i][1] + '</td>' // title
+                    }
+                    out += '<br>'
+                }
+                $('#max tbody').html(out);
+
+                out = "";
+                if (new_perfect.length >= 1){ // BP更新がある場合
+                    out = '<table id="bp"><tr><th colspan="6">New PERFECT</th></tr>';
+                    for (let i=0; i<new_perfect.length; i++){
+                        out += '<tr>'
+                        out += '<td>' + new_perfect[i][0] + '</td>' // lv
+                        out += '<td>' + new_perfect[i][1] + '</td>' // title
+                    }
+                    out += '<br>'
+                }
+                $('#perfect tbody').html(out);
+
+                out = "";
+                if (new_fc.length >= 1){ // BP更新がある場合
+                    out = '<table id="bp"><tr><th colspan="6">New F-COMBO</th></tr>';
+                    for (let i=0; i<new_fc.length; i++){
+                        out += '<tr>'
+                        out += '<td>' + new_fc[i][0] + '</td>' // lv
+                        out += '<td>' + new_fc[i][1] + '</td>' // title
+                    }
+                    out += '<br>'
+                }
+                $('#fc tbody').html(out);
+
+                out = "";
+                if (new_exh.length >= 1){ // 更新がある場合
+                    out = '<table id="bp"><tr><th colspan="6">New EXH-CLEAR</th></tr>';
+                    for (let i=0; i<new_exh.length; i++){
+                        out += '<tr>'
+                        out += '<td>' + new_exh[i][0] + '</td>' // lv
+                        out += '<td>' + new_exh[i][1] + '</td>' // title
+                    }
+                    out += '<br>'
+                }
+                $('#exh tbody').html(out);
+
+                out = "";
+                if (new_hc.length >= 1){ // 更新がある場合
+                    out = '<table id="bp"><tr><th colspan="6">New H-CLEAR</th></tr>';
+                    for (let i=0; i<new_hc.length; i++){
+                        out += '<tr>'
+                        out += '<td>' + new_hc[i][0] + '</td>' // lv
+                        out += '<td>' + new_hc[i][1] + '</td>' // title
+                    }
+                    out += '<br>'
+                }
+                $('#hc tbody').html(out);
+
+                out = "";
+                if (new_nc.length >= 1){ // 更新がある場合
+                    out = '<table id="bp"><tr><th colspan="6">New CLEAR</th></tr>';
+                    for (let i=0; i<new_nc.length; i++){
+                        out += '<tr>'
+                        out += '<td>' + new_nc[i][0] + '</td>' // lv
+                        out += '<td>' + new_nc[i][1] + '</td>' // title
+                    }
+                    out += '<br>'
+                }
+                $('#nc tbody').html(out);
+
+                out = "";
+                if (new_ec.length >= 1){ // 更新がある場合
+                    out = '<table id="bp"><tr><th colspan="6">New E-CLEAR</th></tr>';
+                    for (let i=0; i<new_ec.length; i++){
+                        out += '<tr>'
+                        out += '<td>' + new_ec[i][0] + '</td>' // lv
+                        out += '<td>' + new_ec[i][1] + '</td>' // title
+                    }
+                    out += '<br>'
+                }
+                $('#ec tbody').html(out);
+
+                out = "";
+                if (new_bp.length >= 1){ // BP更新がある場合
+                    out = '<table id="bp"><tr><th colspan="6">BP updates</th></tr>';
+                    for (let i=0; i<new_bp.length; i++){
+                        out += '<tr>'
+                        out += '<td>' + new_bp[i][0] + '</td>' // lv
+                        //out += '<td>' + new_bp[i][2] + '</td>' // pre_bp
+                        out += '<td></td>' // pre_bp
+                        out += '<td>-></td>'
+                        out += '<td>' + new_bp[i][3] + '</td>' // current bp
+                        out += '<td>(<span class="updated">' + new_bp[i][4] + '</span>)</td>' // diff bp
+                        out += '<td>' + new_bp[i][1] + '</td>' // title
+                        out += '</tr>'
+                    }
+                    out += '<br>'
+                }
+                $('#bp tbody').html(out);
+
+                out = "";
+                if (new_score.length >= 1){ // Score更新がある場合
+                    //new_score.sort((a, b) => {
+                    //    let an = parseInt(a[0]);
+                    //    let bn = parseInt(b[0]);
+                    //    let as = a[0].replace('/\d+/g', '')
+                    //    let bs = b[0].replace('/\d+/g', '')
+                    //    //if ((an > bn) && (as > bs)) return -1;
+                    //    //else if ((an < bn) && (as < bs)) return 1;
+                    //    if ((as > bs)) return -1;
+                    //    else if ((as < bs)) return 1;
+                    //    else 0;
+                    //});
+                    out = '<table id="bp"><tr><th colspan="7">Score updates</th></tr>';
+                    for (let i=0; i<new_score.length; i++){
+                        out += '<tr>'
+                        out += '<td>' + new_score[i][0] + '</td>' // lv
+                        //out += '<td>' + new_score[i][2] + '</td>' // pre
+                        out += '<td></td>' // pre
+                        out += '<td>-></td>'
+                        out += '<td>' + new_score[i][3] + '</td>' // current
+                        out += '<td>' + new_score[i][5] + '%</td>' // rate
+                        out += '<td>(<span class="updated">' + new_score[i][4] + '</span>)</td>' // diff bp
+                        out += '<td>' + new_score[i][1] + '</td>' // title
+                        out += '</tr>'
+                    }
+                }
+                $('#score tbody').html(out);
+
+            });
+            getxml.fail(function(err) {
+                // alert('failed');
+            });
+        }
+
+        window.addEventListener('DOMContentLoaded', function() {
+            var roopTimer = setInterval(loadXml, 1000);
+        });
+
+</script>
+</head>
+<body>
+  <div id="all">
+    <table id="title">
+      <tr>
+        <td><date></date></td>
+      </tr>
+    </table>
+    <table id="info">
+        <!--TODO 列の中身を固定せず、spanでスタイルを指定してタイトルとともに変数として書く(pace0でもレイアウトが崩れないように)-->
+      <tr>
+        <td>notes</td><td>plays</td>
+        <td><header_3></header_3></td>
+        <td><header_4></header_4></td>
+        <td><header_5></header_5></td>
+        <td><header_6></header_6></td>
+        <td><header_7></header_7></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><span class="stats_main"><notes></notes></span></td>
+        <td><span class="stats_main"><playcount></playcount></span></td>
+
+        <td><value_3></value_3></td>
+        <td><value_4></value_4></td>
+        <td><value_5></value_5></td>
+        <td><value_6></value_6></td>
+        <td><value_7></value_7></td>
+        <td></td>
+      </tr>
+    </table>
+    <table class="lamp" id="max"><tbody></tbody></table>
+    <table class="lamp" id="perfect"><tbody></tbody></table>
+    <table class="lamp" id="fc"><tbody></tbody></table>
+    <table class="lamp" id="exh"><tbody></tbody></table>
+    <table class="lamp" id="hc"><tbody></tbody></table>
+    <table class="lamp" id="nc"><tbody></tbody></table>
+    <table class="lamp" id="ec"><tbody></tbody></table>
+    <table class="update" id="bp"><tbody></tbody></table>
+    <table class="update" id="score"><tbody></tbody></table>
+  </div>
+</body>
+</html>
