@@ -305,7 +305,7 @@
                     var score_rate = parseFloat($(item).find('score_rate').text());
                     var org_lamp   = lamp;
                     var org_pre_lamp = pre_lamp;
-                    if (lamp > pre_lamp){update_lamp += 1;}
+                    if ((lamp > pre_lamp)&&(lamp >= 4)){update_lamp += 1;}
                     if (score > pre_score){update_score += 1;}
                     if (bp < pre_bp){update_bp += 1;}
                     if (lamp == 0){
