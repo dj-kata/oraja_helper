@@ -56,13 +56,15 @@
                 dataType: 'xml',
                 cache: false
             });
+            var release = 0.0;
+            var density = 0.0;
             getxml.done(function(xml){
                 // xmlデータからほしいデータをfindで探し処理
                 var out = "";
                 var scr_up = $(xml).find('Items scr_up').text();
                 var scr_down = $(xml).find('Items scr_down').text();
-                var release = $(xml).find('Items release').text();
-                var density = $(xml).find('Items density').text();
+                release = $(xml).find('Items release').text();
+                density = $(xml).find('Items density').text();
                 var pushed = "0 0 10px #fff, 0 0 10px #fff, 0 0 20px #fff, 0 0 40px #228dff, 0 0 20px #228dff, 0 0 10px #228dff, 0 0 40px #228dff, 0 0 60px #228dff";
                 var not_pushed = "0 0 10px #fff"
                 var btn = [-1];
@@ -70,8 +72,6 @@
                     btn.push($(xml).find('Items btn'+i).text())
                 }
 
-                $('release').html(release);
-                $('density').html(density);
                 for (let i=1; i<15; i++){
                     if (btn[i] == "1"){
                         $('#btn'+i).css('box-shadow', pushed)
@@ -82,6 +82,12 @@
                     }
                 }
                 //$('#score tbody').html(out);
+                if (release != ""){
+                    $('release').html(release);
+                }
+                if (density != ""){
+                    $('density').html(density);
+                }
 
             });
             getxml.fail(function(err) {
@@ -90,7 +96,7 @@
         }
 
         window.addEventListener('DOMContentLoaded', function() {
-            var roopTimer = setInterval(loadXml, 10);
+            var roopTimer = setInterval(loadXml, 30);
         });
 
 </script>
@@ -100,11 +106,11 @@
     <table id="disp">
         <tr>
             <td></td>
-            <td id="btn1" class="btn"></td>
-            <td></td>
             <td id="btn2" class="btn"></td>
             <td></td>
-            <td id="btn3" class="btn"></td>
+            <td id="btn4" class="btn"></td>
+            <td></td>
+            <td id="btn6" class="btn"></td>
             <td></td>
         </tr>
     </table>
@@ -114,11 +120,11 @@
     </table>
     <table id="disp">
         <tr>
-            <td id="btn4" class="btn"></td>
+            <td id="btn1" class="btn"></td>
+            <td></td>
+            <td id="btn3" class="btn"></td>
             <td></td>
             <td id="btn5" class="btn"></td>
-            <td></td>
-            <td id="btn6" class="btn"></td>
             <td></td>
             <td id="btn7" class="btn"></td>
         </tr>
