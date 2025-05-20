@@ -24,6 +24,7 @@ https://x.com/cold_planet_/status/1791741023158460618
 4. 必要に応じて、表示したい難易度表のURLを追加することもできます。reloadボタンを押すことで反映されます。
 5. OBSにtoday_result.html(プレーログ表示)をD&Dする (-> 幅2000,高さ1500)
 6. 必要に応じてOBSにinfo.html(統計情報表示)をD&Dする (-> 幅1200,高さ162)
+7. 必要に応じてOBSにreceipt.html(その日の成果まとめ)をD&Dする (-> 幅2400,高さ3000)
 7. シーン(選曲、プレー、リザルト)ごとにOBSソースやシーンを自動制御したい場合は[wiki](https://github.com/dj-kata/oraja_helper/wiki/OBS%E9%80%A3%E6%90%BA%E6%A9%9F%E8%83%BD%E3%81%AE%E8%A8%AD%E5%AE%9A%E6%96%B9%E6%B3%95)を参考に設定する。
 
 初期設定後に一度再起動しないとdbの変更が取得されないかもしれません(調査中)
@@ -62,6 +63,10 @@ info.htmlでは以下のような情報が表示されます。
 幅1200,高さ162ぐらいを想定しています。  
 (幅はレイアウトに応じて変更してください)
 ![image](https://github.com/dj-kata/oraja_helper/assets/61326119/fda9ce59-a35f-498f-b1cd-3e015520283e)
+
+receipt.htmlでは以下のような情報が表示されます。
+幅2400，高さ3000ぐらいを想定しています。こちらも配信画面などに合わせて適宜修正してください。
+![image](https://github.com/user-attachments/assets/ff5c8e9b-720b-4c55-a913-3b6feb0fbf33)
 
 # その他
 今後追加するかもしれない機能
