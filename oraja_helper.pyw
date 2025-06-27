@@ -64,7 +64,7 @@ class OneResult:
                  ,score=None, pre_score=0
                  ,bp=None, pre_bp=999999
                  ,lamp=None, pre_lamp = 0
-                 ,score_rate=None, date=None, judge=None
+                 ,score_rate=None, date=None, judge=None, sha256=None
                 ):
         self.title = title
         self.difficulties = difficulties
@@ -78,6 +78,18 @@ class OneResult:
         self.score_rate = score_rate
         self.date = date
         self.judge = judge
+        self.sha256 = sha256
+
+    def __eq__(self, other):
+        if not isinstance(other, OneResult):
+            return NotImplemented
+
+        return (self.title == other.title) and (self.sha256 == other.sha256) and (self.score == other.score) and (self.bp == other.bp) and (self.lamp == other.lamp) and (abs((self.date-other.date).total_seconds())<10.0)
+    
+    def __lt__(self, other):
+        if not isinstance(other, OneResult):
+            return NotImplemented
+        return self.date < other.date
 class Misc:
     SONGDATA = '/mnt/d/bms/beatoraja/songdata.db'
     SONGINFO = '/mnt/d/bms/beatoraja/songinfo.db'
@@ -383,7 +395,8 @@ class Misc:
         bp   += (notes-judge[0]-judge[1]-judge[2]-judge[3]-judge[4]) # 完走していない場合は引く
         score_rate = f"{score/notes*100/2:.2f}"
         ret = OneResult(title=title, lamp=lampid, score=score, score_rate=score_rate, judge=judge, bp=bp)
-        #ret.date = tmpdat.date
+        ret.date = tmpdat.date
+        ret.sha256 = hsh
         if tmpdat['playcount'] > 1:
             ret.pre_score = tmp.oldscore.max()
             ret.pre_bp = tmp.oldminbp.min()
