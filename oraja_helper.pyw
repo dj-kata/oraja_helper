@@ -329,7 +329,7 @@ class Misc:
 
                 for s in self.songs:
                     has_sabun = ''
-                    if s['url_diff'] != "":
+                    if 'url_diff' in s.keys() and s['url_diff'] != "":
                         has_sabun = '○'
                     if 'proposer' in s.keys():
                         proposer = s['proposer']
