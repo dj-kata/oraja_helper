@@ -83,8 +83,10 @@ class OneResult:
     def __eq__(self, other):
         if not isinstance(other, OneResult):
             return NotImplemented
-
-        return (self.title == other.title) and (self.sha256 == other.sha256) and (self.score == other.score) and (self.bp == other.bp) and (self.lamp == other.lamp) and (abs((self.date-other.date).total_seconds())<10.0)
+        diff_date = abs(self.date - other.date)
+        if type(diff_date) is datetime.timedelta:
+            diff_date = diff_date.total_seconds()
+        return (self.title == other.title) and (self.sha256 == other.sha256) and (self.score == other.score) and (self.bp == other.bp) and (self.lamp == other.lamp) and (diff_date<10.0)
     
     def __lt__(self, other):
         if not isinstance(other, OneResult):
@@ -1004,7 +1006,7 @@ class Misc:
                 time.sleep(0.1)
                 continue # エラー時はスキップ
             if self.stop_thread:
-                print('break')
+                logger.debug('break')
                 break
             try:
                 if self.detect_mode == detect_mode.init:
@@ -1049,7 +1051,7 @@ class Misc:
                 #if (self.playtime + datetime.datetime.now() - self.play_st).seconds > 0:
                 #    self.obs.change_text('oraja_helper_pace', f"pace: {int(3600*self.notes/(self.playtime + datetime.datetime.now() - self.play_st).seconds)}notes/h")
             time.sleep(0.1)
-        print('end')
+        logger.debug('end')
 
 a = Misc()
 a.main()
