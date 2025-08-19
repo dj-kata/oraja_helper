@@ -48,6 +48,21 @@ class OBSControlData:
         except Exception as e:
             print(f"OBS制御設定保存エラー: {e}")
     
+    def add_setting(self, setting: Dict[str, Any]):
+        """新しい制御設定を追加"""
+        self.control_settings.append(setting)
+        self.save_settings()
+    
+    def remove_setting(self, index: int):
+        """指定インデックスの制御設定を削除"""
+        if 0 <= index < len(self.control_settings):
+            del self.control_settings[index]
+            self.save_settings()
+    
+    def get_settings_by_trigger(self, trigger: str) -> List[Dict[str, Any]]:
+        """指定されたトリガーの設定一覧を取得"""
+        return [setting for setting in self.control_settings if setting.get("trigger") == trigger]
+    
     def set_monitor_source(self, source_name: str):
         """監視対象ソース名を設定"""
         self.monitor_source_name = source_name
@@ -68,21 +83,6 @@ class OBSControlData:
             except Exception as e:
                 print(f"監視対象ソース設定読み込みエラー: {e}")
         return ""
-    
-    def add_setting(self, setting: Dict[str, Any]):
-        """新しい制御設定を追加"""
-        self.control_settings.append(setting)
-        self.save_settings()
-    
-    def remove_setting(self, index: int):
-        """指定インデックスの制御設定を削除"""
-        if 0 <= index < len(self.control_settings):
-            del self.control_settings[index]
-            self.save_settings()
-    
-    def get_settings_by_trigger(self, trigger: str) -> List[Dict[str, Any]]:
-        """指定されたトリガーの設定一覧を取得"""
-        return [setting for setting in self.control_settings if setting.get("trigger") == trigger]
 
 class ImageRecognitionData:
     """画像認識設定のデータ管理クラス"""
@@ -170,11 +170,31 @@ class OBSControlWindow:
         "result_end": "リザルト画面終了時"
     }
     
-    # アクション種別定義
+    # アクション種別定義（監視対象ソース指定を追加）
     ACTIONS = {
         "show_source": "ソースを表示",
         "hide_source": "ソースを非表示",
-        "switch_scene": "シーンを切り替え"
+        "switch_scene": "シーンを切り替え",
+        "set_monitor_source": "監視対象ソース指定"
+    }
+    
+    # 色定義
+    TRIGGER_COLORS = {
+        "app_start": "#E8F5E8",     # 薄い緑
+        "app_end": "#F5E8E8",       # 薄い赤
+        "select_start": "#E8F0FF",  # 薄い青
+        "select_end": "#E8F0FF",    # 薄い青
+        "play_start": "#FFE8E8",    # 薄いピンク
+        "play_end": "#FFE8E8",      # 薄いピンク
+        "result_start": "#F0E8FF",  # 薄い紫
+        "result_end": "#F0E8FF"     # 薄い紫
+    }
+    
+    ACTION_COLORS = {
+        "show_source": "#E8FFE8",       # 薄い緑
+        "hide_source": "#FFE8E8",       # 薄い赤
+        "switch_scene": "#E8E8FF",      # 薄い青
+        "set_monitor_source": "#FFFACD" # 薄い黄色
     }
     
     def __init__(self, parent, obs_manager, config=None):
@@ -182,19 +202,19 @@ class OBSControlWindow:
         self.obs_manager = obs_manager
         self.config = config
         self.control_data = OBSControlData()
-        self.image_recognition_data = ImageRecognitionData()  # 画像認識データ管理を追加
+        self.image_recognition_data = ImageRecognitionData()
         
         # ウィンドウ設定
         self.window = tk.Toplevel(parent)
-        self.window.title("OBS制御設定")
+        self.window.title("OBS制御設定 v2")
         
         # 画面判定条件設定機能が有効な場合は高さを増やす
         if config and config.enable_register_conditions:
-            self.window.geometry("900x750")
-            self.window.minsize(900, 750)
+            self.window.geometry("1000x900")
+            self.window.minsize(1000, 900)
         else:
-            self.window.geometry("800x600")
-            self.window.minsize(800, 600)
+            self.window.geometry("850x700")
+            self.window.minsize(850, 700)
         
         self.window.resizable(True, True)
         self.window.transient(parent)
@@ -215,6 +235,7 @@ class OBSControlWindow:
         # 監視対象ソース関連のUI変数を初期化
         self.current_monitor_source_var = tk.StringVar()
         self.monitor_source_combo = None  # 後で初期化される
+        self.warning_label = None  # 警告ラベル
         
         self.setup_ui()
         self.refresh_obs_data()
@@ -240,7 +261,29 @@ class OBSControlWindow:
         self.obs_status_label = ttk.Label(status_frame, textvariable=self.obs_status_var)
         self.obs_status_label.pack(side=tk.LEFT)
         
+        ttk.Button(status_frame, text="再接続", command=self.reconnect_and_refresh).pack(side=tk.RIGHT, padx=(5, 0))
         ttk.Button(status_frame, text="更新", command=self.refresh_obs_data).pack(side=tk.RIGHT)
+        
+        # 監視対象ソース設定セクション
+        monitor_source_frame = ttk.LabelFrame(main_frame, text="監視対象ソース設定", padding="10")
+        monitor_source_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        # 現在の設定表示
+        current_source_frame = ttk.Frame(monitor_source_frame)
+        current_source_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        ttk.Label(current_source_frame, text="現在の監視対象:").pack(side=tk.LEFT)
+        self.current_monitor_source_var = tk.StringVar()
+        ttk.Label(current_source_frame, textvariable=self.current_monitor_source_var, 
+                 foreground="blue", font=("Arial", 10, "bold")).pack(side=tk.LEFT, padx=(10, 0))
+        
+        # 警告文表示
+        self.warning_label = ttk.Label(current_source_frame, text="", foreground="red", font=("Arial", 9))
+        self.warning_label.pack(side=tk.LEFT, padx=(20, 0))
+        
+        # 説明文
+        ttk.Label(monitor_source_frame, text="※ スクリーンショット取得の対象となるソースを指定します。下記の制御設定で「監視対象ソース指定」を使用してください。", 
+                 foreground="gray", font=("Arial", 9)).pack(anchor=tk.W)
         
         # 設定追加セクション
         add_frame = ttk.LabelFrame(main_frame, text="新しい制御設定を追加", padding="10")
@@ -263,31 +306,29 @@ class OBSControlWindow:
         self.action_combo.pack(side=tk.LEFT, padx=(5, 0))
         self.action_combo.bind("<<ComboboxSelected>>", self.on_action_changed)
         
-        # シーン選択
-        scene_frame = ttk.Frame(add_frame)
-        scene_frame.pack(fill=tk.X, pady=2)
-        ttk.Label(scene_frame, text="対象シーン:", width=15).pack(side=tk.LEFT)
-        self.scene_combo = ttk.Combobox(scene_frame, textvariable=self.selected_scene_var,
-                                       state="readonly", width=30)
-        self.scene_combo.pack(side=tk.LEFT, padx=(5, 0))
+        # 対象選択フレーム（常に表示）
+        target_frame = ttk.Frame(add_frame)
+        target_frame.pack(fill=tk.X, pady=2)
+        
+        # シーン選択（常に表示）
+        ttk.Label(target_frame, text="対象シーン:", width=15).pack(side=tk.LEFT)
+        self.scene_combo = ttk.Combobox(target_frame, textvariable=self.selected_scene_var,
+                                       state="readonly", width=25)
+        self.scene_combo.pack(side=tk.LEFT, padx=(5, 10))
         self.scene_combo.bind("<<ComboboxSelected>>", self.on_scene_changed)
         
-        # ソース選択（ソース操作時のみ）
-        source_frame = ttk.Frame(add_frame)
-        source_frame.pack(fill=tk.X, pady=2)
-        self.source_label = ttk.Label(source_frame, text="対象ソース:", width=15)
-        self.source_label.pack(side=tk.LEFT)
-        self.source_combo = ttk.Combobox(source_frame, textvariable=self.selected_source_var,
-                                        state="readonly", width=30)
+        # ソース選択（常に表示）
+        ttk.Label(target_frame, text="対象ソース:", width=15).pack(side=tk.LEFT)
+        self.source_combo = ttk.Combobox(target_frame, textvariable=self.selected_source_var,
+                                        state="readonly", width=25)
         self.source_combo.pack(side=tk.LEFT, padx=(5, 0))
         
-        # 切り替え先シーン選択（シーン切り替え時のみ）
+        # 切り替え先シーン選択（常に表示）
         target_scene_frame = ttk.Frame(add_frame)
         target_scene_frame.pack(fill=tk.X, pady=2)
-        self.target_scene_label = ttk.Label(target_scene_frame, text="切り替え先シーン:", width=15)
-        self.target_scene_label.pack(side=tk.LEFT)
+        ttk.Label(target_scene_frame, text="切り替え先シーン:", width=15).pack(side=tk.LEFT)
         self.target_scene_combo = ttk.Combobox(target_scene_frame, textvariable=self.target_scene_var,
-                                              state="readonly", width=30)
+                                              state="readonly", width=25)
         self.target_scene_combo.pack(side=tk.LEFT, padx=(5, 0))
         
         # 追加ボタン
@@ -297,9 +338,9 @@ class OBSControlWindow:
         list_frame = ttk.LabelFrame(main_frame, text="登録済み制御設定", padding="10")
         list_frame.pack(fill=tk.BOTH, expand=True)
         
-        # ツリービュー
+        # ツリービュー（色付け対応）
         columns = ("trigger", "action", "target", "details")
-        self.tree = ttk.Treeview(list_frame, columns=columns, show="headings", height=10)
+        self.tree = ttk.Treeview(list_frame, columns=columns, show="headings", height=12)
         
         # ヘッダー設定
         self.tree.heading("trigger", text="実行タイミング")
@@ -309,9 +350,12 @@ class OBSControlWindow:
         
         # カラム幅設定
         self.tree.column("trigger", width=150)
-        self.tree.column("action", width=120)
+        self.tree.column("action", width=150)
         self.tree.column("target", width=200)
         self.tree.column("details", width=250)
+        
+        # 色付けタグを設定
+        self.setup_tree_tags()
         
         # スクロールバー
         scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.tree.yview)
@@ -333,7 +377,20 @@ class OBSControlWindow:
             self.setup_image_recognition_section(main_frame)
         
         # 初期状態でUIを更新
-        self.update_ui_visibility()
+        self.update_ui_state()
+    
+    def setup_tree_tags(self):
+        """ツリービューの色付けタグを設定"""
+        # 監視対象ソース設定用（特別な背景色）
+        self.tree.tag_configure("monitor_source", background="#FFFACD")
+        
+        # トリガー用タグ
+        for trigger, color in self.TRIGGER_COLORS.items():
+            self.tree.tag_configure(f"trigger_{trigger}", background=color)
+        
+        # アクション用タグ
+        for action, color in self.ACTION_COLORS.items():
+            self.tree.tag_configure(f"action_{action}", background=color)
     
     def setup_image_recognition_section(self, parent_frame):
         """画面判定条件設定セクションをセットアップ"""
@@ -372,9 +429,128 @@ class OBSControlWindow:
         
         # 設定済み条件の状況を更新
         self.update_recognition_status()
+    
+    def center_window(self):
+        """ウィンドウを親ウィンドウの中央に配置（画面内に収まるように調整）"""
+        self.window.update_idletasks()
         
-        # 初期状態でUIを更新
-        self.update_ui_visibility()
+        # 画面サイズを取得
+        screen_width = self.window.winfo_screenwidth()
+        screen_height = self.window.winfo_screenheight()
+        
+        # 親ウィンドウの位置とサイズを取得
+        parent_x = self.parent.winfo_x()
+        parent_y = self.parent.winfo_y()
+        parent_width = self.parent.winfo_width()
+        parent_height = self.parent.winfo_height()
+        
+        # 自分のウィンドウサイズを取得
+        window_width = self.window.winfo_width()
+        window_height = self.window.winfo_height()
+        
+        # 親ウィンドウの中央に配置する座標を計算
+        x = parent_x + (parent_width - window_width) // 2
+        y = parent_y + (parent_height - window_height) // 2
+        
+        # 画面内に収まるように調整
+        x = max(0, min(x, screen_width - window_width))
+        y = max(0, min(y, screen_height - window_height))
+        
+        self.window.geometry(f"{window_width}x{window_height}+{x}+{y}")
+    
+    def refresh_obs_data(self):
+        """OBSからシーンとソースの情報を取得"""
+        if not self.obs_manager.is_connected:
+            self.obs_status_var.set("OBSに接続されていません")
+            self.scene_combo.configure(values=[])
+            self.source_combo.configure(values=[])
+            self.target_scene_combo.configure(values=[])
+            return
+        
+        try:
+            # シーン一覧取得
+            scene_list = self.obs_manager.get_scene_list()
+            if scene_list:
+                self.scenes_data = scene_list.scenes
+                scene_names = [scene["sceneName"] for scene in self.scenes_data]
+                
+                self.scene_combo.configure(values=scene_names)
+                self.target_scene_combo.configure(values=scene_names)
+                
+                # 各シーンのソース一覧を取得
+                self.sources_data = {}
+                all_sources_set = set()  # 重複を避けるためのセット
+                
+                for scene in self.scenes_data:
+                    scene_name = scene["sceneName"]
+                    try:
+                        sources = self.obs_manager.get_sources(scene_name)
+                        if sources:
+                            self.sources_data[scene_name] = sources
+                            # 全ソース一覧に追加
+                            all_sources_set.update(sources)
+                    except Exception as e:
+                        print(f"シーン {scene_name} のソース取得エラー: {e}")
+                        self.sources_data[scene_name] = []
+                
+                # 全ソース一覧を作成（重複なし、ソート済み）
+                self.all_sources_list = sorted(list(all_sources_set))
+                
+                # ソース選択用コンボボックスに設定
+                self.source_combo.configure(values=self.all_sources_list)
+                
+                self.obs_status_var.set(f"接続中 - {len(scene_names)}個のシーン、{len(self.all_sources_list)}個のソースを取得")
+            else:
+                self.obs_status_var.set("シーン情報の取得に失敗")
+                
+        except Exception as e:
+            self.obs_status_var.set(f"データ取得エラー: {str(e)}")
+            print(f"OBSデータ取得エラー: {e}")
+        
+        # 現在の監視対象ソース設定を表示
+        self.update_monitor_source_display()
+    
+    def reconnect_and_refresh(self):
+        """OBSに再接続してデータを更新"""
+        self.obs_status_var.set("OBSに再接続中...")
+        self.window.update()
+        
+        try:
+            # 既存の接続を切断
+            if hasattr(self, 'obs_manager') and self.obs_manager:
+                self.obs_manager.disconnect()
+            
+            # 少し待機
+            import time
+            time.sleep(1)
+            
+            # 再接続
+            if hasattr(self, 'config') and self.config:
+                success = self.obs_manager.connect(
+                    self.config.websocket_host,
+                    self.config.websocket_port,
+                    self.config.websocket_password
+                )
+                if success:
+                    self.refresh_obs_data()
+                else:
+                    self.obs_status_var.set("再接続に失敗しました")
+            
+        except Exception as e:
+            self.obs_status_var.set(f"再接続エラー: {str(e)}")
+            print(f"OBS再接続エラー: {e}")
+    
+    def update_monitor_source_display(self):
+        """現在の監視対象ソース設定を表示"""
+        current_source = self.control_data.get_monitor_source()
+        if current_source:
+            self.current_monitor_source_var.set(current_source)
+            if hasattr(self, 'warning_label') and self.warning_label:
+                self.warning_label.config(text="")
+        else:
+            self.current_monitor_source_var.set("未設定")
+            if hasattr(self, 'warning_label') and self.warning_label:
+                self.warning_label.config(text="⚠ 監視対象ソースが設定されていません！")
     
     def update_recognition_status(self):
         """画像認識設定の状況を更新"""
@@ -415,133 +591,93 @@ class OBSControlWindow:
         
         dialog = ImageRecognitionDialog(self.window, screen_names[screen_type], screen_type, 
                                        self.image_recognition_data, on_dialog_close)
-
-    def center_window(self):
-        """ウィンドウを親ウィンドウの中央に配置（画面内に収まるように調整）"""
-        self.window.update_idletasks()
-        
-        # 画面サイズを取得
-        screen_width = self.window.winfo_screenwidth()
-        screen_height = self.window.winfo_screenheight()
-        
-        # 親ウィンドウの位置とサイズを取得
-        parent_x = self.parent.winfo_x()
-        parent_y = self.parent.winfo_y()
-        parent_width = self.parent.winfo_width()
-        parent_height = self.parent.winfo_height()
-        
-        # 自分のウィンドウサイズを取得
-        window_width = self.window.winfo_width()
-        window_height = self.window.winfo_height()
-        
-        # 親ウィンドウの中央に配置する座標を計算
-        x = parent_x + (parent_width - window_width) // 2
-        y = parent_y + (parent_height - window_height) // 2
-        
-        # 画面内に収まるように調整
-        x = max(0, min(x, screen_width - window_width))
-        y = max(0, min(y, screen_height - window_height))
-        
-        self.window.geometry(f"{window_width}x{window_height}+{x}+{y}")
-    
-    def refresh_obs_data(self):
-        """OBSからシーンとソースの情報を取得"""
-        if not self.obs_manager.is_connected:
-            self.obs_status_var.set("OBSに接続されていません")
-            self.scene_combo.configure(values=[])
-            self.source_combo.configure(values=[])
-            self.target_scene_combo.configure(values=[])
-            # monitor_source_comboが存在する場合のみ設定
-            if hasattr(self, 'monitor_source_combo') and self.monitor_source_combo:
-                self.monitor_source_combo.configure(values=[])
-            return
-        
-        try:
-            # シーン一覧取得
-            scene_list = self.obs_manager.get_scene_list()
-            if scene_list:
-                self.scenes_data = scene_list.scenes
-                scene_names = [scene["sceneName"] for scene in self.scenes_data]
-                
-                self.scene_combo.configure(values=scene_names)
-                self.target_scene_combo.configure(values=scene_names)
-                
-                # 各シーンのソース一覧を取得
-                self.sources_data = {}
-                all_sources_set = set()  # 重複を避けるためのセット
-                
-                for scene in self.scenes_data:
-                    scene_name = scene["sceneName"]
-                    try:
-                        scene_items = self.obs_manager.get_sources(scene_name)
-                        if scene_items:
-                            self.sources_data[scene_name] = scene_items
-                            # 全ソース一覧に追加
-                            all_sources_set.update(scene_items)
-                    except Exception as e:
-                        print(f"シーン {scene_name} のソース取得エラー: {e}")
-                        self.sources_data[scene_name] = []
-                
-                # 全ソース一覧を作成（重複なし、ソート済み）
-                self.all_sources_list = sorted(list(all_sources_set))
-                
-                # 監視対象ソース選択用コンボボックスに設定（存在する場合のみ）
-                if hasattr(self, 'monitor_source_combo') and self.monitor_source_combo:
-                    self.monitor_source_combo.configure(values=self.all_sources_list)
-                
-                self.obs_status_var.set(f"接続中 - {len(scene_names)}個のシーン、{len(self.all_sources_list)}個のソースを取得")
-            else:
-                self.obs_status_var.set("シーン情報の取得に失敗")
-                
-        except Exception as e:
-            self.obs_status_var.set(f"データ取得エラー: {str(e)}")
-            print(f"OBSデータ取得エラー: {e}")
-        
-        # 現在の監視対象ソース設定を表示（メソッドが存在する場合のみ）
-        if hasattr(self, 'update_monitor_source_display'):
-            self.update_monitor_source_display()
     
     def on_scene_changed(self, event=None):
         """シーン選択が変更された時の処理"""
         scene_name = self.selected_scene_var.get()
-        if scene_name in self.sources_data:
-            self.source_combo.configure(values=self.sources_data[scene_name])
-            self.selected_source_var.set("")  # リセット
+        print(f"シーン選択変更: {scene_name}")
+        
+        if scene_name and scene_name in self.sources_data:
+            # 選択されたシーンのソース一覧を更新（アクションが監視対象ソース指定以外の場合）
+            action = self.selected_action_var.get()
+            if action != "監視対象ソース指定":
+                pass  # source_comboは全ソース一覧のまま維持
     
     def on_action_changed(self, event=None):
         """アクション選択が変更された時の処理"""
-        self.update_ui_visibility()
+        self.update_ui_state()
     
-    def update_ui_visibility(self):
-        """アクション種別に応じてUI要素の表示/非表示を切り替え"""
+    def update_ui_state(self):
+        """アクション種別に応じてUI要素の有効/無効を切り替え"""
         action = self.selected_action_var.get()
         
         if action == "シーンを切り替え":
-            # シーン切り替えの場合：対象シーンは不要、切り替え先シーンのみ
-            self.source_label.pack_forget()
-            self.source_combo.pack_forget()
-            self.target_scene_label.pack(side=tk.LEFT)
-            self.target_scene_combo.pack(side=tk.LEFT, padx=(5, 0))
+            # シーン切り替えの場合：切り替え先シーンのみ有効
+            self.trigger_combo.config(state="readonly")
+            self.scene_combo.config(state="disabled")
+            self.source_combo.config(state="disabled")
+            self.target_scene_combo.config(state="readonly")
+        elif action == "監視対象ソース指定":
+            # 監視対象ソース指定の場合：対象ソースのみ有効、実行タイミングは不要
+            self.trigger_combo.config(state="disabled")
+            self.scene_combo.config(state="disabled")
+            self.source_combo.config(state="readonly")
+            self.target_scene_combo.config(state="disabled")
         elif action in ["ソースを表示", "ソースを非表示"]:
-            # ソース操作の場合：対象シーンとソースが必要
-            self.target_scene_label.pack_forget()
-            self.target_scene_combo.pack_forget()
-            self.source_label.pack(side=tk.LEFT)
-            self.source_combo.pack(side=tk.LEFT, padx=(5, 0))
+            # ソース操作の場合：対象シーンとソースが有効
+            self.trigger_combo.config(state="readonly")
+            self.scene_combo.config(state="readonly")
+            self.source_combo.config(state="readonly")
+            self.target_scene_combo.config(state="disabled")
         else:
-            # 未選択の場合：すべて非表示
-            self.source_label.pack_forget()
-            self.source_combo.pack_forget()
-            self.target_scene_label.pack_forget()
-            self.target_scene_combo.pack_forget()
+            # 未選択の場合：すべて無効
+            self.trigger_combo.config(state="disabled")
+            self.scene_combo.config(state="disabled")
+            self.source_combo.config(state="disabled")
+            self.target_scene_combo.config(state="disabled")
     
     def add_setting(self):
         """新しい制御設定を追加"""
-        trigger_text = self.selected_trigger_var.get()
         action_text = self.selected_action_var.get()
         
-        if not trigger_text or not action_text:
-            messagebox.showerror("入力エラー", "実行タイミングとアクションを選択してください。")
+        if not action_text:
+            messagebox.showerror("入力エラー", "アクションを選択してください。")
+            return
+        
+        # action_textからキーを逆引き
+        action_key = None
+        for key, value in self.ACTIONS.items():
+            if value == action_text:
+                action_key = key
+                break
+        
+        if not action_key:
+            messagebox.showerror("設定エラー", "無効なアクションです。")
+            return
+        
+        # 監視対象ソース指定の場合は特別処理
+        if action_key == "set_monitor_source":
+            source_name = self.selected_source_var.get()
+            if not source_name:
+                messagebox.showerror("入力エラー", "監視対象ソースを選択してください。")
+                return
+            
+            # 直接監視対象ソース設定に反映
+            self.control_data.set_monitor_source(source_name)
+            self.refresh_settings_list()
+            
+            # 入力フィールドをクリア
+            self.selected_action_var.set("")
+            self.selected_source_var.set("")
+            self.update_ui_state()
+            
+            messagebox.showinfo("設定完了", f"監視対象ソースを「{source_name}」に設定しました。")
+            return
+        
+        # 監視対象ソース指定以外の場合はトリガーが必要
+        trigger_text = self.selected_trigger_var.get()
+        if not trigger_text:
+            messagebox.showerror("入力エラー", "実行タイミングを選択してください。")
             return
         
         # trigger_textからキーを逆引き
@@ -551,15 +687,8 @@ class OBSControlWindow:
                 trigger_key = key
                 break
         
-        # action_textからキーを逆引き
-        action_key = None
-        for key, value in self.ACTIONS.items():
-            if value == action_text:
-                action_key = key
-                break
-        
-        if not trigger_key or not action_key:
-            messagebox.showerror("設定エラー", "無効な設定です。")
+        if not trigger_key:
+            messagebox.showerror("設定エラー", "無効な実行タイミングです。")
             return
         
         # 設定データ作成
@@ -594,17 +723,24 @@ class OBSControlWindow:
         self.selected_scene_var.set("")
         self.selected_source_var.set("")
         self.target_scene_var.set("")
-        self.update_ui_visibility()
+        self.update_ui_state()
         
         messagebox.showinfo("追加完了", "制御設定を追加しました。")
     
     def refresh_settings_list(self):
-        """設定一覧を更新"""
+        """設定一覧を更新（監視対象ソース設定を優先表示）"""
         # 既存の項目をクリア
         for item in self.tree.get_children():
             self.tree.delete(item)
         
-        # 設定を表示
+        # 監視対象ソース設定を最初に表示
+        monitor_source = self.control_data.get_monitor_source()
+        if monitor_source:
+            self.tree.insert("", "end", 
+                           values=("設定完了", "監視対象ソース指定", monitor_source, ""),
+                           tags=("monitor_source",))
+        
+        # 通常の設定を表示
         for i, setting in enumerate(self.control_data.control_settings):
             trigger_text = self.TRIGGERS.get(setting["trigger"], setting["trigger"])
             action_text = self.ACTIONS.get(setting["action"], setting["action"])
@@ -621,7 +757,20 @@ class OBSControlWindow:
                 target = "未設定"
                 details = ""
             
-            self.tree.insert("", "end", values=(trigger_text, action_text, target, details))
+            # 色付けタグを設定
+            trigger_key = setting["trigger"]
+            action_key = setting["action"]
+            tags = []
+            
+            if trigger_key in self.TRIGGER_COLORS:
+                tags.append(f"trigger_{trigger_key}")
+            if action_key in self.ACTION_COLORS:
+                tags.append(f"action_{action_key}")
+            
+            self.tree.insert("", "end", values=(trigger_text, action_text, target, details), tags=tuple(tags))
+        
+        # 監視対象ソース表示を更新
+        self.update_monitor_source_display()
     
     def delete_setting(self):
         """選択した設定を削除"""
@@ -630,24 +779,38 @@ class OBSControlWindow:
             messagebox.showwarning("選択エラー", "削除する設定を選択してください。")
             return
         
+        # 監視対象ソース設定が選択されているかチェック
+        for item in selected_items:
+            values = self.tree.item(item, "values")
+            if len(values) > 1 and values[1] == "監視対象ソース指定":
+                if messagebox.askyesno("監視対象ソース設定削除", "監視対象ソース設定を削除しますか？"):
+                    self.control_data.set_monitor_source("")
+                    self.refresh_settings_list()
+                    messagebox.showinfo("削除完了", "監視対象ソース設定を削除しました。")
+                return
+        
         if messagebox.askyesno("削除確認", "選択した設定を削除しますか？"):
             # 選択されたアイテムのインデックスを取得
             for item in selected_items:
                 index = self.tree.index(item)
-                self.control_data.remove_setting(index)
+                # 監視対象ソース設定がある場合はインデックスを調整
+                if self.control_data.get_monitor_source():
+                    index -= 1  # 監視対象ソース設定の分を差し引く
+                if index >= 0:
+                    self.control_data.remove_setting(index)
             
             self.refresh_settings_list()
             messagebox.showinfo("削除完了", "設定を削除しました。")
     
     def delete_all_settings(self):
         """全ての設定を削除"""
-        if not self.control_data.control_settings:
+        if not self.control_data.control_settings and not self.control_data.get_monitor_source():
             messagebox.showwarning("削除エラー", "削除する設定がありません。")
             return
         
-        if messagebox.askyesno("全削除確認", "すべての設定を削除しますか？\nこの操作は取り消せません。"):
+        if messagebox.askyesno("全削除確認", "すべての設定（監視対象ソース設定を含む）を削除しますか？\nこの操作は取り消せません。"):
             self.control_data.control_settings = []
-            self.control_data.save_settings()
+            self.control_data.set_monitor_source("")
             self.refresh_settings_list()
             messagebox.showinfo("削除完了", "すべての設定を削除しました。")
     
@@ -665,7 +828,7 @@ class OBSControlWindow:
                 if action == "switch_scene":
                     target_scene = setting.get("target_scene")
                     if target_scene:
-                        self.obs_manager.set_current_scene(target_scene)
+                        self.obs_manager.change_scene(target_scene)
                         print(f"シーンを切り替え: {target_scene}")
                 
                 elif action == "show_source":
@@ -720,7 +883,7 @@ class ImageRecognitionDialog:
         # ウィンドウ設定
         self.window = tk.Toplevel(parent)
         self.window.title(f"{screen_name}の判定条件設定")
-        self.window.geometry("900x700")
+        self.window.geometry("1300x1000")
         self.window.resizable(True, True)
         self.window.transient(parent)
         self.window.grab_set()
@@ -927,7 +1090,7 @@ class ImageRecognitionDialog:
             # エラー時は静かに失敗（コンソールにログだけ出力）
             print(f"自動ハッシュ計算エラー: {e}")
             self.hash_var.set("計算エラー")
-
+    
     def load_existing_condition(self):
         """既存の設定を読み込んで表示"""
         condition = self.image_recognition_data.get_condition(self.screen_type)
@@ -969,7 +1132,7 @@ class ImageRecognitionDialog:
         except Exception as e:
             print(f"既存設定の読み込みエラー: {e}")
             messagebox.showwarning("警告", f"既存設定の読み込みに失敗しました。\n{str(e)}")
-
+    
     def center_window(self):
         """ウィンドウを中央に配置（画面内に収まるように調整）"""
         self.window.update_idletasks()
@@ -1091,7 +1254,7 @@ class ImageRecognitionDialog:
             if hasattr(self, '_resize_timer'):
                 self.window.after_cancel(self._resize_timer)
             self._resize_timer = self.window.after(200, self.display_image_on_canvas)
-
+    
     def on_canvas_click(self, event):
         """キャンバスクリック時の処理"""
         if not self.original_image:
@@ -1218,38 +1381,6 @@ class ImageRecognitionDialog:
             outline="red", width=2
         )
     
-    def calculate_hash(self):
-        """選択範囲の画像ハッシュを計算"""
-        if not self.original_image or not IMAGEHASH_AVAILABLE:
-            return
-        
-        try:
-            # 座標を取得して補正
-            x1 = max(0, min(self.x1_var.get(), self.original_image.width))
-            y1 = max(0, min(self.y1_var.get(), self.original_image.height))
-            x2 = max(0, min(self.x2_var.get(), self.original_image.width))
-            y2 = max(0, min(self.y2_var.get(), self.original_image.height))
-            
-            # 左上と右下を正しく設定
-            left = min(x1, x2)
-            top = min(y1, y2)
-            right = max(x1, x2)
-            bottom = max(y1, y2)
-            
-            if right <= left or bottom <= top:
-                messagebox.showwarning("警告", "有効な範囲を選択してください。")
-                return
-            
-            # 選択範囲を切り出し
-            cropped_image = self.original_image.crop((left, top, right, bottom))
-            
-            # imagehashを計算
-            hash_value = imagehash.average_hash(cropped_image)
-            self.hash_var.set(str(hash_value))
-            
-        except Exception as e:
-            messagebox.showerror("エラー", f"ハッシュ計算に失敗しました。\n{str(e)}")
-    
     def save_condition(self):
         """判定条件を保存"""
         if not self.original_image:
@@ -1296,6 +1427,15 @@ class ImageRecognitionDialog:
 
 # メイン関数（テスト用）
 if __name__ == "__main__":
+    # テスト用のダミー設定
+    class DummyConfig:
+        def __init__(self):
+            self.enable_websocket = True
+            self.websocket_host = "localhost"
+            self.websocket_port = 4455
+            self.websocket_password = ""
+            self.enable_register_conditions = True
+    
     # テスト用のダミーOBSマネージャー
     class DummyOBSManager:
         def __init__(self):
@@ -1310,7 +1450,8 @@ if __name__ == "__main__":
     root = tk.Tk()
     root.withdraw()  # メインウィンドウを非表示
     
+    config = DummyConfig()
     obs_manager = DummyOBSManager()
-    control_window = OBSControlWindow(root, obs_manager)
+    control_window = OBSControlWindow(root, obs_manager, config)
     
     root.mainloop()

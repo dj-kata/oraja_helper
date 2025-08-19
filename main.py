@@ -129,9 +129,13 @@ class MainWindow:
         # WebSocket自動接続開始
         if self.config.enable_websocket:
             self.obs_manager.start_auto_reconnect()
+            for i in range(20):
+                if self.obs_manager.is_connected:
+                    self.execute_obs_trigger("app_start")
+                    break
+                time.sleep(0.5)
         
         # アプリ起動時のOBS制御実行
-        self.execute_obs_trigger("app_start")
     
     def setup_ui(self):
         """UIの初期設定"""
@@ -628,7 +632,7 @@ class MainWindow:
                     if action == "switch_scene":
                         target_scene = setting.get("target_scene")
                         if target_scene:
-                            self.obs_manager.set_current_scene(target_scene)
+                            self.obs_manager.change_scene(target_scene)
                             print(f"シーンを切り替え: {target_scene}")
                     
                     elif action == "show_source":
