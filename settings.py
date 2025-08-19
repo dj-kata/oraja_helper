@@ -10,8 +10,8 @@ class SettingsWindow:
         # ウィンドウ設定
         self.window = tk.Toplevel(parent)
         self.window.title("設定")
-        self.window.geometry("600x550")
-        self.window.minsize(600,550) # 最小サイズを設定
+        self.window.geometry("600x550")  # サイズを拡大
+        self.window.minsize(600, 550)    # 最小サイズを設定
         self.window.resizable(True, True)
         self.window.transient(parent)
         self.window.grab_set()
@@ -25,6 +25,7 @@ class SettingsWindow:
         self.enable_websocket_var = tk.BooleanVar(value=self.config.enable_websocket)
         self.enable_autotweet_var = tk.BooleanVar(value=self.config.enable_autotweet)
         self.autoload_offset_var = tk.IntVar(value=self.config.autoload_offset)
+        self.enable_register_conditions_var = tk.BooleanVar(value=self.config.enable_register_conditions)
         
         self.setup_ui()
         self.update_websocket_state()
@@ -87,7 +88,7 @@ class SettingsWindow:
         websocket_frame = ttk.LabelFrame(main_frame, text="WebSocket連携設定", padding="10")
         websocket_frame.pack(fill=tk.X, pady=(0, 15))
         
-        # 連携機能on/off
+        # 連携機能有効/無効
         self.enable_websocket_cb = ttk.Checkbutton(
             websocket_frame, 
             text="WebSocket連携機能を使用する",
@@ -135,19 +136,30 @@ class SettingsWindow:
         ]
     
     def center_window(self):
-        """ウィンドウを親ウィンドウの中央に配置"""
+        """ウィンドウを親ウィンドウの中央に配置（画面内に収まるように調整）"""
         self.window.update_idletasks()
         
+        # 画面サイズを取得
+        screen_width = self.window.winfo_screenwidth()
+        screen_height = self.window.winfo_screenheight()
+        
+        # 親ウィンドウの位置とサイズを取得
         parent_x = self.parent.winfo_x()
         parent_y = self.parent.winfo_y()
         parent_width = self.parent.winfo_width()
         parent_height = self.parent.winfo_height()
         
+        # 自分のウィンドウサイズを取得
         window_width = self.window.winfo_width()
         window_height = self.window.winfo_height()
         
+        # 親ウィンドウの中央に配置する座標を計算
         x = parent_x + (parent_width - window_width) // 2
         y = parent_y + (parent_height - window_height) // 2
+        
+        # 画面内に収まるように調整
+        x = max(0, min(x, screen_width - window_width))
+        y = max(0, min(y, screen_height - window_height))
         
         self.window.geometry(f"{window_width}x{window_height}+{x}+{y}")
     
@@ -216,6 +228,7 @@ class SettingsWindow:
             self.config.enable_websocket = self.enable_websocket_var.get()
             self.config.enable_autotweet = self.enable_autotweet_var.get()
             self.config.autoload_offset = self.autoload_offset_var.get()
+            self.config.enable_register_conditions = self.enable_register_conditions_var.get()
             
             # ファイルに保存
             self.config.save_config()

@@ -5,11 +5,29 @@ import time
 import os
 import tempfile
 import sys
+import base64
+import io
 from datetime import datetime, timedelta
 from config import Config
 from settings import SettingsWindow
 from obssocket import OBSWebSocketManager
-from obs_control import OBSControlWindow
+from obs_control import OBSControlWindow, ImageRecognitionData
+
+# PILのインポート
+try:
+    from PIL import Image
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
+    print("Warning: PIL not installed. Install with: pip install pillow")
+
+# imagehashのインポート
+try:
+    import imagehash
+    IMAGEHASH_AVAILABLE = True
+except ImportError:
+    IMAGEHASH_AVAILABLE = False
+    print("Warning: imagehash not installed. Install with: pip install imagehash")
 
 class ApplicationLock:
     """アプリケーションの二重起動防止クラス"""
@@ -89,22 +107,23 @@ class MainWindow:
         self.root = tk.Tk()
         self.config = Config()
         self.start_time = datetime.now()
-        self.file_exists = False
-        self.monitoring_thread = None
+        
+        # スレッド管理
         self.is_running = True
+        self.file_monitoring_thread = None
+        self.screen_monitoring_thread = None
+        
+        # 監視データ
+        self.file_exists = False
+        self.current_game_state = None  # None, "select", "play", "result"
         
         # OBS WebSocket管理クラス初期化
         self.obs_manager = OBSWebSocketManager(status_callback=self.on_obs_status_changed)
         self.obs_manager.set_config(self.config)
         
-        # OBS制御管理クラス初期化
-        self.obs_control = None
-        
-        # ゲーム状態管理
-        self.current_game_state = None  # None, "select", "play", "result"
-        
         self.setup_ui()
-        self.start_monitoring()
+        self.restore_window_position()
+        self.start_all_threads()
         self.update_display()
         
         # WebSocket自動接続開始
@@ -116,8 +135,8 @@ class MainWindow:
     
     def setup_ui(self):
         """UIの初期設定"""
-        self.root.title("ファイルモニタリングシステム")
-        self.root.geometry("500x300")
+        self.root.title("ファイル・画面モニタリングシステム")
+        self.root.geometry("550x350")
         
         # メニューバー
         menubar = tk.Menu(self.root)
@@ -155,11 +174,17 @@ class MainWindow:
         self.last_check_var = tk.StringVar(value="未確認")
         ttk.Label(main_frame, textvariable=self.last_check_var).grid(row=3, column=1, sticky=tk.W, padx=(10, 0), pady=5)
         
+        # ゲーム状態表示
+        ttk.Label(main_frame, text="現在のゲーム状態:").grid(row=4, column=0, sticky=tk.W, pady=5)
+        self.game_state_var = tk.StringVar(value="未判定")
+        self.game_state_label = ttk.Label(main_frame, textvariable=self.game_state_var, font=("Arial", 12, "bold"))
+        self.game_state_label.grid(row=4, column=1, sticky=tk.W, padx=(10, 0), pady=5)
+        
         # OBS WebSocket連携状況表示
-        ttk.Label(main_frame, text="OBS WebSocket:").grid(row=4, column=0, sticky=tk.W, pady=5)
+        ttk.Label(main_frame, text="OBS WebSocket:").grid(row=5, column=0, sticky=tk.W, pady=5)
         self.obs_status_var = tk.StringVar()
         self.obs_status_label = ttk.Label(main_frame, textvariable=self.obs_status_var, wraplength=300)
-        self.obs_status_label.grid(row=4, column=1, sticky=tk.W, padx=(10, 0), pady=5)
+        self.obs_status_label.grid(row=5, column=1, sticky=tk.W, padx=(10, 0), pady=5)
         
         # ステータスバー
         status_frame = ttk.Frame(self.root)
@@ -173,6 +198,244 @@ class MainWindow:
         main_frame.columnconfigure(1, weight=1)
         
         self.update_config_display()
+    
+    def start_all_threads(self):
+        """全スレッドを開始"""
+        self.start_file_monitoring()
+        self.start_screen_monitoring()
+    
+    def start_file_monitoring(self):
+        """ファイル監視スレッドを開始"""
+        if self.file_monitoring_thread is None or not self.file_monitoring_thread.is_alive():
+            self.file_monitoring_thread = threading.Thread(target=self.file_monitoring_worker, daemon=True)
+            self.file_monitoring_thread.start()
+            print("ファイル監視スレッドを開始しました")
+    
+    def start_screen_monitoring(self):
+        """画面監視スレッドを開始"""
+        if self.screen_monitoring_thread is None or not self.screen_monitoring_thread.is_alive():
+            self.screen_monitoring_thread = threading.Thread(target=self.screen_monitoring_worker, daemon=True)
+            self.screen_monitoring_thread.start()
+            print("画面監視スレッドを開始しました")
+    
+    def file_monitoring_worker(self):
+        """ファイル監視専用ワーカースレッド"""
+        print("ファイル監視スレッド開始")
+        while self.is_running:
+            try:
+                # ファイルの存在確認のみを実行
+                target_file = self.config.get_target_file_path()
+                
+                if target_file:
+                    file_exists_now = os.path.exists(target_file)
+                    
+                    # ファイル存在状態が変化した場合の処理
+                    if file_exists_now != self.file_exists:
+                        self.file_exists = file_exists_now
+                        print(f"ファイル状態変化: {self.file_exists}")
+                        
+                    # WebSocket連携処理もここに実装予定
+                    if self.config.enable_websocket:
+                        # TODO: WebSocket送信処理
+                        pass
+                else:
+                    self.file_exists = False
+                
+                # メインスレッドでUI更新をスケジュール
+                self.root.after(0, self.update_file_status)
+                
+            except Exception as e:
+                print(f"ファイル監視エラー: {e}")
+                self.root.after(0, lambda: self.status_var.set(f"ファイル監視エラー: {e}"))
+            
+            # 5秒間隔で監視
+            time.sleep(5)
+        
+        print("ファイル監視スレッド終了")
+    
+    def screen_monitoring_worker(self):
+        """画面監視専用ワーカースレッド"""
+        print("画面監視スレッド開始")
+        while self.is_running:
+            try:
+                # OBSWebSocket設定がされている場合のみ実行
+                if (self.config.enable_websocket and 
+                    self.obs_manager.is_connected):
+                    
+                    # 画像認識が有効な場合：OBSスクリーンショットによる判定
+                    if self.config.enable_register_conditions:
+                        screenshot_data = self.get_obs_screenshot()
+                        if screenshot_data:
+                            self.detect_game_state_from_screenshot(screenshot_data)
+                    
+                    # 画像認識が無効な場合：ファイルベースの判定
+                    else:
+                        self.detect_game_state_from_file()
+                
+                # 1秒間隔で実行
+                time.sleep(1)
+                
+            except Exception as e:
+                print(f"画面監視エラー: {e}")
+                # エラー時は少し長めに待機
+                time.sleep(5)
+        
+        print("画面監視スレッド終了")
+    
+    def get_obs_screenshot(self):
+        """OBSからスクリーンショットを取得"""
+        if not PIL_AVAILABLE:
+            return None
+            
+        try:
+            # OBSの現在のプログラム出力のスクリーンショットを取得
+            result = self.obs_manager.send_command("get_source_screenshot", 
+                                                  source_name="Program",
+                                                  image_format="png")
+            
+            # 上記が失敗した場合は代替方法を試行
+            if not result or not hasattr(result, 'image_data'):
+                # 現在のシーンのスクリーンショットを取得
+                scene_list = self.obs_manager.get_scene_list()
+                if scene_list and hasattr(scene_list, 'current_program_scene_name'):
+                    result = self.obs_manager.send_command("get_source_screenshot",
+                                                          source_name=scene_list.current_program_scene_name,
+                                                          image_format="png")
+            
+            if result and hasattr(result, 'image_data'):
+                # Base64デコードして画像データを返す
+                image_data_str = result.image_data
+                if image_data_str.startswith('data:image/'):
+                    image_data_str = image_data_str.split(',')[1]
+                
+                image_data = base64.b64decode(image_data_str)
+                image = Image.open(io.BytesIO(image_data))
+                return image
+            
+        except Exception as e:
+            print(f"OBSスクリーンショット取得エラー: {e}")
+            
+        return None
+    
+    def detect_game_state_from_screenshot(self, screenshot_image):
+        """スクリーンショットからゲーム状態を判定"""
+        if not IMAGEHASH_AVAILABLE:
+            return
+            
+        try:
+            # 画像認識データを読み込み
+            recognition_data = ImageRecognitionData()
+            
+            new_state = None
+            detected_states = []
+            
+            # 各画面タイプの判定を実行
+            for screen_type in ["select", "play", "result"]:
+                condition = recognition_data.get_condition(screen_type)
+                if condition and self.check_screen_match(screenshot_image, condition):
+                    detected_states.append(screen_type)
+            
+            # 複数の状態が検出された場合は優先度で決定（プレー > リザルト > 選曲）
+            if "play" in detected_states:
+                new_state = "play"
+            elif "result" in detected_states:
+                new_state = "result"
+            elif "select" in detected_states:
+                new_state = "select"
+            
+            # 状態が変化した場合のみ処理
+            if new_state != self.current_game_state:
+                # 前の状態の終了処理
+                if self.current_game_state:
+                    self.execute_obs_trigger(f"{self.current_game_state}_end")
+                
+                # 新しい状態の開始処理
+                if new_state:
+                    self.execute_obs_trigger(f"{new_state}_start")
+                
+                self.current_game_state = new_state
+                
+                # UI更新
+                self.root.after(0, self.update_game_state_display)
+                
+                print(f"ゲーム状態変化（画像認識）: {self.current_game_state}")
+                
+        except Exception as e:
+            print(f"ゲーム状態判定エラー: {e}")
+    
+    def check_screen_match(self, screenshot_image, condition):
+        """スクリーンショットが指定された画面条件にマッチするかチェック"""
+        try:
+            # 座標情報を取得
+            coords = condition.get("coordinates", {})
+            x1, y1 = coords.get("x1", 0), coords.get("y1", 0)
+            x2, y2 = coords.get("x2", 100), coords.get("y2", 100)
+            
+            # 座標を正規化
+            left, top = min(x1, x2), min(y1, y2)
+            right, bottom = max(x1, x2), max(y1, y2)
+            
+            # スクリーンショットのサイズチェック
+            img_width, img_height = screenshot_image.size
+            if right > img_width or bottom > img_height:
+                return False
+            
+            # スクリーンショットから該当範囲を切り出し
+            cropped = screenshot_image.crop((left, top, right, bottom))
+            
+            # ハッシュを計算
+            current_hash = imagehash.average_hash(cropped)
+            
+            # 設定されたハッシュと比較
+            reference_hash = imagehash.hex_to_hash(condition.get("hash", ""))
+            threshold = condition.get("threshold", 10)
+            
+            # ハッシュの差分を計算
+            hash_diff = current_hash - reference_hash
+            
+            # しきい値以下なら一致とみなす
+            return hash_diff <= threshold
+            
+        except Exception as e:
+            print(f"画面マッチング判定エラー: {e}")
+            return False
+    
+    def detect_game_state_from_file(self):
+        """ファイルベースのゲーム状態判定"""
+        try:
+            target_file = self.config.get_target_file_path()
+            
+            # ファイルが存在する場合のみ判定
+            if target_file and self.file_exists:
+                # ファイル名や内容から状態を判定
+                if "select" in target_file.lower():
+                    new_state = "select"
+                elif "play" in target_file.lower():
+                    new_state = "play"  
+                elif "result" in target_file.lower():
+                    new_state = "result"
+                else:
+                    new_state = None
+                
+                # 状態が変化した場合
+                if new_state != self.current_game_state:
+                    # 前の状態の終了処理
+                    if self.current_game_state:
+                        self.execute_obs_trigger(f"{self.current_game_state}_end")
+                    
+                    # 新しい状態の開始処理
+                    if new_state:
+                        self.execute_obs_trigger(f"{new_state}_start")
+                    
+                    self.current_game_state = new_state
+                    
+                    # UI更新
+                    self.root.after(0, self.update_game_state_display)
+                    
+                    print(f"ゲーム状態変化（ファイルベース）: {self.current_game_state}")
+                    
+        except Exception as e:
+            print(f"ファイルベースゲーム状態判定エラー: {e}")
     
     def update_config_display(self):
         """設定情報の表示を更新"""
@@ -196,10 +459,54 @@ class MainWindow:
         # WebSocket連携が有効になった場合は自動接続を開始
         if self.config.enable_websocket and not self.obs_manager.should_reconnect:
             self.obs_manager.start_auto_reconnect()
-            time.sleep(1)
         elif not self.config.enable_websocket:
             self.obs_manager.stop_auto_reconnect()
             self.obs_manager.disconnect()
+    
+    def update_file_status(self):
+        """ファイル状況の表示を更新"""
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        self.last_check_var.set(current_time)
+        
+        # 使用中の判定方式を表示
+        if (self.config.enable_websocket and self.obs_manager.is_connected and 
+            self.config.enable_register_conditions):
+            detection_method = "（画像認識モード）"
+        elif self.config.enable_websocket and self.obs_manager.is_connected:
+            detection_method = "（ファイル監視 + OBS連携モード）"
+        else:
+            detection_method = "（ファイル監視のみ）"
+        
+        if self.file_exists:
+            self.file_status_var.set("存在します")
+            self.file_status_label.config(foreground="green")
+            self.status_var.set(f"ファイルが見つかりました {detection_method}")
+        else:
+            self.file_status_var.set("存在しません")
+            self.file_status_label.config(foreground="red")
+            self.status_var.set(f"ファイルが見つかりません {detection_method}")
+    
+    def update_game_state_display(self):
+        """ゲーム状態表示を更新"""
+        state_names = {
+            "select": "選曲画面",
+            "play": "プレー画面",
+            "result": "リザルト画面",
+            None: "未判定"
+        }
+        
+        state_text = state_names.get(self.current_game_state, "未判定")
+        self.game_state_var.set(state_text)
+        
+        # 状態に応じて色を変更
+        if self.current_game_state == "play":
+            self.game_state_label.config(foreground="red")
+        elif self.current_game_state == "result":
+            self.game_state_label.config(foreground="blue")
+        elif self.current_game_state == "select":
+            self.game_state_label.config(foreground="green")
+        else:
+            self.game_state_label.config(foreground="gray")
     
     def on_obs_status_changed(self, status_message: str, is_connected: bool):
         """OBS WebSocket接続状態変更時のコールバック"""
@@ -236,81 +543,66 @@ class MainWindow:
         
         # メインスレッドでUI更新を実行
         self.root.after(0, update_ui)
-
-    def start_monitoring(self):
-        """ファイル監視スレッドを開始"""
-        if self.monitoring_thread is None or not self.monitoring_thread.is_alive():
-            self.monitoring_thread = threading.Thread(target=self.file_monitoring_worker, daemon=True)
-            self.monitoring_thread.start()
     
-    def file_monitoring_worker(self):
-        """ファイル監視を行うワーカースレッド（スケルトンコード）"""
-        while self.is_running:
-            try:
-                # 実際のファイル監視処理をここに実装
-                target_file = self.config.get_target_file_path()
-                
-                if target_file:
-                    file_exists_now = os.path.exists(target_file)
-                    
-                    # ファイル存在状態が変化した場合の処理
-                    if file_exists_now != self.file_exists:
-                        self.file_exists = file_exists_now
-                        
-                        # ここでゲーム状態を判定（実装例）
-                        if self.file_exists:
-                            # ファイルが検出された → ゲーム状態の変化を検出
-                            # 実際の実装では、ファイル内容を解析してゲーム状態を判定
-                            self.detect_game_state_change(target_file)
-                        
-                    # WebSocket連携処理もここに実装予定
-                    if self.config.enable_websocket:
-                        # TODO: WebSocket送信処理
-                        pass
-                else:
-                    self.file_exists = False
-                
-                # メインスレッドでUI更新をスケジュール
-                self.root.after(0, self.update_file_status)
-                
-            except Exception as e:
-                print(f"監視エラー: {e}")
-                self.root.after(0, lambda: self.status_var.set(f"監視エラー: {e}"))
-            
-            # 5秒間隔で監視
-            time.sleep(5)
-    
-    def detect_game_state_change(self, file_path):
-        """ゲーム状態の変化を検出してOBS制御を実行（スケルトンコード）"""
+    def restore_window_position(self):
+        """ウィンドウ位置を復元"""
         try:
-            # ここで実際のファイル内容を解析してゲーム状態を判定
-            # 以下は実装例（実際にはファイル形式に応じて実装）
+            # 画面サイズを取得
+            screen_width = self.root.winfo_screenwidth()
+            screen_height = self.root.winfo_screenheight()
             
-            # 例：ファイル名や内容から状態を判定
-            if "select" in file_path.lower():
-                new_state = "select"
-            elif "play" in file_path.lower():
-                new_state = "play"  
-            elif "result" in file_path.lower():
-                new_state = "result"
-            else:
-                new_state = None
+            # 設定されたウィンドウ位置を取得
+            x = self.config.main_window_x
+            y = self.config.main_window_y
+            width = self.config.main_window_width
+            height = self.config.main_window_height
             
-            # 状態が変化した場合
-            if new_state != self.current_game_state:
-                # 前の状態の終了処理
-                if self.current_game_state:
-                    self.execute_obs_trigger(f"{self.current_game_state}_end")
-                
-                # 新しい状態の開始処理
-                if new_state:
-                    self.execute_obs_trigger(f"{new_state}_start")
-                
-                self.current_game_state = new_state
-                print(f"ゲーム状態変化: {self.current_game_state}")
-                
+            # 画面内に収まるように調整
+            x = max(0, min(x, screen_width - width))
+            y = max(0, min(y, screen_height - height))
+            
+            # ウィンドウサイズと位置を設定
+            self.root.geometry(f"{width}x{height}+{x}+{y}")
+            
         except Exception as e:
-            print(f"ゲーム状態検出エラー: {e}")
+            print(f"ウィンドウ位置復元エラー: {e}")
+            # エラーの場合はデフォルト位置
+            self.root.geometry("550x350+100+100")
+    
+    def save_window_position(self):
+        """現在のウィンドウ位置を保存"""
+        try:
+            # ウィンドウが最小化されている場合は保存しない
+            if self.root.state() == 'iconic':
+                return
+            
+            # 現在の位置とサイズを取得
+            geometry = self.root.geometry()
+            # 形式: "widthxheight+x+y"
+            size_pos = geometry.split('+')
+            width_height = size_pos[0].split('x')
+            
+            width = int(width_height[0])
+            height = int(width_height[1])
+            x = int(size_pos[1])
+            y = int(size_pos[2])
+            
+            # 設定に保存
+            self.config.save_window_position(x, y, width, height)
+            
+        except Exception as e:
+            print(f"ウィンドウ位置保存エラー: {e}")
+    
+    def update_display(self):
+        """表示の定期更新"""
+        # 経過時間の更新
+        elapsed = datetime.now() - self.start_time
+        hours, remainder = divmod(int(elapsed.total_seconds()), 3600)
+        minutes, seconds = divmod(remainder, 60)
+        self.elapsed_time_var.set(f"{hours:02d}:{minutes:02d}:{seconds:02d}")
+        
+        # 1秒後に再実行
+        self.root.after(1000, self.update_display)
     
     def execute_obs_trigger(self, trigger: str):
         """OBS制御トリガーを実行"""
@@ -319,7 +611,8 @@ class MainWindow:
             # 直接設定データを読み込んで実行
             from obs_control import OBSControlData
             
-            settings = self.control_data.get_settings_by_trigger(trigger)
+            control_data = OBSControlData()
+            settings = control_data.get_settings_by_trigger(trigger)
             
             if not settings:
                 return  # 該当する設定がない場合は何もしない
@@ -379,30 +672,13 @@ class MainWindow:
             print(f"シーンアイテムID取得エラー: {e}")
             return 0
     
-    def update_file_status(self):
-        """ファイル状況の表示を更新"""
-        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        self.last_check_var.set(current_time)
+    def open_settings(self):
+        """設定ダイアログを開く"""
+        def on_settings_close():
+            # 設定が更新されたら表示を更新
+            self.update_config_display()
         
-        if self.file_exists:
-            self.file_status_var.set("存在します")
-            self.file_status_label.config(foreground="green")
-            self.status_var.set("ファイルが見つかりました")
-        else:
-            self.file_status_var.set("存在しません")
-            self.file_status_label.config(foreground="red")
-            self.status_var.set("ファイルが見つかりません")
-    
-    def update_display(self):
-        """表示の定期更新"""
-        # 経過時間の更新
-        elapsed = datetime.now() - self.start_time
-        hours, remainder = divmod(int(elapsed.total_seconds()), 3600)
-        minutes, seconds = divmod(remainder, 60)
-        self.elapsed_time_var.set(f"{hours:02d}:{minutes:02d}:{seconds:02d}")
-        
-        # 1秒後に再実行
-        self.root.after(1000, self.update_display)
+        settings_window = SettingsWindow(self.root, self.config, on_settings_close)
     
     def open_obs_control(self):
         """OBS制御設定ダイアログを開く"""
@@ -413,23 +689,21 @@ class MainWindow:
             return
         
         try:
-            obs_control = OBSControlWindow(self.root, self.obs_manager)
+            obs_control = OBSControlWindow(self.root, self.obs_manager, self.config)
         except Exception as e:
             messagebox.showerror("エラー", f"OBS制御設定ウィンドウの起動に失敗しました。\n{str(e)}")
-
-    def open_settings(self):
-        """設定ダイアログを開く"""
-        def on_settings_close():
-            # 設定が更新されたら表示を更新
-            self.update_config_display()
-        
-        settings_window = SettingsWindow(self.root, self.config, on_settings_close)
     
     def on_closing(self):
         """アプリケーション終了時の処理"""
+        print("アプリケーション終了処理開始")
+        
+        # ウィンドウ位置を保存
+        self.save_window_position()
+        
         # アプリ終了時のOBS制御実行
         self.execute_obs_trigger("app_end")
         
+        # スレッド停止フラグを設定
         self.is_running = False
         
         # OBS WebSocket接続を停止
@@ -437,14 +711,20 @@ class MainWindow:
             self.obs_manager.stop_auto_reconnect()
             self.obs_manager.disconnect()
         
-        # ファイル監視スレッドを停止
-        if self.monitoring_thread and self.monitoring_thread.is_alive():
-            self.monitoring_thread.join(timeout=1)
+        # スレッドの終了を待機
+        if self.file_monitoring_thread and self.file_monitoring_thread.is_alive():
+            print("ファイル監視スレッドの終了を待機中...")
+            self.file_monitoring_thread.join(timeout=2)
+        
+        if self.screen_monitoring_thread and self.screen_monitoring_thread.is_alive():
+            print("画面監視スレッドの終了を待機中...")
+            self.screen_monitoring_thread.join(timeout=2)
         
         # アプリケーションロックを解放
         if hasattr(self, 'app_lock'):
             self.app_lock.release_lock()
-            
+        
+        print("アプリケーション終了処理完了")
         self.root.destroy()
     
     def run(self):
