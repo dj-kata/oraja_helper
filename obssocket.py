@@ -426,3 +426,4 @@ if __name__ == '__main__':
     a.start_auto_reconnect()
     time.sleep(1)
     print(a.search_itemid('成果確認', 'receipt.html'))
+    print(a.send_command("get_scene_item_list", scene_name='成果確認'))
