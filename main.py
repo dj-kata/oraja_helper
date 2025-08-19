@@ -3,52 +3,89 @@ from tkinter import ttk, messagebox
 import threading
 import time
 import os
+import tempfile
+import sys
 from datetime import datetime, timedelta
 from config import Config
 from settings import SettingsWindow
 from obssocket import OBSWebSocketManager
-import logging, logging.handlers
-from PIL import ImageDraw, Image
-import imagehash
-from enum import Enum
+from obs_control import OBSControlWindow
 
-os.makedirs('log', exist_ok=True)
-os.makedirs('out', exist_ok=True)
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-hdl = logging.handlers.RotatingFileHandler(
-    f'log/{os.path.basename(__file__).split(".")[0]}.log',
-    encoding='utf-8',
-    maxBytes=1024*1024*2,
-    backupCount=1,
-)
-hdl.setLevel(logging.DEBUG)
-hdl_formatter = logging.Formatter('%(asctime)s %(filename)s:%(lineno)5d %(funcName)s() [%(levelname)s] %(message)s')
-hdl.setFormatter(hdl_formatter)
-logger.addHandler(hdl)
-lamp = ['NO PLAY', 'FAILED', 'FAILED', 'A-CLEAR', 'E-CLEAR', 'CLEAR', 'H-CLEAR', 'EXH-CLEAR', 'F-COMBO', 'PERFECT']
-
-class gui_mode(Enum):
-    init = 0
-    main = 1
-    settings = 2
-    obs_control = 3
-    register_scene = 4
-
-class detect_mode(Enum):
-    init = 0
-    select = 1
-    play = 2
-    result = 3
-
-try:
-    with open('version.txt', 'r') as f:
-        SWVER = f.readline().strip()
-except Exception:
-    SWVER = "v0.0.0"
+class ApplicationLock:
+    """アプリケーションの二重起動防止クラス"""
+    def __init__(self, app_name="file_monitor_app"):
+        self.app_name = app_name
+        self.lock_file_path = os.path.join(tempfile.gettempdir(), f"{app_name}.lock")
+        self.lock_file = None
+        
+    def acquire_lock(self) -> bool:
+        """ロックを取得"""
+        try:
+            # ロックファイルが既に存在するかチェック
+            if os.path.exists(self.lock_file_path):
+                # ファイル内のPIDを確認
+                try:
+                    with open(self.lock_file_path, 'r') as f:
+                        pid = int(f.read().strip())
+                    
+                    # プロセスが実際に動いているかチェック
+                    if self._is_process_running(pid):
+                        return False  # 別のインスタンスが動作中
+                    else:
+                        # プロセスが終了しているので古いロックファイルを削除
+                        os.remove(self.lock_file_path)
+                except (ValueError, IOError):
+                    # 不正なロックファイルは削除
+                    try:
+                        os.remove(self.lock_file_path)
+                    except:
+                        pass
+            
+            # 新しいロックファイルを作成
+            with open(self.lock_file_path, 'w') as f:
+                f.write(str(os.getpid()))
+            
+            return True
+            
+        except Exception as e:
+            print(f"ロック取得エラー: {e}")
+            return False
+    
+    def release_lock(self):
+        """ロックを解放"""
+        try:
+            if os.path.exists(self.lock_file_path):
+                os.remove(self.lock_file_path)
+        except Exception as e:
+            print(f"ロック解放エラー: {e}")
+    
+    def _is_process_running(self, pid: int) -> bool:
+        """指定されたPIDのプロセスが動作中かチェック"""
+        try:
+            if sys.platform == "win32":
+                import subprocess
+                result = subprocess.run(['tasklist', '/FI', f'PID eq {pid}'], 
+                                       capture_output=True, text=True)
+                return str(pid) in result.stdout
+            else:
+                # Unix系システム
+                os.kill(pid, 0)
+                return True
+        except (OSError, subprocess.SubprocessError):
+            return False
 
 class MainWindow:
     def __init__(self):
+        # 二重起動チェック
+        self.app_lock = ApplicationLock("file_monitor_app")
+        if not self.app_lock.acquire_lock():
+            messagebox.showerror(
+                "起動エラー", 
+                "アプリケーションは既に起動しています。\n"
+                "複数のインスタンスを同時に実行することはできません。"
+            )
+            sys.exit(1)
+        
         self.root = tk.Tk()
         self.config = Config()
         self.start_time = datetime.now()
@@ -60,6 +97,12 @@ class MainWindow:
         self.obs_manager = OBSWebSocketManager(status_callback=self.on_obs_status_changed)
         self.obs_manager.set_config(self.config)
         
+        # OBS制御管理クラス初期化
+        self.obs_control = None
+        
+        # ゲーム状態管理
+        self.current_game_state = None  # None, "select", "play", "result"
+        
         self.setup_ui()
         self.start_monitoring()
         self.update_display()
@@ -67,10 +110,13 @@ class MainWindow:
         # WebSocket自動接続開始
         if self.config.enable_websocket:
             self.obs_manager.start_auto_reconnect()
+        
+        # アプリ起動時のOBS制御実行
+        self.execute_obs_trigger("app_start")
     
     def setup_ui(self):
         """UIの初期設定"""
-        self.root.title(f"oraja_helper {SWVER}")
+        self.root.title("ファイルモニタリングシステム")
         self.root.geometry("500x300")
         
         # メニューバー
@@ -80,7 +126,9 @@ class MainWindow:
         # 設定メニュー
         settings_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="設定", menu=settings_menu)
-        settings_menu.add_command(label="設定を開く", command=self.open_settings)
+        settings_menu.add_command(label="基本設定", command=self.open_settings)
+        settings_menu.add_separator()
+        settings_menu.add_command(label="OBS制御設定", command=self.open_obs_control)
         
         # メインフレーム
         main_frame = ttk.Frame(self.root, padding="10")
@@ -148,6 +196,7 @@ class MainWindow:
         # WebSocket連携が有効になった場合は自動接続を開始
         if self.config.enable_websocket and not self.obs_manager.should_reconnect:
             self.obs_manager.start_auto_reconnect()
+            time.sleep(1)
         elif not self.config.enable_websocket:
             self.obs_manager.stop_auto_reconnect()
             self.obs_manager.disconnect()
@@ -191,20 +240,29 @@ class MainWindow:
     def start_monitoring(self):
         """ファイル監視スレッドを開始"""
         if self.monitoring_thread is None or not self.monitoring_thread.is_alive():
-            self.monitoring_thread = threading.Thread(target=self.db_monitoring_worker, daemon=True)
+            self.monitoring_thread = threading.Thread(target=self.file_monitoring_worker, daemon=True)
             self.monitoring_thread.start()
     
-    def db_monitoring_worker(self):
-        """dbfile監視を行うワーカースレッド
-        """
+    def file_monitoring_worker(self):
+        """ファイル監視を行うワーカースレッド（スケルトンコード）"""
         while self.is_running:
             try:
                 # 実際のファイル監視処理をここに実装
                 target_file = self.config.get_target_file_path()
                 
                 if target_file:
-                    self.file_exists = os.path.exists(target_file)
+                    file_exists_now = os.path.exists(target_file)
                     
+                    # ファイル存在状態が変化した場合の処理
+                    if file_exists_now != self.file_exists:
+                        self.file_exists = file_exists_now
+                        
+                        # ここでゲーム状態を判定（実装例）
+                        if self.file_exists:
+                            # ファイルが検出された → ゲーム状態の変化を検出
+                            # 実際の実装では、ファイル内容を解析してゲーム状態を判定
+                            self.detect_game_state_change(target_file)
+                        
                     # WebSocket連携処理もここに実装予定
                     if self.config.enable_websocket:
                         # TODO: WebSocket送信処理
@@ -221,6 +279,105 @@ class MainWindow:
             
             # 5秒間隔で監視
             time.sleep(5)
+    
+    def detect_game_state_change(self, file_path):
+        """ゲーム状態の変化を検出してOBS制御を実行（スケルトンコード）"""
+        try:
+            # ここで実際のファイル内容を解析してゲーム状態を判定
+            # 以下は実装例（実際にはファイル形式に応じて実装）
+            
+            # 例：ファイル名や内容から状態を判定
+            if "select" in file_path.lower():
+                new_state = "select"
+            elif "play" in file_path.lower():
+                new_state = "play"  
+            elif "result" in file_path.lower():
+                new_state = "result"
+            else:
+                new_state = None
+            
+            # 状態が変化した場合
+            if new_state != self.current_game_state:
+                # 前の状態の終了処理
+                if self.current_game_state:
+                    self.execute_obs_trigger(f"{self.current_game_state}_end")
+                
+                # 新しい状態の開始処理
+                if new_state:
+                    self.execute_obs_trigger(f"{new_state}_start")
+                
+                self.current_game_state = new_state
+                print(f"ゲーム状態変化: {self.current_game_state}")
+                
+        except Exception as e:
+            print(f"ゲーム状態検出エラー: {e}")
+    
+    def execute_obs_trigger(self, trigger: str):
+        """OBS制御トリガーを実行"""
+        try:
+            # OBS制御ウィンドウが作成されていなくても設定は実行できるよう、
+            # 直接設定データを読み込んで実行
+            from obs_control import OBSControlData
+            
+            settings = self.control_data.get_settings_by_trigger(trigger)
+            
+            if not settings:
+                return  # 該当する設定がない場合は何もしない
+            
+            if not self.obs_manager.is_connected:
+                print(f"OBS未接続のため、トリガー '{trigger}' をスキップ")
+                return
+            
+            for setting in settings:
+                try:
+                    action = setting["action"]
+                    
+                    if action == "switch_scene":
+                        target_scene = setting.get("target_scene")
+                        if target_scene:
+                            self.obs_manager.set_current_scene(target_scene)
+                            print(f"シーンを切り替え: {target_scene}")
+                    
+                    elif action == "show_source":
+                        scene_name = setting.get("scene_name")
+                        source_name = setting.get("source_name")
+                        if scene_name and source_name:
+                            scene_item_id = self._get_scene_item_id(scene_name, source_name)
+                            if scene_item_id:
+                                self.obs_manager.send_command("set_scene_item_enabled", 
+                                                            scene_name=scene_name,
+                                                            scene_item_id=scene_item_id,
+                                                            scene_item_enabled=True)
+                                print(f"ソースを表示: {scene_name}/{source_name}")
+                    
+                    elif action == "hide_source":
+                        scene_name = setting.get("scene_name")
+                        source_name = setting.get("source_name")
+                        if scene_name and source_name:
+                            scene_item_id = self._get_scene_item_id(scene_name, source_name)
+                            if scene_item_id:
+                                self.obs_manager.send_command("set_scene_item_enabled",
+                                                            scene_name=scene_name,
+                                                            scene_item_id=scene_item_id,
+                                                            scene_item_enabled=False)
+                                print(f"ソースを非表示: {scene_name}/{source_name}")
+                                
+                except Exception as e:
+                    print(f"制御実行エラー (trigger: {trigger}, setting: {setting}): {e}")
+                    
+        except Exception as e:
+            print(f"トリガー実行エラー ({trigger}): {e}")
+    
+    def _get_scene_item_id(self, scene_name: str, source_name: str) -> int:
+        """シーンアイテムIDを取得"""
+        try:
+            result = self.obs_manager.send_command("get_scene_item_id", 
+                                                 scene_name=scene_name, 
+                                                 source_name=source_name)
+            return result.scene_item_id if result else 0
+        except Exception as e:
+            print(f"シーンアイテムID取得エラー: {e}")
+            return 0
     
     def update_file_status(self):
         """ファイル状況の表示を更新"""
@@ -247,6 +404,19 @@ class MainWindow:
         # 1秒後に再実行
         self.root.after(1000, self.update_display)
     
+    def open_obs_control(self):
+        """OBS制御設定ダイアログを開く"""
+        if not self.obs_manager.is_connected:
+            messagebox.showwarning("OBS未接続", 
+                                 "OBS制御設定を開くには、まずOBSに接続してください。\n"
+                                 "「設定」→「基本設定」からWebSocket接続を有効にしてください。")
+            return
+        
+        try:
+            obs_control = OBSControlWindow(self.root, self.obs_manager)
+        except Exception as e:
+            messagebox.showerror("エラー", f"OBS制御設定ウィンドウの起動に失敗しました。\n{str(e)}")
+
     def open_settings(self):
         """設定ダイアログを開く"""
         def on_settings_close():
@@ -257,6 +427,9 @@ class MainWindow:
     
     def on_closing(self):
         """アプリケーション終了時の処理"""
+        # アプリ終了時のOBS制御実行
+        self.execute_obs_trigger("app_end")
+        
         self.is_running = False
         
         # OBS WebSocket接続を停止
@@ -267,14 +440,32 @@ class MainWindow:
         # ファイル監視スレッドを停止
         if self.monitoring_thread and self.monitoring_thread.is_alive():
             self.monitoring_thread.join(timeout=1)
+        
+        # アプリケーションロックを解放
+        if hasattr(self, 'app_lock'):
+            self.app_lock.release_lock()
             
         self.root.destroy()
     
     def run(self):
         """アプリケーションを実行"""
-        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
-        self.root.mainloop()
+        try:
+            self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+            self.root.mainloop()
+        except Exception as e:
+            print(f"アプリケーション実行エラー: {e}")
+        finally:
+            # 確実にロックを解放
+            if hasattr(self, 'app_lock'):
+                self.app_lock.release_lock()
 
 if __name__ == "__main__":
-    app = MainWindow()
-    app.run()
+    try:
+        app = MainWindow()
+        app.run()
+    except SystemExit:
+        # 二重起動による正常終了
+        pass
+    except Exception as e:
+        print(f"アプリケーション起動エラー: {e}")
+        messagebox.showerror("エラー", f"アプリケーションの起動に失敗しました。\n{str(e)}")
