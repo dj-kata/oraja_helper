@@ -191,11 +191,12 @@ class MainWindow:
     def start_monitoring(self):
         """ファイル監視スレッドを開始"""
         if self.monitoring_thread is None or not self.monitoring_thread.is_alive():
-            self.monitoring_thread = threading.Thread(target=self.file_monitoring_worker, daemon=True)
+            self.monitoring_thread = threading.Thread(target=self.db_monitoring_worker, daemon=True)
             self.monitoring_thread.start()
     
-    def file_monitoring_worker(self):
-        """ファイル監視を行うワーカースレッド（スケルトンコード）"""
+    def db_monitoring_worker(self):
+        """dbfile監視を行うワーカースレッド
+        """
         while self.is_running:
             try:
                 # 実際のファイル監視処理をここに実装
