@@ -20,6 +20,7 @@ class OBSControlData:
     def __init__(self, config_file="obs_control_config.json"):
         self.config_file = config_file
         self.control_settings: List[Dict[str, Any]] = []
+        self.monitor_source_name: str = ""  # 監視対象ソース名
         self.load_settings()
     
     def load_settings(self):
@@ -29,18 +30,44 @@ class OBSControlData:
                 with open(self.config_file, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                     self.control_settings = data.get("control_settings", [])
+                    self.monitor_source_name = data.get("monitor_source_name", "")
             except Exception as e:
                 print(f"OBS制御設定読み込みエラー: {e}")
                 self.control_settings = []
+                self.monitor_source_name = ""
     
     def save_settings(self):
         """設定ファイルに制御設定を保存"""
         try:
-            data = {"control_settings": self.control_settings}
+            data = {
+                "control_settings": self.control_settings,
+                "monitor_source_name": self.monitor_source_name
+            }
             with open(self.config_file, 'w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
         except Exception as e:
             print(f"OBS制御設定保存エラー: {e}")
+    
+    def set_monitor_source(self, source_name: str):
+        """監視対象ソース名を設定"""
+        self.monitor_source_name = source_name
+        self.save_settings()
+    
+    def get_monitor_source(self) -> str:
+        """監視対象ソース名を取得"""
+        return self.monitor_source_name
+    
+    @staticmethod
+    def get_monitor_source_name(config_file="obs_control_config.json") -> str:
+        """監視対象ソース名を取得（静的メソッド）"""
+        if os.path.exists(config_file):
+            try:
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    return data.get("monitor_source_name", "")
+            except Exception as e:
+                print(f"監視対象ソース設定読み込みエラー: {e}")
+        return ""
     
     def add_setting(self, setting: Dict[str, Any]):
         """新しい制御設定を追加"""
@@ -176,6 +203,7 @@ class OBSControlWindow:
         # OBSデータ
         self.scenes_data = []
         self.sources_data = {}  # {scene_name: [source_list]}
+        self.all_sources_list = []  # 全ソース一覧
         
         # UI変数
         self.selected_scene_var = tk.StringVar()
@@ -183,6 +211,10 @@ class OBSControlWindow:
         self.selected_trigger_var = tk.StringVar()
         self.selected_action_var = tk.StringVar()
         self.target_scene_var = tk.StringVar()  # シーン切り替え用
+        
+        # 監視対象ソース関連のUI変数を初期化
+        self.current_monitor_source_var = tk.StringVar()
+        self.monitor_source_combo = None  # 後で初期化される
         
         self.setup_ui()
         self.refresh_obs_data()
@@ -419,6 +451,9 @@ class OBSControlWindow:
             self.scene_combo.configure(values=[])
             self.source_combo.configure(values=[])
             self.target_scene_combo.configure(values=[])
+            # monitor_source_comboが存在する場合のみ設定
+            if hasattr(self, 'monitor_source_combo') and self.monitor_source_combo:
+                self.monitor_source_combo.configure(values=[])
             return
         
         try:
@@ -433,24 +468,38 @@ class OBSControlWindow:
                 
                 # 各シーンのソース一覧を取得
                 self.sources_data = {}
+                all_sources_set = set()  # 重複を避けるためのセット
+                
                 for scene in self.scenes_data:
                     scene_name = scene["sceneName"]
                     try:
-                        scene_items = self.obs_manager.send_command("get_scene_item_list", scene_name=scene_name)
+                        scene_items = self.obs_manager.get_sources(scene_name)
                         if scene_items:
-                            sources = [item["sourceName"] for item in scene_items.scene_items]
-                            self.sources_data[scene_name] = sources
+                            self.sources_data[scene_name] = scene_items
+                            # 全ソース一覧に追加
+                            all_sources_set.update(scene_items)
                     except Exception as e:
                         print(f"シーン {scene_name} のソース取得エラー: {e}")
                         self.sources_data[scene_name] = []
                 
-                self.obs_status_var.set(f"接続中 - {len(scene_names)}個のシーンを取得")
+                # 全ソース一覧を作成（重複なし、ソート済み）
+                self.all_sources_list = sorted(list(all_sources_set))
+                
+                # 監視対象ソース選択用コンボボックスに設定（存在する場合のみ）
+                if hasattr(self, 'monitor_source_combo') and self.monitor_source_combo:
+                    self.monitor_source_combo.configure(values=self.all_sources_list)
+                
+                self.obs_status_var.set(f"接続中 - {len(scene_names)}個のシーン、{len(self.all_sources_list)}個のソースを取得")
             else:
                 self.obs_status_var.set("シーン情報の取得に失敗")
                 
         except Exception as e:
             self.obs_status_var.set(f"データ取得エラー: {str(e)}")
             print(f"OBSデータ取得エラー: {e}")
+        
+        # 現在の監視対象ソース設定を表示（メソッドが存在する場合のみ）
+        if hasattr(self, 'update_monitor_source_display'):
+            self.update_monitor_source_display()
     
     def on_scene_changed(self, event=None):
         """シーン選択が変更された時の処理"""
