@@ -360,7 +360,7 @@ class DataBaseAccessor:
         self.today_results.add_result(tmp_result)
 
     def read_old_results(self):
-        """起動前のリザルトをpushする
+        """oraja_helper起動前のリザルトをself.today_resultsに追加する。設定されたオフセット時刻以後のものを参照。
         """
         cur_time = datetime.datetime.now() - datetime.timedelta(hours=self.config.autoload_offset)
         print(cur_time)
