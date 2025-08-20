@@ -11,8 +11,8 @@ class SettingsWindow:
         # ウィンドウ設定
         self.window = tk.Toplevel(parent)
         self.window.title("設定")
-        self.window.geometry("600x550")  # サイズを拡大
-        self.window.minsize(600, 550)    # 最小サイズを設定
+        self.window.geometry("600x700")  # 高さを少し増やす
+        self.window.minsize(600, 600)    # 最小サイズも調整
         self.window.resizable(True, True)
         self.window.transient(parent)
         self.window.grab_set()
@@ -46,20 +46,19 @@ class SettingsWindow:
     
     def setup_ui(self):
         """UIセットアップ"""
-        # メインフレーム
-        self.main_frame = ttk.Frame(self.window, padding="15")
-        self.main_frame.pack(fill=tk.BOTH, expand=True)
+        # スクロール可能なメインフレームを作成
+        self.setup_scrollable_frame()
         
         # 自動ツイート機能on/off
         self.enable_autotweet_cb = ttk.Checkbutton(
-            self.main_frame, 
+            self.scrollable_frame, 
             text="終了時に結果を自動でTweetする",
             variable=self.enable_autotweet_var,
         )
         self.enable_autotweet_cb.pack(anchor=tk.W, pady=(0, 10))
         
         # 起動時に自動で読み込む範囲の設定
-        autoload_offset_frame = ttk.Frame(self.main_frame)
+        autoload_offset_frame = ttk.Frame(self.scrollable_frame)
         autoload_offset_frame.pack(fill=tk.X, pady=2)
         
         ttk.Label(autoload_offset_frame, text="何時間前までのリザルトを自動で読み込むか:", width=45).pack(side=tk.LEFT)
@@ -67,7 +66,7 @@ class SettingsWindow:
         self.autoload_offset_entry.pack(side=tk.LEFT, padx=(5, 0))
 
         # フォルダ設定セクション
-        folder_frame = ttk.LabelFrame(self.main_frame, text="監視設定", padding="10")
+        folder_frame = ttk.LabelFrame(self.scrollable_frame, text="監視設定", padding="10")
         folder_frame.pack(fill=tk.X, pady=(0, 15))
         
         # フォルダパス設定
@@ -93,7 +92,7 @@ class SettingsWindow:
         ttk.Button(player_path_frame, text="変更", command=self.change_player_path).pack(side=tk.RIGHT)
         
         # WebSocket設定セクション
-        websocket_frame = ttk.LabelFrame(self.main_frame, text="WebSocket連携設定", padding="10")
+        websocket_frame = ttk.LabelFrame(self.scrollable_frame, text="WebSocket連携設定", padding="10")
         websocket_frame.pack(fill=tk.X, pady=(0, 15))
         
         # 連携機能有効/無効
@@ -139,9 +138,52 @@ class SettingsWindow:
         # 難易度表セクションを初期化
         self.setup_ui_nglist()
         
-        # ボタンフレーム
-        button_frame = ttk.Frame(self.main_frame)
-        button_frame.pack(fill=tk.X, side=tk.BOTTOM, pady=(10, 0))
+        # ボタンフレーム（固定位置）
+        self.setup_button_frame()
+    
+    def setup_scrollable_frame(self):
+        """スクロール可能なメインフレームを作成"""
+        # ボタンフレーム用のスペースを確保
+        self.main_container = ttk.Frame(self.window)
+        self.main_container.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
+        
+        # スクロール可能エリア
+        self.scroll_canvas = tk.Canvas(self.main_container)
+        self.scrollbar = ttk.Scrollbar(self.main_container, orient="vertical", command=self.scroll_canvas.yview)
+        self.scrollable_frame = ttk.Frame(self.scroll_canvas)
+        
+        self.scrollable_frame.bind(
+            "<Configure>",
+            lambda e: self.scroll_canvas.configure(scrollregion=self.scroll_canvas.bbox("all"))
+        )
+        
+        self.scroll_canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
+        self.scroll_canvas.configure(yscrollcommand=self.scrollbar.set)
+        
+        # マウスホイールでスクロール
+        def _on_mousewheel(event):
+            self.scroll_canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        
+        self.scroll_canvas.bind("<MouseWheel>", _on_mousewheel)
+        
+        # ウィンドウサイズ変更時の対応
+        def configure_scroll_region(event):
+            self.scroll_canvas.configure(scrollregion=self.scroll_canvas.bbox("all"))
+        
+        self.scrollable_frame.bind("<Configure>", configure_scroll_region)
+        
+        # スクロール可能エリアをパック（ボタン分のスペースを確保）
+        self.scroll_canvas.pack(side="left", fill="both", expand=True)
+        self.scrollbar.pack(side="right", fill="y")
+    
+    def setup_button_frame(self):
+        """固定位置のボタンフレームを作成"""
+        # ボタンフレーム（ウィンドウの下部に固定）
+        self.button_container = ttk.Frame(self.window)
+        self.button_container.pack(side=tk.BOTTOM, fill=tk.X, padx=15, pady=(5, 15))
+        
+        button_frame = ttk.Frame(self.button_container)
+        button_frame.pack(fill=tk.X)
         
         ttk.Button(button_frame, text="キャンセル", command=self.on_cancel).pack(side=tk.RIGHT, padx=(5, 0))
         ttk.Button(button_frame, text="保存", command=self.on_save).pack(side=tk.RIGHT)
@@ -152,9 +194,9 @@ class SettingsWindow:
         if hasattr(self, 'nglist_section') and self.nglist_section:
             self.nglist_section.destroy()
         
-        # 難易度表セクションフレーム
-        self.nglist_section = ttk.LabelFrame(self.main_frame, text="難易度表選択", padding="10")
-        self.nglist_section.pack(fill=tk.BOTH, expand=True, pady=(0, 15))
+        # 難易度表セクションフレーム（高さを制限）
+        self.nglist_section = ttk.LabelFrame(self.scrollable_frame, text="難易度表選択", padding="10")
+        self.nglist_section.pack(fill=tk.X, pady=(0, 15))  # expand=Trueを削除
         
         # 現在のチェック状態を保存
         current_states = {}
@@ -175,9 +217,13 @@ class SettingsWindow:
                      foreground="red").pack(anchor=tk.W, pady=10)
             return
         
+        # 難易度表数に応じて高さを動的に決定（最大300px）
+        table_count = len(self.difftable.table_names)
+        dynamic_height = min(max(150, table_count * 25), 300)
+        
         # キャンバスとスクロールバー
-        self.canvas = tk.Canvas(self.nglist_section, height=200)
-        scrollbar = ttk.Scrollbar(self.nglist_section, orient="vertical", command=self.canvas.yview)
+        self.canvas = tk.Canvas(self.nglist_section, height=dynamic_height)
+        nglist_scrollbar = ttk.Scrollbar(self.nglist_section, orient="vertical", command=self.canvas.yview)
         self.nglist_frame = ttk.Frame(self.canvas)
         
         ttk.Label(self.nglist_frame, text="ログに難易度を表示する難易度表", width=30).pack(fill=tk.X, pady=2)
@@ -188,10 +234,10 @@ class SettingsWindow:
         )
         
         self.canvas.create_window((0, 0), window=self.nglist_frame, anchor="nw")
-        self.canvas.configure(yscrollcommand=scrollbar.set)
+        self.canvas.configure(yscrollcommand=nglist_scrollbar.set)
         
         self.canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
+        nglist_scrollbar.pack(side="right", fill="y")
 
         # 難易度表のチェックボックスを作成
         for i, item in enumerate(self.difftable.table_names):
@@ -218,6 +264,10 @@ class SettingsWindow:
             else:
                 # デフォルト（有効）
                 var.set(True)
+        
+        # スクロール領域を更新
+        self.scrollable_frame.update_idletasks()
+        self.scroll_canvas.configure(scrollregion=self.scroll_canvas.bbox("all"))
     
     def load_difftable_data(self):
         """難易度表データを読み込み"""

@@ -11,7 +11,6 @@ from collections import defaultdict
 
 import logging, logging.handlers
 os.makedirs('log', exist_ok=True)
-os.makedirs('out', exist_ok=True)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 hdl = logging.handlers.RotatingFileHandler(
