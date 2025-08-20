@@ -108,6 +108,7 @@ class MainWindow:
         
         self.root = tk.Tk()
         self.config = Config()
+        self.config.save_config()
         self.start_time = datetime.datetime.now()
         
         # スレッド管理
@@ -126,6 +127,7 @@ class MainWindow:
         # データアクセス用クラス初期化
         self.database_accessor = DataBaseAccessor()
         self.database_accessor.set_config(self.config)
+        self.database_accessor.read_old_results()
         self.database_accessor.today_results.write_history_xml()
         
         self.setup_ui()
