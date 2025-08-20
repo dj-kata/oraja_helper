@@ -28,6 +28,7 @@ class DiffTable:
     """難易度表管理用クラス。table以下のgzfileのパースも行う。
     """
     def __init__(self):
+        self.table_names = []
         self.nglist = ['BMS Search'] # 読まないテーブル一覧。名前を登録する。
         self.set_config()
         self.parse_bmtfiles()
@@ -58,6 +59,8 @@ class DiffTable:
         tables = [] 
         for f in glob.glob(self.config.oraja_path+'/table/*.bmt'):
             tmp = self.parse_gzfile_to_json(f)
+            if 'BMS Search' not in tmp.get('name'):
+                self.table_names.append(tmp.get('name'))
             if tmp.get('name') not in self.nglist:
                 tables.append(tmp)
             else:
@@ -162,6 +165,12 @@ class TodayResults:
                 self.updates.append(new)
             else:
                 self.updates.append(result)
+
+    def write_history_xml(self):
+        pass
+
+    def write_updates_xml(self):
+        pass
 
 class DataBaseAccessor:
     def __init__(self):

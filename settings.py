@@ -159,7 +159,7 @@ class SettingsWindow:
         scrollbar.pack(side="right", fill="y")
 
         tmp_difftable = DiffTable()
-        self.difftable = [t['name'] for t in tmp_difftable.tables]
+        self.difftable = tmp_difftable.table_names
         for i, item in enumerate(self.difftable):
             # BooleanVar を作成（チェック状態を管理）
             var = tk.BooleanVar()
