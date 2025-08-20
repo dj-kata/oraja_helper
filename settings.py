@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
+from dataclass import DiffTable
 
 class SettingsWindow:
     def __init__(self, parent, config, on_close_callback=None):
@@ -26,6 +27,8 @@ class SettingsWindow:
         self.enable_autotweet_var = tk.BooleanVar(value=self.config.enable_autotweet)
         self.autoload_offset_var = tk.IntVar(value=self.config.autoload_offset)
         self.enable_register_conditions_var = tk.BooleanVar(value=self.config.enable_register_conditions)
+        self.nglist_vars = {}
+        self.nglist_checkbuttons = {}
         
         self.setup_ui()
         self.update_websocket_state()
@@ -39,27 +42,27 @@ class SettingsWindow:
     def setup_ui(self):
         """UIセットアップ"""
         # メインフレーム
-        main_frame = ttk.Frame(self.window, padding="15")
-        main_frame.pack(fill=tk.BOTH, expand=True)
+        self.main_frame = ttk.Frame(self.window, padding="15")
+        self.main_frame.pack(fill=tk.BOTH, expand=True)
         
         # 自動ツイート機能on/off
         self.enable_autotweet_cb = ttk.Checkbutton(
-            main_frame, 
+            self.main_frame, 
             text="終了時に結果を自動でTweetする",
             variable=self.enable_autotweet_var,
         )
         self.enable_autotweet_cb.pack(anchor=tk.W, pady=(0, 10))
         
         # 起動時に自動で読み込む範囲の設定
-        autoload_offset_frame = ttk.Frame(main_frame)
+        autoload_offset_frame = ttk.Frame(self.main_frame)
         autoload_offset_frame.pack(fill=tk.X, pady=2)
         
         ttk.Label(autoload_offset_frame, text="何時間前までのリザルトを自動で読み込むか:", width=45).pack(side=tk.LEFT)
         self.autoload_offset_entry = ttk.Entry(autoload_offset_frame, textvariable=self.autoload_offset_var, width=5)
         self.autoload_offset_entry.pack(side=tk.LEFT, padx=(5, 0))
-        
+
         # フォルダ設定セクション
-        folder_frame = ttk.LabelFrame(main_frame, text="監視設定", padding="10")
+        folder_frame = ttk.LabelFrame(self.main_frame, text="監視設定", padding="10")
         folder_frame.pack(fill=tk.X, pady=(0, 15))
         
         # フォルダパス設定
@@ -85,7 +88,7 @@ class SettingsWindow:
         ttk.Button(player_path_frame, text="変更", command=self.change_player_path).pack(side=tk.RIGHT)
         
         # WebSocket設定セクション
-        websocket_frame = ttk.LabelFrame(main_frame, text="WebSocket連携設定", padding="10")
+        websocket_frame = ttk.LabelFrame(self.main_frame, text="WebSocket連携設定", padding="10")
         websocket_frame.pack(fill=tk.X, pady=(0, 15))
         
         # 連携機能有効/無効
@@ -122,7 +125,7 @@ class SettingsWindow:
         self.websocket_password_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(5, 0))
         
         # ボタンフレーム
-        button_frame = ttk.Frame(main_frame)
+        button_frame = ttk.Frame(self.main_frame)
         button_frame.pack(fill=tk.X, side=tk.BOTTOM)
         
         ttk.Button(button_frame, text="キャンセル", command=self.on_cancel).pack(side=tk.RIGHT, padx=(5, 0))
@@ -135,6 +138,48 @@ class SettingsWindow:
             self.websocket_password_entry
         ]
     
+        self.setup_ui_nglist()
+        
+    def setup_ui_nglist(self):
+        # キャンバスとスクロールバー
+        self.canvas = tk.Canvas(self.main_frame, height=300)
+        scrollbar = ttk.Scrollbar(self.main_frame, orient="vertical", command=self.canvas.yview)
+        self.nglist_frame = ttk.Frame(self.canvas)
+        ttk.Label(self.nglist_frame, text="ログに難易度を表示する難易度表", width=24).pack(fill=tk.X, pady=2)
+        
+        self.nglist_frame.bind(
+            "<Configure>",
+            lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+        )
+        
+        self.canvas.create_window((0, 0), window=self.nglist_frame, anchor="nw")
+        self.canvas.configure(yscrollcommand=scrollbar.set)
+        
+        self.canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        tmp_difftable = DiffTable()
+        self.difftable = [t['name'] for t in tmp_difftable.tables]
+        for i, item in enumerate(self.difftable):
+            # BooleanVar を作成（チェック状態を管理）
+            var = tk.BooleanVar()
+            self.nglist_vars[item] = var
+            
+            # チェックボックスを作成
+            checkbox = ttk.Checkbutton(
+                self.nglist_frame,
+                text=item,
+                variable=var,
+                # command=lambda item=item: self.on_checkbox_change(item)
+            )
+            checkbox.pack(anchor="w", padx=10, pady=2)
+            self.nglist_checkbuttons[item] = checkbox
+
+            if item in self.config.difftable_nglist: 
+                self.nglist_vars[item].set(False)
+            else:
+                self.nglist_vars[item].set(True)
+
     def center_window(self):
         """ウィンドウを親ウィンドウの中央に配置（画面内に収まるように調整）"""
         self.window.update_idletasks()
@@ -229,6 +274,11 @@ class SettingsWindow:
             self.config.enable_autotweet = self.enable_autotweet_var.get()
             self.config.autoload_offset = self.autoload_offset_var.get()
             self.config.enable_register_conditions = self.enable_register_conditions_var.get()
+
+            self.config.difftable_nglist = []
+            for item in self.difftable:
+                if not self.nglist_vars[item].get():
+                    self.config.difftable_nglist.append(item)
             
             # ファイルに保存
             self.config.save_config()

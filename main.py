@@ -1,17 +1,19 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 import threading
+import subprocess
 import time
 import os
 import tempfile
 import sys
 import base64
 import io
-from datetime import datetime, timedelta
+import datetime
 from config import Config
 from settings import SettingsWindow
 from obssocket import OBSWebSocketManager
 from obs_control import OBSControlWindow, ImageRecognitionData
+from dataclass import *
 
 # PILのインポート
 try:
@@ -31,7 +33,7 @@ except ImportError:
 
 class ApplicationLock:
     """アプリケーションの二重起動防止クラス"""
-    def __init__(self, app_name="file_monitor_app"):
+    def __init__(self, app_name="db_monitor_app"):
         self.app_name = app_name
         self.lock_file_path = os.path.join(tempfile.gettempdir(), f"{app_name}.lock")
         self.lock_file = None
@@ -95,7 +97,7 @@ class ApplicationLock:
 class MainWindow:
     def __init__(self):
         # 二重起動チェック
-        self.app_lock = ApplicationLock("file_monitor_app")
+        self.app_lock = ApplicationLock("db_monitor_app")
         if not self.app_lock.acquire_lock():
             messagebox.showerror(
                 "起動エラー", 
@@ -106,11 +108,11 @@ class MainWindow:
         
         self.root = tk.Tk()
         self.config = Config()
-        self.start_time = datetime.now()
+        self.start_time = datetime.datetime.now()
         
         # スレッド管理
         self.is_running = True
-        self.file_monitoring_thread = None
+        self.db_monitoring_thread = None
         self.screen_monitoring_thread = None
         
         # 監視データ
@@ -120,6 +122,10 @@ class MainWindow:
         # OBS WebSocket管理クラス初期化
         self.obs_manager = OBSWebSocketManager(status_callback=self.on_obs_status_changed)
         self.obs_manager.set_config(self.config)
+
+        # データアクセス用クラス初期化
+        self.database_accessor = DataBaseAccessor()
+        self.database_accessor.set_config(self.config)
         
         self.setup_ui()
         self.restore_window_position()
@@ -139,7 +145,7 @@ class MainWindow:
     
     def setup_ui(self):
         """UIの初期設定"""
-        self.root.title("ファイル・画面モニタリングシステム")
+        self.root.title(f"oraja_helper")
         self.root.geometry("550x350")
         
         # メニューバー
@@ -205,14 +211,14 @@ class MainWindow:
     
     def start_all_threads(self):
         """全スレッドを開始"""
-        self.start_file_monitoring()
+        self.start_db_monitoring()
         self.start_screen_monitoring()
     
-    def start_file_monitoring(self):
+    def start_db_monitoring(self):
         """ファイル監視スレッドを開始"""
-        if self.file_monitoring_thread is None or not self.file_monitoring_thread.is_alive():
-            self.file_monitoring_thread = threading.Thread(target=self.file_monitoring_worker, daemon=True)
-            self.file_monitoring_thread.start()
+        if self.db_monitoring_thread is None or not self.db_monitoring_thread.is_alive():
+            self.db_monitoring_thread = threading.Thread(target=self.db_monitoring_worker, daemon=True)
+            self.db_monitoring_thread.start()
             print("ファイル監視スレッドを開始しました")
     
     def start_screen_monitoring(self):
@@ -222,38 +228,27 @@ class MainWindow:
             self.screen_monitoring_thread.start()
             print("画面監視スレッドを開始しました")
     
-    def file_monitoring_worker(self):
-        """ファイル監視専用ワーカースレッド"""
-        print("ファイル監視スレッド開始")
+    def db_monitoring_worker(self):
+        """dbfile監視専用ワーカースレッド"""
+        print("dbfile監視スレッド開始")
         while self.is_running:
             try:
-                # ファイルの存在確認のみを実行
-                target_file = self.config.get_target_file_path()
-                
-                if target_file:
-                    file_exists_now = os.path.exists(target_file)
+                if self.database_accessor.is_valid():
+                    if self.database_accessor.reload_db():
+                        # TODO とりあえず直近のリザルトを表示だけしている
+                        self.database_accessor.read_one_result()
                     
-                    # ファイル存在状態が変化した場合の処理
-                    if file_exists_now != self.file_exists:
-                        self.file_exists = file_exists_now
-                        print(f"ファイル状態変化: {self.file_exists}")
-                        
-                    # WebSocket連携処理もここに実装予定
-                    if self.config.enable_websocket:
-                        # TODO: WebSocket送信処理
-                        pass
                 else:
                     self.file_exists = False
                 
                 # メインスレッドでUI更新をスケジュール
-                self.root.after(0, self.update_file_status)
+                # self.root.after(0, self.update_file_status)
                 
             except Exception as e:
                 print(f"ファイル監視エラー: {e}")
-                self.root.after(0, lambda: self.status_var.set(f"ファイル監視エラー: {e}"))
-            
-            # 5秒間隔で監視
-            time.sleep(5)
+                # self.root.after(0, lambda: self.status_var.set(f"ファイル監視エラー: {e}"))
+            # 
+            time.sleep(1)
         
         print("ファイル監視スレッド終了")
     
@@ -447,6 +442,7 @@ class MainWindow:
         
         # OBS WebSocket設定の更新
         self.obs_manager.set_config(self.config)
+        self.database_accessor.set_config(self.config)
         
         # 現在のOBSステータスを取得して表示
         status_message, is_connected = self.obs_manager.get_status()
@@ -469,7 +465,7 @@ class MainWindow:
     
     def update_file_status(self):
         """ファイル状況の表示を更新"""
-        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.last_check_var.set(current_time)
         
         # 使用中の判定方式を表示
@@ -600,7 +596,7 @@ class MainWindow:
     def update_display(self):
         """表示の定期更新"""
         # 経過時間の更新
-        elapsed = datetime.now() - self.start_time
+        elapsed = datetime.datetime.now() - self.start_time
         hours, remainder = divmod(int(elapsed.total_seconds()), 3600)
         minutes, seconds = divmod(remainder, 60)
         self.elapsed_time_var.set(f"{hours:02d}:{minutes:02d}:{seconds:02d}")
@@ -641,11 +637,8 @@ class MainWindow:
                         if scene_name and source_name:
                             scene_item_id = self._get_scene_item_id(scene_name, source_name)
                             if scene_item_id:
-                                self.obs_manager.send_command("set_scene_item_enabled", 
-                                                            scene_name=scene_name,
-                                                            scene_item_id=scene_item_id,
-                                                            scene_item_enabled=True)
-                                print(f"ソースを表示: {scene_name}/{source_name}")
+                                self.obs_manager.enable_source(scene_name, scene_item_id)
+                                print(f"ソースを表示: {scene_name}/{source_name} (id:{scene_item_id})")
                     
                     elif action == "hide_source":
                         scene_name = setting.get("scene_name")
@@ -657,7 +650,8 @@ class MainWindow:
                                                             scene_name=scene_name,
                                                             scene_item_id=scene_item_id,
                                                             scene_item_enabled=False)
-                                print(f"ソースを非表示: {scene_name}/{source_name}")
+                                self.obs_manager.disable_source(scene_name, scene_item_id)
+                                print(f"ソースを非表示: {scene_name}/{source_name} (id:{scene_item_id})")
                                 
                 except Exception as e:
                     print(f"制御実行エラー (trigger: {trigger}, setting: {setting}): {e}")
@@ -716,9 +710,9 @@ class MainWindow:
             self.obs_manager.disconnect()
         
         # スレッドの終了を待機
-        if self.file_monitoring_thread and self.file_monitoring_thread.is_alive():
+        if self.db_monitoring_thread and self.db_monitoring_thread.is_alive():
             print("ファイル監視スレッドの終了を待機中...")
-            self.file_monitoring_thread.join(timeout=2)
+            self.db_monitoring_thread.join(timeout=2)
         
         if self.screen_monitoring_thread and self.screen_monitoring_thread.is_alive():
             print("画面監視スレッドの終了を待機中...")

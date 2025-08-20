@@ -19,6 +19,10 @@ class Config:
         self.main_window_y = 100
         self.main_window_width = 500
         self.main_window_height = 300
+
+        # スキップする難易度表の名前を登録
+        # settings.py側はOKListを選択する形になっているが、DiffTableではこちらの方が扱いやすいので変換している。
+        self.difftable_nglist = []
         
         self.load_config()
     
@@ -44,6 +48,8 @@ class Config:
                     self.main_window_y = window_config.get("y", 100)
                     self.main_window_width = window_config.get("width", 500)
                     self.main_window_height = window_config.get("height", 300)
+
+                    self.difftable_nglist = config_data.get('difftable_nglist', [])
             except Exception as e:
                 print(f"設定ファイル読み込みエラー: {e}")
     
@@ -64,7 +70,8 @@ class Config:
                 "y": self.main_window_y,
                 "width": self.main_window_width,
                 "height": self.main_window_height
-            }
+            },
+            "difftable_nglist": self.difftable_nglist
         }
         
         try:
