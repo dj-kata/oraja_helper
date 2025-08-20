@@ -28,6 +28,8 @@ class DiffTable:
     """難易度表管理用クラス。table以下のgzfileのパースも行う。
     """
     def __init__(self):
+        self.difftable = {}
+        self.songtable = {}
         self.table_names = []
         self.nglist = ['BMS Search'] # 読まないテーブル一覧。名前を登録する。
         self.set_config()
@@ -145,6 +147,7 @@ class TodayResults:
         self.updates = [] # resultsは全て記録するが、こちらは同じ曲ならマージする
         self.start_time = datetime.datetime.now()
         self.playtime = datetime.timedelta(seconds=0)
+        self.pace_notes = 0 # ノーツ数について、時間計測ありで取得できたものを別にしておく
 
     def merge_results(self, pre:OneResult, new:OneResult) -> OneResult:
         assert(pre.sha256 == new.sha256)
@@ -286,6 +289,8 @@ class DataBaseAccessor:
         Returns:
             bool: score.dbに更新があった場合True
         """
+        if not self.is_valid():
+            return False
         tmp_df_scorelog = self.load_one_dbfile(self.db_scorelog, 'scorelog')
         self.df_scorelog = tmp_df_scorelog if tmp_df_scorelog is not None else self.df_scorelog
         tmp_df_score = self.load_one_dbfile(self.db_score, 'score')
