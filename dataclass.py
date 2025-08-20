@@ -31,19 +31,53 @@ class DiffTable:
         self.difftable = {}
         self.songtable = {}
         self.table_names = []
+        self.tables = []
         self.nglist = ['BMS Search'] # 読まないテーブル一覧。名前を登録する。
-        self.set_config()
-        self.parse_bmtfiles()
-        self.update_tables()
+        self.config = None
+        
+        # デフォルト設定で初期化を試行
+        try:
+            self.set_config()
+        except Exception as e:
+            print(f"DiffTable初期化警告: {e}")
+            # 初期化に失敗しても空の状態で続行
     
-    def set_config(self, config:Config=Config()):
+    def set_config(self, config=None):
         """設定ファイルを読み込み、各dbfileのパスを更新する。
 
         Args:
             config (Config, optional): config情報。 Defaults to Config().
         """
+        if config is None:
+            try:
+                from config import Config
+                config = Config()
+            except Exception as e:
+                print(f"デフォルトConfig作成エラー: {e}")
+                return
+        
         self.config = config
-        self.nglist = list(set(self.nglist + config.difftable_nglist))
+        self.nglist = list(set(self.nglist + getattr(config, 'difftable_nglist', [])))
+        
+        # oraja_pathが設定されていない場合は空の状態で初期化
+        if not hasattr(config, 'oraja_path') or not config.oraja_path:
+            print("oraja_pathが設定されていません。空の難易度表で初期化します。")
+            self.table_names = []
+            self.tables = []
+            self.difftable = {}
+            self.songtable = {}
+            return
+        
+        try:
+            self.parse_bmtfiles()
+            self.update_tables()
+        except Exception as e:
+            print(f"難易度表パースエラー: {e}")
+            # エラーが発生しても空の状態で続行
+            self.table_names = []
+            self.tables = []
+            self.difftable = {}
+            self.songtable = {}
 
     def parse_gzfile_to_json(self, filepath) -> json:
         """bmt(gz)ファイルからjsonへパース
@@ -58,24 +92,64 @@ class DiffTable:
             return json.load(f)
 
     def parse_bmtfiles(self):
+        """bmtファイルをパースして難易度表データを構築"""
+        if not self.config or not self.config.oraja_path:
+            print("設定が不正です。難易度表をパースできません。")
+            self.tables = []
+            self.table_names = []
+            return
+        
         tables = [] 
-        for f in glob.glob(self.config.oraja_path+'/table/*.bmt'):
-            tmp = self.parse_gzfile_to_json(f)
-            if 'BMS Search' not in tmp.get('name'):
-                self.table_names.append(tmp.get('name'))
-            if tmp.get('name') not in self.nglist:
-                tables.append(tmp)
-            else:
-                print(f"parsing: {tables[-1].get('name') or ''}")
+        table_names = []
+        
+        # tableディレクトリの存在確認
+        table_dir = os.path.join(self.config.oraja_path, 'table')
+        if not os.path.exists(table_dir):
+            print(f"難易度表ディレクトリが見つかりません: {table_dir}")
+            self.tables = []
+            self.table_names = []
+            return
+        
+        # bmtファイルを検索してパース
+        bmt_pattern = os.path.join(table_dir, '*.bmt')
+        bmt_files = glob.glob(bmt_pattern)
+        
+        if not bmt_files:
+            print(f"bmtファイルが見つかりません: {bmt_pattern}")
+        
+        for f in bmt_files:
+            try:
+                tmp = self.parse_gzfile_to_json(f)
+                table_name = tmp.get('name', 'Unknown')
+                
+                # BMS Searchは常に除外
+                if 'BMS Search' not in table_name:
+                    table_names.append(table_name)
+                
+                # nglistに含まれていない場合のみ追加
+                if table_name not in self.nglist:
+                    tables.append(tmp)
+                    print(f"難易度表を読み込み: {table_name}")
+                else:
+                    print(f"難易度表をスキップ: {table_name} (nglistに含まれています)")
+                    
+            except Exception as e:
+                print(f"bmtファイル読み込みエラー ({f}): {e}")
+                continue
+        
         self.tables = tables
+        self.table_names = sorted(list(set(table_names)))  # 重複を除去してソート
+        print(f"合計 {len(self.table_names)} 個の難易度表を認識しました")
 
     def add_nglist(self, ng:list):
         assert(type(ng) == list)
         for name in ng:
             if name not in self.nglist:
                 self.nglist.append(name)
-                self.parse_bmtfiles()
-                self.update_tables()
+        # 再パースして更新
+        if self.config:
+            self.parse_bmtfiles()
+            self.update_tables()
 
     def update_tables(self):
         print(f'難易度表管理用dictを更新します')
@@ -83,16 +157,23 @@ class DiffTable:
         difftable = defaultdict(list)
 
         for t in self.tables:
-            for f in t['folder']:
-                for song in f['songs']:
-                    md5 = song.get('sha256') or song.get('md5')
-                    difftable[md5].append(f['name'])
-                    songtable[md5] = (f['name'], song.get('title'))
+            try:
+                for f in t.get('folder', []):
+                    for song in f.get('songs', []):
+                        md5 = song.get('sha256') or song.get('md5')
+                        if md5:  # md5/sha256が存在する場合のみ処理
+                            difftable[md5].append(f.get('name', 'Unknown'))
+                            songtable[md5] = (f.get('name', 'Unknown'), song.get('title', 'Unknown'))
+            except Exception as e:
+                print(f"難易度表処理エラー: {e}")
+                continue
+                
         self.songtable = songtable
         self.difftable = difftable
+        print(f"難易度表辞書を構築しました (楽曲数: {len(songtable)})")
 
     def search_from_hash(self, hash:str) -> list:
-        return self.difftable.get(hash) or None
+        return self.difftable.get(hash) or []
 
 class OneResult: 
     def __init__(self, title=None, difficulties=None
@@ -367,13 +448,14 @@ class DataBaseAccessor:
     def read_old_results(self):
         """oraja_helper起動前のリザルトをself.today_resultsに追加する。設定されたオフセット時刻以後のものを参照。
         """
-        cur_time = datetime.datetime.now() - datetime.timedelta(hours=self.config.autoload_offset)
-        print(cur_time)
-        log = self.df_scoredatalog[self.df_scoredatalog['date'] > cur_time.timestamp()]
-        for index,row in log.iterrows():
-            tmp_result = self.parse(row)
-            self.today_results.add_result(tmp_result)
-            tmp_result.disp()
+        if self.is_valid():
+            cur_time = datetime.datetime.now() - datetime.timedelta(hours=self.config.autoload_offset)
+            print(cur_time)
+            log = self.df_scoredatalog[self.df_scoredatalog['date'] > cur_time.timestamp()]
+            for index,row in log.iterrows():
+                tmp_result = self.parse(row)
+                self.today_results.add_result(tmp_result)
+                tmp_result.disp()
 
         
 if __name__ == '__main__':

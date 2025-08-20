@@ -30,6 +30,11 @@ class SettingsWindow:
         self.nglist_vars = {}
         self.nglist_checkbuttons = {}
         
+        # 難易度表関連の初期化
+        self.difftable = None
+        self.nglist_frame = None
+        self.canvas = None
+        
         self.setup_ui()
         self.update_websocket_state()
         
@@ -124,13 +129,6 @@ class SettingsWindow:
         self.websocket_password_entry = ttk.Entry(password_frame, textvariable=self.websocket_password_var, show="*")
         self.websocket_password_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(5, 0))
         
-        # ボタンフレーム
-        button_frame = ttk.Frame(self.main_frame)
-        button_frame.pack(fill=tk.X, side=tk.BOTTOM)
-        
-        ttk.Button(button_frame, text="キャンセル", command=self.on_cancel).pack(side=tk.RIGHT, padx=(5, 0))
-        ttk.Button(button_frame, text="保存", command=self.on_save).pack(side=tk.RIGHT)
-        
         # WebSocketエントリリストを保存（状態更新用）
         self.websocket_entries = [
             self.websocket_host_entry,
@@ -138,14 +136,51 @@ class SettingsWindow:
             self.websocket_password_entry
         ]
     
+        # 難易度表セクションを初期化
         self.setup_ui_nglist()
         
+        # ボタンフレーム
+        button_frame = ttk.Frame(self.main_frame)
+        button_frame.pack(fill=tk.X, side=tk.BOTTOM, pady=(10, 0))
+        
+        ttk.Button(button_frame, text="キャンセル", command=self.on_cancel).pack(side=tk.RIGHT, padx=(5, 0))
+        ttk.Button(button_frame, text="保存", command=self.on_save).pack(side=tk.RIGHT)
+        
     def setup_ui_nglist(self):
+        """難易度表UIセクションの初期化"""
+        # 既存のUIが存在する場合は削除
+        if hasattr(self, 'nglist_section') and self.nglist_section:
+            self.nglist_section.destroy()
+        
+        # 難易度表セクションフレーム
+        self.nglist_section = ttk.LabelFrame(self.main_frame, text="難易度表選択", padding="10")
+        self.nglist_section.pack(fill=tk.BOTH, expand=True, pady=(0, 15))
+        
+        # 現在のチェック状態を保存
+        current_states = {}
+        if hasattr(self, 'nglist_vars'):
+            current_states = {name: var.get() for name, var in self.nglist_vars.items()}
+        
+        # 変数をリセット
+        self.nglist_vars = {}
+        self.nglist_checkbuttons = {}
+        
+        # 難易度表データを読み込み
+        self.load_difftable_data()
+        
+        if not self.difftable or not hasattr(self.difftable, 'table_names'):
+            # 難易度表データが読み込めない場合
+            ttk.Label(self.nglist_section, 
+                     text="難易度表データを読み込めません。\nbeatorajaのインストール先が正しく設定されているか確認してください。",
+                     foreground="red").pack(anchor=tk.W, pady=10)
+            return
+        
         # キャンバスとスクロールバー
-        self.canvas = tk.Canvas(self.main_frame, height=300)
-        scrollbar = ttk.Scrollbar(self.main_frame, orient="vertical", command=self.canvas.yview)
+        self.canvas = tk.Canvas(self.nglist_section, height=200)
+        scrollbar = ttk.Scrollbar(self.nglist_section, orient="vertical", command=self.canvas.yview)
         self.nglist_frame = ttk.Frame(self.canvas)
-        ttk.Label(self.nglist_frame, text="ログに難易度を表示する難易度表", width=24).pack(fill=tk.X, pady=2)
+        
+        ttk.Label(self.nglist_frame, text="ログに難易度を表示する難易度表", width=30).pack(fill=tk.X, pady=2)
         
         self.nglist_frame.bind(
             "<Configure>",
@@ -158,9 +193,8 @@ class SettingsWindow:
         self.canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
 
-        tmp_difftable = DiffTable()
-        self.difftable = tmp_difftable.table_names
-        for i, item in enumerate(self.difftable):
+        # 難易度表のチェックボックスを作成
+        for i, item in enumerate(self.difftable.table_names):
             # BooleanVar を作成（チェック状態を管理）
             var = tk.BooleanVar()
             self.nglist_vars[item] = var
@@ -170,15 +204,54 @@ class SettingsWindow:
                 self.nglist_frame,
                 text=item,
                 variable=var,
-                # command=lambda item=item: self.on_checkbox_change(item)
             )
             checkbox.pack(anchor="w", padx=10, pady=2)
             self.nglist_checkbuttons[item] = checkbox
 
-            if item in self.config.difftable_nglist: 
-                self.nglist_vars[item].set(False)
+            # チェック状態を設定（優先順位：保存された状態 > 設定ファイル > デフォルト）
+            if item in current_states:
+                # 以前のUIセッションの状態を復元
+                var.set(current_states[item])
+            elif item in self.config.difftable_nglist: 
+                # 設定ファイルの状態を反映
+                var.set(False)
             else:
-                self.nglist_vars[item].set(True)
+                # デフォルト（有効）
+                var.set(True)
+    
+    def load_difftable_data(self):
+        """難易度表データを読み込み"""
+        try:
+            # 現在のoraja_pathを使用して一時的なConfigを作成
+            temp_config = type('TempConfig', (), {})()
+            temp_config.oraja_path = self.oraja_path_var.get()
+            temp_config.difftable_nglist = self.config.difftable_nglist
+            
+            # DiffTableを新しいパスで初期化
+            if temp_config.oraja_path:
+                self.difftable = DiffTable()
+                self.difftable.set_config(temp_config)
+                print(f"難易度表を読み込みました: {len(self.difftable.table_names)}個")
+            else:
+                self.difftable = None
+                print("oraja_pathが設定されていません")
+                
+        except Exception as e:
+            print(f"難易度表読み込みエラー: {e}")
+            self.difftable = None
+    
+    def refresh_difftable_ui(self):
+        """難易度表UIを再構築"""
+        print("難易度表UIを更新中...")
+        try:
+            # UIを再構築
+            self.setup_ui_nglist()
+            # ウィンドウを更新
+            self.window.update_idletasks()
+            print("難易度表UI更新完了")
+        except Exception as e:
+            print(f"難易度表UI更新エラー: {e}")
+            messagebox.showerror("エラー", f"難易度表UIの更新に失敗しました。\n{str(e)}")
 
     def center_window(self):
         """ウィンドウを親ウィンドウの中央に配置（画面内に収まるように調整）"""
@@ -216,7 +289,11 @@ class SettingsWindow:
         )
         
         if oraja_path:
+            print(f"oraja_pathを変更: {self.oraja_path_var.get()} -> {oraja_path}")
             self.oraja_path_var.set(oraja_path)
+            
+            # 難易度表UIを即座に更新
+            self.window.after(100, self.refresh_difftable_ui)  # 少し遅延させて確実に更新
     
     def change_player_path(self):
         """フォルダ選択ダイアログを開く"""
@@ -275,10 +352,12 @@ class SettingsWindow:
             self.config.autoload_offset = self.autoload_offset_var.get()
             self.config.enable_register_conditions = self.enable_register_conditions_var.get()
 
+            # 難易度表設定を保存
             self.config.difftable_nglist = []
-            for item in self.difftable:
-                if not self.nglist_vars[item].get():
-                    self.config.difftable_nglist.append(item)
+            if self.difftable and hasattr(self.difftable, 'table_names'):
+                for item in self.difftable.table_names:
+                    if item in self.nglist_vars and not self.nglist_vars[item].get():
+                        self.config.difftable_nglist.append(item)
             
             # ファイルに保存
             self.config.save_config()
