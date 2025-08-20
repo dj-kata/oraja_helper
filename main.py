@@ -126,6 +126,7 @@ class MainWindow:
         # データアクセス用クラス初期化
         self.database_accessor = DataBaseAccessor()
         self.database_accessor.set_config(self.config)
+        self.database_accessor.today_results.write_history_xml()
         
         self.setup_ui()
         self.restore_window_position()

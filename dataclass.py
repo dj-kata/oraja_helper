@@ -213,6 +213,7 @@ class TodayResults:
                 else: # 初プレイ時は空白
                     f.write(f'        <diff_bp></diff_bp>\n')
                 f.write(f'        <score_rate>{float(r.score_rate):.2f}</score_rate>\n')
+                f.write(f'        <date>{datetime.datetime.fromtimestamp(r.date)}</date>\n')
                 f.write('    </Result>\n')
             f.write("</Items>\n")
 
@@ -357,17 +358,30 @@ class DataBaseAccessor:
         tmp_result = self.parse(tmp_song)
         tmp_result.disp()
         self.today_results.add_result(tmp_result)
+
+    def read_old_results(self):
+        """起動前のリザルトをpushする
+        """
+        cur_time = datetime.datetime.now() - datetime.timedelta(hours=self.config.autoload_offset)
+        print(cur_time)
+        log = self.df_scoredatalog[self.df_scoredatalog['date'] > cur_time.timestamp()]
+        for index,row in log.iterrows():
+            tmp_result = self.parse(row)
+            self.today_results.add_result(tmp_result)
+            tmp_result.disp()
+
         
 if __name__ == '__main__':
     acc = DataBaseAccessor()
     table_names = [t['name'] for t in acc.difftable.tables]
+    acc.read_old_results()
 
-    num = 25 
-    for i in range(num):
-        idx = len(acc.df_scoredatalog) - num + i
-        scdatalog = acc.df_scoredatalog.iloc[idx, :]
-        tmp_result = acc.parse(scdatalog)
-        acc.today_results.add_result(tmp_result)
-        tmp_result.disp()
+    # num = 25 
+    # for i in range(num):
+    #     idx = len(acc.df_scoredatalog) - num + i
+    #     scdatalog = acc.df_scoredatalog.iloc[idx, :]
+    #     tmp_result = acc.parse(scdatalog)
+    #     acc.today_results.add_result(tmp_result)
+    #     tmp_result.disp()
 
     acc.today_results.write_history_xml()
