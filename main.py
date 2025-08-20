@@ -237,6 +237,7 @@ class MainWindow:
                     if self.database_accessor.reload_db():
                         # TODO とりあえず直近のリザルトを表示だけしている
                         self.database_accessor.read_one_result()
+                        self.database_accessor.today_results.write_history_xml()
                     
                 else:
                     self.file_exists = False

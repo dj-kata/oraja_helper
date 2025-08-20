@@ -143,6 +143,8 @@ class TodayResults:
     def __init__(self):
         self.results = []
         self.updates = [] # resultsは全て記録するが、こちらは同じ曲ならマージする
+        self.start_time = datetime.datetime.now()
+        self.playtime = datetime.timedelta(seconds=0)
 
     def merge_results(self, pre:OneResult, new:OneResult) -> OneResult:
         assert(pre.sha256 == new.sha256)
@@ -158,7 +160,7 @@ class TodayResults:
     def add_result(self, result:OneResult):
         if result not in self.results:
             self.results.append(result)
-            hashes = [tmp.sha256 for tmp in self.results]
+            hashes = [tmp.sha256 for tmp in self.updates]
             if result.sha256 in hashes:
                 pre = self.results.pop(hashes.index(result.sha256))
                 new = self.merge_results(pre, result)
@@ -167,7 +169,53 @@ class TodayResults:
                 self.updates.append(result)
 
     def write_history_xml(self):
-        pass
+        sum_judge = [0, 0, 0, 0, 0, 0]
+        for r in self.results:
+            for i in range(6):
+                sum_judge[i] += r.judge[i]
+        score_rate = 0 # total
+        notes = sum_judge[0]+sum_judge[1]+sum_judge[2]+sum_judge[3]+sum_judge[4]
+        if (notes) > 0:
+            score_rate = 100*(sum_judge[0]*2+sum_judge[1]) / (sum_judge[0]+sum_judge[1]+sum_judge[2]+sum_judge[3]+sum_judge[4]) / 2
+        with open('history.xml', 'w', encoding='utf-8') as f:
+            f.write(f'<?xml version="1.0" encoding="utf-8"?>\n')
+            f.write("<Items>\n")
+            f.write(f"    <date>{self.start_time.year}/{self.start_time.month:02d}/{self.start_time.day:02d}</date>\n")
+            f.write(f'    <notes>{notes}</notes>\n')
+            f.write(f'    <total_score_rate>{score_rate:.2f}</total_score_rate>\n')
+            f.write(f'    <playcount>{len(self.results)}</playcount>\n')
+            # f.write(f'    <last_notes>{self.last_notes}</last_notes>\n')
+            if self.playtime.seconds == 0:
+                f.write(f'    <playtime>0</playtime>\n') # HTML側で処理しやすくしている
+                f.write(f'    <pace>0</pace>\n')
+            else:
+                f.write(f'    <playtime>{str(self.playtime).split(".")[0]}</playtime>\n')
+                f.write(f'    <pace>{int(3600*self.notes/self.playtime.seconds)}</pace>\n')
+
+            for r in self.results:
+                title_esc = r.title.replace('&', '&amp;').replace('<','&lt;').replace('>','&gt;').replace('"','&quot;').replace("'",'&apos;')
+                f.write(f'    <Result>\n')
+                # f.write(f'        <lv>{r.difficulties[0]}</lv>\n')
+                f.write(f'        <lv>{",".join(r.difficulties)}</lv>\n')
+                f.write(f'        <title>{title_esc}</title>\n')
+                f.write(f'        <lamp>{r.lamp}</lamp>\n')
+                f.write(f'        <pre_lamp>{r.pre_lamp}</pre_lamp>\n')
+                f.write(f'        <score>{r.score}</score>\n')
+                f.write(f'        <pre_score>{r.pre_score}</pre_score>\n')
+                f.write(f'        <bp>{r.bp}</bp>\n')
+                f.write(f'        <pre_bp>{r.pre_bp}</pre_bp>\n')
+                if r.pre_score > 0:
+                    f.write(f'        <diff_score>{r.score-r.pre_score:+}</diff_score>\n')
+                else: # 初プレイ時は空白
+                    f.write(f'        <diff_score></diff_score>\n')
+                if r.pre_bp < 100000:
+                    f.write(f'        <diff_bp>{r.bp-r.pre_bp:+}</diff_bp>\n')
+                else: # 初プレイ時は空白
+                    f.write(f'        <diff_bp></diff_bp>\n')
+                f.write(f'        <score_rate>{float(r.score_rate):.2f}</score_rate>\n')
+                f.write('    </Result>\n')
+            f.write("</Items>\n")
+
 
     def write_updates_xml(self):
         pass
@@ -314,10 +362,12 @@ if __name__ == '__main__':
     acc = DataBaseAccessor()
     table_names = [t['name'] for t in acc.difftable.tables]
 
-    num = 5 
+    num = 25 
     for i in range(num):
         idx = len(acc.df_scoredatalog) - num + i
         scdatalog = acc.df_scoredatalog.iloc[idx, :]
         tmp_result = acc.parse(scdatalog)
         acc.today_results.add_result(tmp_result)
         tmp_result.disp()
+
+    acc.today_results.write_history_xml()
