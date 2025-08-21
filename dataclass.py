@@ -224,7 +224,7 @@ class TodayResults:
     """
     def __init__(self):
         self.results = []
-        self.updates = [] # resultsは全て記録するが、こちらは同じ曲ならマージする
+        self.updates = {} # resultsは全て記録するが、こちらは同じ曲ならマージする
         self.start_time = datetime.datetime.now()
         self.playtime = datetime.timedelta(seconds=0)
         self.pace_notes = 0 # ノーツ数について、時間計測ありで取得できたものを別にしておく
@@ -243,15 +243,14 @@ class TodayResults:
     def add_result(self, result:OneResult):
         if result not in self.results:
             self.results.append(result)
-            hashes = [tmp.sha256 for tmp in self.updates]
-            if result.sha256 in hashes:
-                pre = self.results.pop(hashes.index(result.sha256))
+            if result.sha256 in self.updates.keys():
+                pre = self.updates[result.sha256]
                 new = self.merge_results(pre, result)
-                self.updates.append(new)
+                self.updates[result.sha256] = new
             else:
-                self.updates.append(result)
+                self.updates[result.sha256] = result
 
-    def write_history_xml(self):
+    def write_xml(self, outfile='history.xml'):
         sum_judge = [0, 0, 0, 0, 0, 0]
         for r in self.results:
             for i in range(6):
@@ -260,7 +259,7 @@ class TodayResults:
         notes = sum_judge[0]+sum_judge[1]+sum_judge[2]+sum_judge[3]+sum_judge[4]
         if (notes) > 0:
             score_rate = 100*(sum_judge[0]*2+sum_judge[1]) / (sum_judge[0]+sum_judge[1]+sum_judge[2]+sum_judge[3]+sum_judge[4]) / 2
-        with open('history.xml', 'w', encoding='utf-8') as f:
+        with open(outfile, 'w', encoding='utf-8') as f:
             f.write(f'<?xml version="1.0" encoding="utf-8"?>\n')
             f.write("<Items>\n")
             f.write(f"    <date>{self.start_time.year}/{self.start_time.month:02d}/{self.start_time.day:02d}</date>\n")
@@ -296,7 +295,7 @@ class TodayResults:
                 else: # 初プレイ時は空白
                     f.write(f'        <diff_bp></diff_bp>\n')
                 f.write(f'        <score_rate>{float(r.score_rate):.2f}</score_rate>\n')
-                f.write(f'        <date>{datetime.datetime.fromtimestamp(r.date)}</date>\n')
+                f.write(f'        <timestamp>{datetime.datetime.fromtimestamp(r.date)}</timestamp>\n')
                 f.write('    </Result>\n')
             f.write("</Items>\n")
 
@@ -441,6 +440,7 @@ class DataBaseAccessor:
         idx = len(self.df_scoredatalog) - 1
         tmp_song = self.df_scoredatalog.iloc[idx, :]
         tmp_result = self.parse(tmp_song)
+        print(f'read_one_result, idx={idx}')
         tmp_result.disp()
         self.today_results.add_result(tmp_result)
 
@@ -448,14 +448,23 @@ class DataBaseAccessor:
         """oraja_helper起動前のリザルトをself.today_resultsに追加する。設定されたオフセット時刻以後のものを参照。
         """
         if self.is_valid():
+            # scoredatalog(判定内訳あり)を読み込む
             cur_time = datetime.datetime.now() - datetime.timedelta(hours=self.config.autoload_offset)
             print(cur_time)
-            log = self.df_scoredatalog[self.df_scoredatalog['date'] > cur_time.timestamp()]
+            #log = self.df_scoredatalog[self.df_scoredatalog['date'] > cur_time.timestamp()]
+            log = self.df_score[self.df_score['date'] > cur_time.timestamp()]
             for index,row in log.iterrows():
                 tmp_result = self.parse(row)
                 self.today_results.add_result(tmp_result)
                 tmp_result.disp()
-
+            # # scorelog(内訳なし)を読み込む
+            # log = self.df_scorelog[self.df_scorelog['date'] > cur_time.timestamp()]
+            # for index,row in log.iterrows():
+            #     tmp = self.today_results.updates[row.sha256]
+            #     tmp.score = max(tmp.score,row.score)
+            #     tmp.lamp = max(tmp.lamp,row.clear)
+            #     tmp.bp = min(tmp.bp,row.minbp)
+            #     self.today_results.updates[row.sha256] = tmp
         
 if __name__ == '__main__':
     acc = DataBaseAccessor()
@@ -471,3 +480,15 @@ if __name__ == '__main__':
     #     tmp_result.disp()
 
     acc.today_results.write_history_xml()
+
+    len_score = len(acc.df_score)
+    sc0 = acc.df_score.iloc[len_score - 1,:]
+    sc1 = acc.df_score.iloc[len_score - 2,:]
+
+    len_scorelog = len(acc.df_scorelog)
+    scl0 = acc.df_scorelog.iloc[len_scorelog - 1,:]
+    scl1 = acc.df_scorelog.iloc[len_scorelog - 2,:]
+
+    len_scoredatalog = len(acc.df_scoredatalog)
+    scd0 = acc.df_scoredatalog.iloc[len_scoredatalog - 1,:]
+    scd1 = acc.df_scoredatalog.iloc[len_scoredatalog - 2,:]
