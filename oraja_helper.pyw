@@ -3,7 +3,7 @@ from tkinter import ttk, messagebox
 import threading
 import subprocess
 import time
-import os
+import os, sys
 import tempfile
 import sys
 import base64
@@ -131,6 +131,7 @@ class MainWindow:
         self.database_accessor.today_results.write_history_xml()
         
         self.setup_ui()
+        self.set_embedded_icon()
         self.restore_window_position()
         self.start_all_threads()
         self.update_display()
@@ -145,7 +146,32 @@ class MainWindow:
                 time.sleep(0.5)
         
         # アプリ起動時のOBS制御実行
-    
+    def get_resource_path(self, relative_path):
+        """埋め込みリソースのパスを取得"""
+        try:
+            # PyInstaller実行時
+            base_path = sys._MEIPASS
+        except AttributeError:
+            # 開発時
+            base_path = os.path.dirname(os.path.abspath(__file__))
+
+        return os.path.join(base_path, relative_path)
+
+    def set_embedded_icon(self):
+        """埋め込まれたアイコンを設定"""
+        try:
+            # 埋め込まれたアイコンのパスを取得
+            icon_path = self.get_resource_path("assets/icon.ico")
+            
+            if os.path.exists(icon_path):
+                self.root.iconbitmap(default=icon_path)
+                print(f"埋め込みアイコンを設定: {icon_path}")
+            else:
+                # フォールバック
+                self.try_alternative_icons()
+        except Exception as e:
+            print(f"アイコン設定エラー: {e}")    
+
     def setup_ui(self):
         """UIの初期設定"""
         self.root.title(f"oraja_helper")
