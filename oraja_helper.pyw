@@ -447,6 +447,7 @@ class MainWindow:
         # OBS WebSocket設定の更新
         self.obs_manager.set_config(self.config)
         self.database_accessor.set_config(self.config)
+        self.database_accessor.read_old_results()
         
         # 現在のOBSステータスを取得して表示
         status_message, is_connected = self.obs_manager.get_status()
@@ -698,6 +699,10 @@ class MainWindow:
     def on_closing(self):
         """アプリケーション終了時の処理"""
         print("アプリケーション終了処理開始")
+
+        # xml出力
+        self.database_accessor.today_results.write_history_xml()
+        self.database_accessor.today_results.write_updates_xml()
         
         # ウィンドウ位置を保存
         self.save_window_position()
