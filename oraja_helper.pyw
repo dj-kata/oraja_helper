@@ -729,6 +729,10 @@ class MainWindow:
         # xml出力
         self.database_accessor.today_results.write_history_xml()
         self.database_accessor.today_results.write_updates_xml()
+
+        # tweet
+        if self.config.enable_autotweet:
+            self.database_accessor.today_results.tweet_summary()
         
         # ウィンドウ位置を保存
         self.save_window_position()

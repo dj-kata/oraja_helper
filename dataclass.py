@@ -6,6 +6,7 @@ import datetime
 import os
 import sqlite3
 import pandas as pd
+import webbrowser, urllib
 from config import Config
 from collections import defaultdict
 
@@ -250,7 +251,7 @@ class TodayResults:
             else:
                 self.updates[result.sha256] = result
 
-    def write_xml(self, outfile='history.xml'):
+    def write_history_xml(self, outfile='history.xml'):
         sum_judge = [0, 0, 0, 0, 0, 0]
         for r in self.results:
             for i in range(6):
@@ -302,6 +303,30 @@ class TodayResults:
 
     def write_updates_xml(self):
         pass
+
+    def tweet_summary(self):
+        """本日の統計情報をツイートする
+        """
+        sum_judge = [0, 0, 0, 0, 0, 0]
+        for r in self.results:
+            for i in range(6):
+                sum_judge[i] += r.judge[i]
+        score_rate = 0 # total
+        notes = sum_judge[0]+sum_judge[1]+sum_judge[2]+sum_judge[3]+sum_judge[4]
+        if (notes) > 0:
+            score_rate = 100*(sum_judge[0]*2+sum_judge[1]) / (sum_judge[0]+sum_judge[1]+sum_judge[2]+sum_judge[3]+sum_judge[4]) / 2
+        pace = int(3600*self.notes/self.playtime.seconds) if self.playtime.seconds > 0 else 0
+        ontime = datetime.datetime.now() - self.start_time
+        msg = f"notes: {notes:,}, score_rate: {score_rate:.2f}%\n"
+        msg += f"(PG:{sum_judge[0]:,}, GR:{sum_judge[1]:,}, GD: {sum_judge[2]:,}, BD: {sum_judge[3]:,}, PR:{sum_judge[4]:,}, MISS:{sum_judge[5]:,})\n"
+        if pace > 0:
+            msg += f"uptime: {str(ontime).split('.')[0]}, playtime: {str(self.playtime).split('.')[0]}, pace: {pace:,}notes/h\n"
+        else:
+            msg += f"uptime: {str(ontime).split('.')[0]}\n"
+        msg += '#oraja_helper\n'
+        encoded_msg = urllib.parse.quote(msg)
+        webbrowser.open(f"https://twitter.com/intent/tweet?text={encoded_msg}")
+
 
 class DataBaseAccessor:
     def __init__(self):
@@ -469,6 +494,7 @@ class DataBaseAccessor:
 if __name__ == '__main__':
     acc = DataBaseAccessor()
     table_names = [t['name'] for t in acc.difftable.tables]
+    acc.config.autoload_offset = 12
     acc.read_old_results()
 
     # num = 25 
@@ -492,3 +518,5 @@ if __name__ == '__main__':
     len_scoredatalog = len(acc.df_scoredatalog)
     scd0 = acc.df_scoredatalog.iloc[len_scoredatalog - 1,:]
     scd1 = acc.df_scoredatalog.iloc[len_scoredatalog - 2,:]
+
+    acc.today_results.tweet_summary()
