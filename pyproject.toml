@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "bs4>=0.0.2",
+    "fastparquet>=2024.11.0",
     "imagehash>=4.3.2",
     "ipython>=9.4.0",
     "obsws-python>=1.8.0",
@@ -13,6 +14,13 @@ dependencies = [
     "pandas>=2.3.1",
     "pillow>=11.3.0",
     "pyarmor>=9.1.8",
+    "pyarrow>=21.0.0",
     "pyinstaller>=6.15.0",
     "requests>=2.32.5",
+    "zstandard>=0.24.0",
+]
+
+[tool.uv.workspace]
+members = [
+    "old",
 ]

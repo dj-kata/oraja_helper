@@ -9,6 +9,7 @@ import pandas as pd
 import webbrowser, urllib
 from config import Config
 from collections import defaultdict
+import traceback
 
 import logging, logging.handlers
 os.makedirs('log', exist_ok=True)
@@ -196,7 +197,11 @@ class OneResult:
         self.date = date
         self.judge = judge
         self.sha256 = sha256
-        self.length = float(length/1000) if length is not None else None
+        try:
+            self.length = float(length/1000)
+        except Exception:
+            self.length = None
+
         self.notes = notes 
         self.density = self.notes / self.length if (self.notes is not None) and (self.length is not None) else None
 
@@ -220,10 +225,31 @@ class OneResult:
         print(f"bp:{self.bp}", end=',')
         print(f"notes:{self.notes}, density={self.density:.2f}", end='\n')
 
+    def to_dataframe(self) -> pd.DataFrame:
+        out = {}
+        out['title']     = self.title
+        out['sha256']    = self.sha256
+        out['lamp']      = self.lamp
+        out['score']     = self.score if type(self.score)==int else self.score.item()
+        out['bp']        = self.bp if type(self.bp)==int else self.bp.item()
+        out['pre_lamp']  = self.pre_lamp if type(self.pre_lamp)==int else self.pre_lamp.item()
+        out['pre_score'] = self.pre_score if type(self.pre_score)==int else self.pre_score.item()
+        out['pre_bp']    = self.pre_bp if type(self.pre_bp)==int else self.pre_bp.item()
+        out['notes']     = self.notes if type(self.notes)==int else self.notes.item()
+        out['pg']        = self.judge[0]
+        out['gr']        = self.judge[1]
+        out['gd']        = self.judge[2]
+        out['bd']        = self.judge[3]
+        out['pr']        = self.judge[4]
+        out['ms']        = self.judge[5]
+        out['date']      = self.date
+        return pd.DataFrame(out, index=[0])
+
 class TodayResults:
     """OneResultの配列を管理するクラス。xml出力とかもやる。
     """
     def __init__(self):
+        logger.info('created')
         self.results = []
         self.updates = {} # resultsは全て記録するが、こちらは同じ曲ならマージする
         self.start_time = datetime.datetime.now()
@@ -331,10 +357,11 @@ class TodayResults:
 class DataBaseAccessor:
     def __init__(self):
         self.difftable = DiffTable() # 難易度情報を取得するために持っておく
-        self.today_results = TodayResults()
+        self.today_results = TodayResults() # xml出力向けにOneResultの配列を持っておく
         self.db_updated_date = {} # 各dbfileの最終更新日時を覚えておく、必要なものだけ読み込む
         self.set_config()
         self.reload_db()
+        self.read_playlog()
 
     def is_valid(self):
         """すべての設定ファイルが存在すればTrue,無効な設定があればFalseを返す
@@ -427,15 +454,14 @@ class DataBaseAccessor:
         tmp = self.df_scorelog[self.df_scorelog['sha256'] == hsh].tail(1)
         #pre_score = tmp.oldscore.iloc[0]
         notes = tmpsc.notes.iloc[0]
-        logger.debug(f'hsh:{hsh}\n')
+        # logger.debug(f'hsh:{hsh}\n')
         info = self.df_songdata[self.df_songdata['sha256'] == hsh].tail(1)
-        logger.debug(f'type(info):{type(info)}')
-        if type(info) == pd.DataFrame:
-            logger.debug(f'info.shape:{info.shape}')
+        # logger.debug(f'type(info):{type(info)}, info.shape:{info.shape}')
         if info.shape[0] > 0:
             title = info.title.iloc[0]
             length = info.length.iloc[0]
         else:
+            return False
             title = info.title
             length = info.length
             logger.debug(f'shape[0]==0!!!, title={title}')
@@ -462,15 +488,20 @@ class DataBaseAccessor:
         #return title, lampid, score, pre_score, score_rate, tmpdat.date, judge
 
     def read_one_result(self):
+        """最新のリザルト1つを受け取って処理する。today_results及びplaylogに登録する。
+        """
         idx = len(self.df_scoredatalog) - 1
         tmp_song = self.df_scoredatalog.iloc[idx, :]
         tmp_result = self.parse(tmp_song)
         print(f'read_one_result, idx={idx}')
         tmp_result.disp()
         self.today_results.add_result(tmp_result)
+        # oraja_helper用プレーログにも追加
+        self.playlog = pd.concat([self.playlog, tmp_result.to_dataframe()])
 
     def read_old_results(self):
         """oraja_helper起動前のリザルトをself.today_resultsに追加する。設定されたオフセット時刻以後のものを参照。
+        oraja_helperで取ったログを書き出すようにしたら不要になる予定。
         """
         if self.is_valid():
             # scoredatalog(判定内訳あり)を読み込む
@@ -490,33 +521,55 @@ class DataBaseAccessor:
             #     tmp.lamp = max(tmp.lamp,row.clear)
             #     tmp.bp = min(tmp.bp,row.minbp)
             #     self.today_results.updates[row.sha256] = tmp
+
+    def test_write_playlog(self):
+        """テスト用。scoredatalogからparseして作ったDataFrameを書き出す
+        """
+        out = None
+        for i,d in self.df_scoredatalog.iterrows():
+            try:
+                parse_result = self.parse(d)
+                if parse_result:
+                    p = parse_result.to_dataframe()
+            except Exception:
+                logger.error(traceback.format_exc())
+                continue
+            if out is None:
+                out = p
+            else:
+                out = pd.concat([out, p], ignore_index=True)
         
+        # gz+json
+        out.to_parquet('test.orh', compression='zstd')
+
+    def write_playlog(self):
+        """self.playlogのファイル出力。pd.DataFrame.to_parquetを利用.
+        """
+        self.playlog.to_parquet('playlog.orh', compression='zstd')
+
+    def read_playlog(self):
+        """oraja_helperで記録しているplaylogを読み込んでself.playlogにセットする。初期状態では空のDataFrameがセットされる。
+
+        Returns:
+            pd.DataFrame: playlog
+        """
+        try:
+            self.playlog = pd.read_parquet('playlog.orh')
+        except Exception:
+            columns = ['title', 'sha256', 'lamp', 'score', 'bp', 'pre_lamp', 'pre_score', 'pre_bp'
+                       ,'notes', 'pg', 'gr', 'gd', 'bd', 'pr', 'ms', 'date']
+            self.playlog = pd.DataFrame(columns=columns)
+        return self.playlog
+
 if __name__ == '__main__':
     acc = DataBaseAccessor()
     table_names = [t['name'] for t in acc.difftable.tables]
     acc.config.autoload_offset = 12
     acc.read_old_results()
 
-    # num = 25 
-    # for i in range(num):
-    #     idx = len(acc.df_scoredatalog) - num + i
-    #     scdatalog = acc.df_scoredatalog.iloc[idx, :]
-    #     tmp_result = acc.parse(scdatalog)
-    #     acc.today_results.add_result(tmp_result)
-    #     tmp_result.disp()
-
     acc.today_results.write_history_xml()
 
-    len_score = len(acc.df_score)
-    sc0 = acc.df_score.iloc[len_score - 1,:]
-    sc1 = acc.df_score.iloc[len_score - 2,:]
+    # acc.today_results.tweet_summary()
 
-    len_scorelog = len(acc.df_scorelog)
-    scl0 = acc.df_scorelog.iloc[len_scorelog - 1,:]
-    scl1 = acc.df_scorelog.iloc[len_scorelog - 2,:]
-
-    len_scoredatalog = len(acc.df_scoredatalog)
-    scd0 = acc.df_scoredatalog.iloc[len_scoredatalog - 1,:]
-    scd1 = acc.df_scoredatalog.iloc[len_scoredatalog - 2,:]
-
-    acc.today_results.tweet_summary()
+    hoge = acc.read_playlog()
+    acc.write_playlog()
