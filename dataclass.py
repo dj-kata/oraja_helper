@@ -358,6 +358,7 @@ class DataBaseAccessor:
     def __init__(self):
         self.difftable = DiffTable() # 難易度情報を取得するために持っておく
         self.today_results = TodayResults() # xml出力向けにOneResultの配列を持っておく
+        self.playlog = None # 
         self.db_updated_date = {} # 各dbfileの最終更新日時を覚えておく、必要なものだけ読み込む
         self.set_config()
         self.reload_db()
