@@ -733,7 +733,7 @@ class MainWindow:
 
         # tweet
         if self.config.enable_autotweet:
-            self.database_accessor.today_results.tweet_summary()
+            self.database_accessor.tweet_summary()
         
         # ウィンドウ位置を保存
         self.save_window_position()

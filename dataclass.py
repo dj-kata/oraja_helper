@@ -353,11 +353,16 @@ class TodayResults:
     def write_updates_xml(self):
         pass
 
-    def tweet_summary(self):
+    def tweet_summary(self, autoload_offset):
         """本日の統計情報をツイートする
         """
+        target_results = []
+        for i,r in enumerate(self.results):
+            if r.date > int(datetime.datetime.now().timestamp()) - autoload_offset:
+                target_results = self.results[i:]
+
         sum_judge = [0, 0, 0, 0, 0, 0]
-        for r in self.results:
+        for r in target_results:
             for i in range(6):
                 sum_judge[i] += r.judge[i]
         score_rate = 0 # total
@@ -366,7 +371,7 @@ class TodayResults:
             score_rate = 100*(sum_judge[0]*2+sum_judge[1]) / (sum_judge[0]+sum_judge[1]+sum_judge[2]+sum_judge[3]+sum_judge[4]) / 2
         pace = int(3600*self.notes/self.playtime.seconds) if self.playtime.seconds > 0 else 0
         ontime = datetime.datetime.now() - self.start_time
-        msg = f"notes: {notes:,}, score_rate: {score_rate:.2f}%\n"
+        msg = f"plays:{len(target_results):,}, notes: {notes:,}, score_rate: {score_rate:.2f}%\n"
         msg += f"(PG:{sum_judge[0]:,}, GR:{sum_judge[1]:,}, GD: {sum_judge[2]:,}, BD: {sum_judge[3]:,}, PR:{sum_judge[4]:,}, MISS:{sum_judge[5]:,})\n"
         if pace > 0:
             msg += f"uptime: {str(ontime).split('.')[0]}, playtime: {str(self.playtime).split('.')[0]}, pace: {pace:,}notes/h\n"
@@ -568,6 +573,9 @@ class DataBaseAccessor:
         """XML出力用関数。データの実体を持つがconfigを持たないTodayResultsクラスを叩くためだけに用意している。
         """
         self.today_results.write_history_xml(autoload_offset=self.config.autoload_offset)
+
+    def tweet_summary(self):
+        self.today_results.tweet_summary(autoload_offset=self.config.autoload_offset)
 
 if __name__ == '__main__':
     acc = DataBaseAccessor()
