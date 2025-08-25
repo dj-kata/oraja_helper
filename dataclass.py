@@ -1,6 +1,8 @@
 # 難易度表やdb周り
+import pickle
 import json
 import gzip
+import bz2
 import glob
 import datetime
 import os
@@ -208,10 +210,7 @@ class OneResult:
     def __eq__(self, other):
         if not isinstance(other, OneResult):
             return NotImplemented
-        diff_date = abs(self.date - other.date)
-        if type(diff_date) is datetime.timedelta:
-            diff_date = diff_date.total_seconds()
-        return (self.title == other.title) and (self.sha256 == other.sha256) and (self.score == other.score) and (self.bp == other.bp) and (self.lamp == other.lamp) and (diff_date<10.0)
+        return (self.title == other.title) and (self.sha256 == other.sha256) and (self.score == other.score) and (self.bp == other.bp) and (self.lamp == other.lamp) and (self.date == other.date)
     
     def __lt__(self, other):
         if not isinstance(other, OneResult):
@@ -223,7 +222,8 @@ class OneResult:
         print(f"difficulties:{self.difficulties}", end=',')
         print(f"lamp:{self.lamp}, score:{self.score} ({self.score_rate}%)", end=',')
         print(f"bp:{self.bp}", end=',')
-        print(f"notes:{self.notes}, density={self.density:.2f}", end='\n')
+        print(f"notes:{self.notes}, density={self.density:.2f}", end=',')
+        print(f"date:{datetime.datetime.fromtimestamp(self.date)}")
 
     def to_dataframe(self) -> pd.DataFrame:
         out = {}
@@ -255,6 +255,22 @@ class TodayResults:
         self.start_time = datetime.datetime.now()
         self.playtime = datetime.timedelta(seconds=0)
         self.pace_notes = 0 # ノーツ数について、時間計測ありで取得できたものを別にしておく
+        self.load()
+        self.save()
+
+    def save(self):
+        """self.resultsをファイルに保存する
+        """
+        print(f"number of results: {len(self.results)}")
+        with bz2.BZ2File('playlog.orh', 'wb', compresslevel=9) as f:
+            pickle.dump(self.results, f)
+
+    def load(self):
+        try:
+            with bz2.BZ2File('playlog.orh', 'rb', compresslevel=9) as f:
+                self.results = pickle.load(f)
+        except:
+            logger.error(traceback.format_exc())
 
     def merge_results(self, pre:OneResult, new:OneResult) -> OneResult:
         assert(pre.sha256 == new.sha256)
@@ -271,15 +287,22 @@ class TodayResults:
         if result not in self.results:
             self.results.append(result)
             if result.sha256 in self.updates.keys():
-                pre = self.updates[result.sha256]
-                new = self.merge_results(pre, result)
+                import copy
+                pre = copy.copy(self.updates[result.sha256])
+                new = self.merge_results(pre, copy.copy(result))
                 self.updates[result.sha256] = new
             else:
                 self.updates[result.sha256] = result
 
-    def write_history_xml(self, outfile='history.xml'):
+    def write_history_xml(self, autoload_offset:int=0, outfile='history.xml'):
         sum_judge = [0, 0, 0, 0, 0, 0]
-        for r in self.results:
+        # offsetの条件を満たすものだけ抽出
+        target_results = []
+        for i,r in enumerate(self.results):
+            if r.date > int(datetime.datetime.now().timestamp()) - autoload_offset:
+                target_results = self.results[i:]
+
+        for r in target_results:
             for i in range(6):
                 sum_judge[i] += r.judge[i]
         score_rate = 0 # total
@@ -292,7 +315,7 @@ class TodayResults:
             f.write(f"    <date>{self.start_time.year}/{self.start_time.month:02d}/{self.start_time.day:02d}</date>\n")
             f.write(f'    <notes>{notes}</notes>\n')
             f.write(f'    <total_score_rate>{score_rate:.2f}</total_score_rate>\n')
-            f.write(f'    <playcount>{len(self.results)}</playcount>\n')
+            f.write(f'    <playcount>{len(target_results)}</playcount>\n')
             # f.write(f'    <last_notes>{self.last_notes}</last_notes>\n')
             if self.playtime.seconds == 0:
                 f.write(f'    <playtime>0</playtime>\n') # HTML側で処理しやすくしている
@@ -301,7 +324,7 @@ class TodayResults:
                 f.write(f'    <playtime>{str(self.playtime).split(".")[0]}</playtime>\n')
                 f.write(f'    <pace>{int(3600*self.notes/self.playtime.seconds)}</pace>\n')
 
-            for r in self.results:
+            for r in target_results:
                 title_esc = r.title.replace('&', '&amp;').replace('<','&lt;').replace('>','&gt;').replace('"','&quot;').replace("'",'&apos;')
                 f.write(f'    <Result>\n')
                 # f.write(f'        <lv>{r.difficulties[0]}</lv>\n')
@@ -362,7 +385,6 @@ class DataBaseAccessor:
         self.db_updated_date = {} # 各dbfileの最終更新日時を覚えておく、必要なものだけ読み込む
         self.set_config()
         self.reload_db()
-        self.read_playlog()
 
     def is_valid(self):
         """すべての設定ファイルが存在すればTrue,無効な設定があればFalseを返す
@@ -505,33 +527,25 @@ class DataBaseAccessor:
         oraja_helperで取ったログを書き出すようにしたら不要になる予定。
         """
         if self.is_valid():
-            # scoredatalog(判定内訳あり)を読み込む
-            cur_time = datetime.datetime.now() - datetime.timedelta(hours=self.config.autoload_offset)
-            print(cur_time)
             #log = self.df_scoredatalog[self.df_scoredatalog['date'] > cur_time.timestamp()]
-            log = self.df_score[self.df_score['date'] > cur_time.timestamp()]
+            log = self.df_score
             for index,row in log.iterrows():
                 tmp_result = self.parse(row)
-                self.today_results.add_result(tmp_result)
-                tmp_result.disp()
-            # # scorelog(内訳なし)を読み込む
-            # log = self.df_scorelog[self.df_scorelog['date'] > cur_time.timestamp()]
-            # for index,row in log.iterrows():
-            #     tmp = self.today_results.updates[row.sha256]
-            #     tmp.score = max(tmp.score,row.score)
-            #     tmp.lamp = max(tmp.lamp,row.clear)
-            #     tmp.bp = min(tmp.bp,row.minbp)
-            #     self.today_results.updates[row.sha256] = tmp
+                if tmp_result:
+                    self.today_results.add_result(tmp_result)
+        self.today_results.results.sort()
 
     def test_write_playlog(self):
         """テスト用。scoredatalogからparseして作ったDataFrameを書き出す
         """
         out = None
+        out_list = []
         for i,d in self.df_scoredatalog.iterrows():
             try:
                 parse_result = self.parse(d)
                 if parse_result:
                     p = parse_result.to_dataframe()
+                    out_list.append(parse_result)
             except Exception:
                 logger.error(traceback.format_exc())
                 continue
@@ -543,34 +557,25 @@ class DataBaseAccessor:
         # gz+json
         out.to_parquet('test.orh', compression='zstd')
 
-    def write_playlog(self):
-        """self.playlogのファイル出力。pd.DataFrame.to_parquetを利用.
-        """
-        self.playlog.to_parquet('playlog.orh', compression='zstd')
+        # bz2+pickle
+        with bz2.BZ2File('test.bz2', 'wb', compresslevel=9) as f:
+            pickle.dump(out_list, f)
 
-    def read_playlog(self):
-        """oraja_helperで記録しているplaylogを読み込んでself.playlogにセットする。初期状態では空のDataFrameがセットされる。
+        with open('test.pkl', 'wb') as f:
+            pickle.dump(out_list, f)
 
-        Returns:
-            pd.DataFrame: playlog
+    def write_history_xml(self):
+        """XML出力用関数。データの実体を持つがconfigを持たないTodayResultsクラスを叩くためだけに用意している。
         """
-        try:
-            self.playlog = pd.read_parquet('playlog.orh')
-        except Exception:
-            columns = ['title', 'sha256', 'lamp', 'score', 'bp', 'pre_lamp', 'pre_score', 'pre_bp'
-                       ,'notes', 'pg', 'gr', 'gd', 'bd', 'pr', 'ms', 'date']
-            self.playlog = pd.DataFrame(columns=columns)
-        return self.playlog
+        self.today_results.write_history_xml(autoload_offset=self.config.autoload_offset)
 
 if __name__ == '__main__':
     acc = DataBaseAccessor()
     table_names = [t['name'] for t in acc.difftable.tables]
     acc.config.autoload_offset = 12
-    acc.read_old_results()
 
-    acc.today_results.write_history_xml()
 
     # acc.today_results.tweet_summary()
-
-    hoge = acc.read_playlog()
-    acc.write_playlog()
+    acc.read_old_results()
+    acc.today_results.save()
+    acc.write_history_xml()

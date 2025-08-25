@@ -127,8 +127,8 @@ class MainWindow:
         # データアクセス用クラス初期化
         self.database_accessor = DataBaseAccessor()
         self.database_accessor.set_config(self.config)
-        self.database_accessor.read_old_results()
-        self.database_accessor.today_results.write_history_xml()
+        # self.database_accessor.read_old_results()
+        self.database_accessor.write_history_xml()
         
         self.setup_ui()
         self.set_embedded_icon()
@@ -266,7 +266,7 @@ class MainWindow:
                     if self.database_accessor.reload_db():
                         # TODO とりあえず直近のリザルトを表示だけしている
                         self.database_accessor.read_one_result()
-                        self.database_accessor.today_results.write_history_xml()
+                        self.database_accessor.write_history_xml()
                     
                 else:
                     self.file_exists = False
@@ -473,7 +473,7 @@ class MainWindow:
         # OBS WebSocket設定の更新
         self.obs_manager.set_config(self.config)
         self.database_accessor.set_config(self.config)
-        self.database_accessor.read_old_results()
+        # self.database_accessor.read_old_results()
         
         # 現在のOBSステータスを取得して表示
         status_message, is_connected = self.obs_manager.get_status()
@@ -727,8 +727,9 @@ class MainWindow:
         print("アプリケーション終了処理開始")
 
         # xml出力
-        self.database_accessor.today_results.write_history_xml()
-        self.database_accessor.today_results.write_updates_xml()
+        self.database_accessor.today_results.save()
+        self.database_accessor.write_history_xml()
+        # self.database_accessor.write_updates_xml()
 
         # tweet
         if self.config.enable_autotweet:
