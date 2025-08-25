@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
-from dataclass import DiffTable
+from dataclass import DiffTable, DataBaseAccessor
+# from tooltip import ToolTip
 
 class SettingsWindow:
     def __init__(self, parent, config, on_close_callback=None):
@@ -64,6 +65,9 @@ class SettingsWindow:
         ttk.Label(autoload_offset_frame, text="何時間前までのリザルトを自動で読み込むか:", width=45).pack(side=tk.LEFT)
         self.autoload_offset_entry = ttk.Entry(autoload_offset_frame, textvariable=self.autoload_offset_var, width=5)
         self.autoload_offset_entry.pack(side=tk.LEFT, padx=(5, 0))
+
+        self.button_load_oraja_log = ttk.Button(autoload_offset_frame, text="過去ログ取得", command=self.load_oraja_log).pack(side=tk.RIGHT)
+        # ToolTip(self.button_load_oraja_log, 'beatorajaのdbからプレーログを取得して本ツールのログとして保存します。\n連奏した曲は取得漏れとなるので注意。')
 
         # フォルダ設定セクション
         folder_frame = ttk.LabelFrame(self.scrollable_frame, text="監視設定", padding="10")
@@ -363,6 +367,11 @@ class SettingsWindow:
         
         for entry in self.websocket_entries: # 設定が無効な場合に入力欄を無効化
             entry.config(state=state)
+
+    def load_oraja_log(self):
+        acc = DataBaseAccessor()
+        acc.read_old_results()
+        acc.today_results.save()
     
     def validate_settings(self):
         """設定値の妥当性をチェック"""

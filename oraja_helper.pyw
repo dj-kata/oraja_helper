@@ -470,10 +470,12 @@ class MainWindow:
         """設定情報の表示を更新"""
         self.oraja_path_var.set(self.config.oraja_path or "未設定")
         
-        # OBS WebSocket設定の更新
+        # 設定の更新
         self.obs_manager.set_config(self.config)
         self.database_accessor.set_config(self.config)
-        # self.database_accessor.read_old_results()
+
+        # DataBaseAccessorをリロードしておく
+        self.database_accessor.today_results.load()
         
         # 現在のOBSステータスを取得して表示
         status_message, is_connected = self.obs_manager.get_status()

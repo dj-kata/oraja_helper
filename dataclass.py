@@ -299,8 +299,9 @@ class TodayResults:
         # offsetの条件を満たすものだけ抽出
         target_results = []
         for i,r in enumerate(self.results):
-            if r.date > int(datetime.datetime.now().timestamp()) - autoload_offset:
+            if r.date > int(datetime.datetime.now().timestamp()) - autoload_offset*3600:
                 target_results = self.results[i:]
+                break
 
         for r in target_results:
             for i in range(6):
@@ -358,8 +359,9 @@ class TodayResults:
         """
         target_results = []
         for i,r in enumerate(self.results):
-            if r.date > int(datetime.datetime.now().timestamp()) - autoload_offset:
+            if r.date > int(datetime.datetime.now().timestamp()) - autoload_offset*3600:
                 target_results = self.results[i:]
+                break
 
         sum_judge = [0, 0, 0, 0, 0, 0]
         for r in target_results:
