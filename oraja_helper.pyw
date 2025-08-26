@@ -470,6 +470,7 @@ class MainWindow:
         self.oraja_path_var.set(self.config.oraja_path or "未設定")
         
         # 設定の更新
+        self.config = Config()
         self.obs_manager.set_config(self.config)
         self.database_accessor.set_config(self.config)
 
@@ -719,7 +720,7 @@ class MainWindow:
             return
         
         try:
-            obs_control = OBSControlWindow(self.root, self.obs_manager, self.config)
+            obs_control = OBSControlWindow(self.root, self.obs_manager, self.config, self.update_config_display())
         except Exception as e:
             messagebox.showerror("エラー", f"OBS制御設定ウィンドウの起動に失敗しました。\n{str(e)}")
     

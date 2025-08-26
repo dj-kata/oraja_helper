@@ -43,7 +43,7 @@ class SettingsWindow:
         self.center_window()
         
         # ウィンドウ閉じる時のイベント
-        self.window.protocol("WM_DELETE_WINDOW", self.on_cancel)
+        self.window.protocol("WM_DELETE_WINDOW", self.on_save)
     
     def setup_ui(self):
         """UIセットアップ"""
@@ -188,9 +188,6 @@ class SettingsWindow:
         
         button_frame = ttk.Frame(self.button_container)
         button_frame.pack(fill=tk.X)
-        
-        ttk.Button(button_frame, text="キャンセル", command=self.on_cancel).pack(side=tk.RIGHT, padx=(5, 0))
-        ttk.Button(button_frame, text="保存", command=self.on_save).pack(side=tk.RIGHT)
         
     def setup_ui_nglist(self):
         """難易度表UIセクションの初期化"""
@@ -421,15 +418,11 @@ class SettingsWindow:
             # ファイルに保存
             self.config.save_config()
             
-            messagebox.showinfo("保存完了", "設定を保存しました。")
+            # messagebox.showinfo("保存完了", "設定を保存しました。")
             self.close_window()
             
         except Exception as e:
             messagebox.showerror("保存エラー", f"設定の保存に失敗しました。\n{str(e)}")
-    
-    def on_cancel(self):
-        """キャンセル処理"""
-        self.close_window()
     
     def close_window(self):
         """ウィンドウを閉じる"""

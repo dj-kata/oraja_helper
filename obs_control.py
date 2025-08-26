@@ -12,6 +12,7 @@ import logging, logging.handlers
 import traceback
 import base64
 import io
+from config import Config
 
 try:
     import obsws_python as obs
@@ -44,60 +45,40 @@ logger.addHandler(hdl)
 class OBSControlData:
     """OBS制御設定のデータ管理クラス"""
     
-    def __init__(self, config_file="obs_control_config.json"):
-        self.config_file = config_file
-        self.control_settings: List[Dict[str, Any]] = []
-        self.monitor_source_name: str = ""  # 監視対象ソース名
-        self.load_settings()
+    def __init__(self):
+        self.set_config()
     
-    def load_settings(self):
-        """設定ファイルから制御設定を読み込む"""
-        if os.path.exists(self.config_file):
-            try:
-                with open(self.config_file, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                    self.control_settings = data.get("control_settings", [])
-                    self.monitor_source_name = data.get("monitor_source_name", "")
-            except Exception as e:
-                print(f"OBS制御設定読み込みエラー: {e}")
-                self.control_settings = []
-                self.monitor_source_name = ""
-    
-    def save_settings(self):
-        """設定ファイルに制御設定を保存"""
-        try:
-            data = {
-                "control_settings": self.control_settings,
-                "monitor_source_name": self.monitor_source_name
-            }
-            with open(self.config_file, 'w', encoding='utf-8') as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            print(f"OBS制御設定保存エラー: {e}")
-    
+    def set_config(self, config:Config=Config()):
+        """設定ファイルを読み込み、各dbfileのパスを更新する。
+
+        Args:
+            config (Config, optional): config情報。 Defaults to Config().
+        """
+        self.config = config
+
     def add_setting(self, setting: Dict[str, Any]):
         """新しい制御設定を追加"""
-        self.control_settings.append(setting)
-        self.save_settings()
+        self.config.obs_control_settings.append(setting)
+        self.config.save_config()
     
     def remove_setting(self, index: int):
         """指定インデックスの制御設定を削除"""
-        if 0 <= index < len(self.control_settings):
-            del self.control_settings[index]
-            self.save_settings()
+        if 0 <= index < len(self.config.obs_control_settings):
+            del self.config.obs_control_settings[index]
+            self.config.save_config()
     
     def get_settings_by_trigger(self, trigger: str) -> List[Dict[str, Any]]:
         """指定されたトリガーの設定一覧を取得"""
-        return [setting for setting in self.control_settings if setting.get("trigger") == trigger]
+        return [setting for setting in self.config.obs_control_settings if setting.get("trigger") == trigger]
     
     def set_monitor_source(self, source_name: str):
         """監視対象ソース名を設定"""
-        self.monitor_source_name = source_name
-        self.save_settings()
+        self.config.monitor_source_name = source_name
+        self.config.save_config()
     
     def get_monitor_source(self) -> str:
         """監視対象ソース名を取得"""
-        return self.monitor_source_name
+        return self.config.monitor_source_name
     
     @staticmethod
     def get_monitor_source_name(config_file="obs_control_config.json") -> str:
@@ -163,7 +144,7 @@ class ImageRecognitionData:
                 "image_path": image_path
             }
             
-            self.save_settings()
+            self.config.save_config()
             return True
             
         except Exception as e:
@@ -224,10 +205,11 @@ class OBSControlWindow:
         "set_monitor_source": "#FFFACD" # 薄い黄色
     }
     
-    def __init__(self, parent, obs_manager, config=None):
+    def __init__(self, parent, obs_manager, config=None, on_close_callback=None):
         self.parent = parent
         self.obs_manager = obs_manager
         self.config = config
+        self.on_close_callback = on_close_callback
         self.control_data = OBSControlData()
         self.image_recognition_data = ImageRecognitionData()
         
@@ -272,7 +254,7 @@ class OBSControlWindow:
         self.center_window()
         
         # ウィンドウ閉じる時のイベント
-        self.window.protocol("WM_DELETE_WINDOW", self.on_close)
+        self.window.protocol("WM_DELETE_WINDOW", self.on_save)
     
     def setup_ui(self):
         """UIセットアップ"""
@@ -768,7 +750,7 @@ class OBSControlWindow:
                            tags=("monitor_source",))
         
         # 通常の設定を表示
-        for i, setting in enumerate(self.control_data.control_settings):
+        for i, setting in enumerate(self.control_data.config.obs_control_settings):
             trigger_text = self.TRIGGERS.get(setting["trigger"], setting["trigger"])
             action_text = self.ACTIONS.get(setting["action"], setting["action"])
             
@@ -831,12 +813,12 @@ class OBSControlWindow:
     
     def delete_all_settings(self):
         """全ての設定を削除"""
-        if not self.control_data.control_settings and not self.control_data.get_monitor_source():
+        if not self.control_data.config.obs_control_settings and not self.control_data.get_monitor_source():
             messagebox.showwarning("削除エラー", "削除する設定がありません。")
             return
         
         if messagebox.askyesno("全削除確認", "すべての設定（監視対象ソース設定を含む）を削除しますか？\nこの操作は取り消せません。"):
-            self.control_data.control_settings = []
+            self.control_data.config.obs_control_settings = []
             self.control_data.set_monitor_source("")
             self.refresh_settings_list()
             messagebox.showinfo("削除完了", "すべての設定を削除しました。")
@@ -879,6 +861,7 @@ class OBSControlWindow:
                         print(f"ソースを非表示: {scene_name}/{source_name}")
                         
             except Exception as e:
+                logger.error(traceback.format_exc())
                 print(f"制御実行エラー (trigger: {trigger}, setting: {setting}): {e}")
     
     def _get_scene_item_id(self, scene_name: str, source_name: str) -> int:
@@ -889,10 +872,17 @@ class OBSControlWindow:
                                                  source_name=source_name)
             return result.scene_item_id if result else 0
         except Exception as e:
+            logger.error(traceback.format_exc())
             print(f"シーンアイテムID取得エラー: {e}")
             return 0
     
+    def on_save(self):
+        self.on_close()
+
     def on_close(self):
+        if self.on_close_callback:
+            self.on_close_callback()
+
         """ウィンドウを閉じる"""
         self.window.grab_release()
         self.window.destroy()
@@ -1115,6 +1105,7 @@ class ImageRecognitionDialog:
             
         except Exception as e:
             # エラー時は静かに失敗（コンソールにログだけ出力）
+            logger.error(traceback.format_exc())
             print(f"自動ハッシュ計算エラー: {e}")
             self.hash_var.set("計算エラー")
     
@@ -1157,6 +1148,7 @@ class ImageRecognitionDialog:
             print(f"{self.screen_name}の既存設定を読み込みました")
             
         except Exception as e:
+            logger.error(traceback.format_exc())
             print(f"既存設定の読み込みエラー: {e}")
             messagebox.showwarning("警告", f"既存設定の読み込みに失敗しました。\n{str(e)}")
     

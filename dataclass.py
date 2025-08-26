@@ -42,6 +42,7 @@ class DiffTable:
         try:
             self.set_config()
         except Exception as e:
+            logger.error(traceback.format_exc())
             print(f"DiffTable初期化警告: {e}")
             # 初期化に失敗しても空の状態で続行
     
@@ -56,6 +57,7 @@ class DiffTable:
                 from config import Config
                 config = Config()
             except Exception as e:
+                logger.error(traceback.format_exc())
                 print(f"デフォルトConfig作成エラー: {e}")
                 return
         
@@ -75,6 +77,7 @@ class DiffTable:
             self.parse_bmtfiles()
             self.update_tables()
         except Exception as e:
+            logger.error(traceback.format_exc())
             print(f"難易度表パースエラー: {e}")
             # エラーが発生しても空の状態で続行
             self.table_names = []
@@ -137,6 +140,7 @@ class DiffTable:
                     print(f"難易度表をスキップ: {table_name} (nglistに含まれています)")
                     
             except Exception as e:
+                logger.error(traceback.format_exc())
                 print(f"bmtファイル読み込みエラー ({f}): {e}")
                 continue
         
@@ -168,6 +172,7 @@ class DiffTable:
                             difftable[md5].append(f.get('name', 'Unknown'))
                             songtable[md5] = (f.get('name', 'Unknown'), song.get('title', 'Unknown'))
             except Exception as e:
+                logger.error(traceback.format_exc())
                 print(f"難易度表処理エラー: {e}")
                 continue
                 
