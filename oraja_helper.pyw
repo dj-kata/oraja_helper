@@ -705,6 +705,7 @@ class MainWindow:
             # 設定が更新されたら表示を更新
             self.update_config_display()
         
+        self.database_accessor.today_results.save()
         settings_window = SettingsWindow(self.root, self.config, on_settings_close)
     
     def open_obs_control(self):
