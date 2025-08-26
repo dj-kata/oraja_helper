@@ -60,12 +60,16 @@ class OBSControlData:
         """新しい制御設定を追加"""
         self.config.obs_control_settings.append(setting)
         self.config.save_config()
+        print('hoge')
+        self.config.disp()
     
     def remove_setting(self, index: int):
         """指定インデックスの制御設定を削除"""
         if 0 <= index < len(self.config.obs_control_settings):
             del self.config.obs_control_settings[index]
             self.config.save_config()
+            print('fuga')
+            self.config.disp()
     
     def get_settings_by_trigger(self, trigger: str) -> List[Dict[str, Any]]:
         """指定されたトリガーの設定一覧を取得"""
@@ -182,7 +186,7 @@ class OBSControlWindow:
         "set_monitor_source": "#FFFACD" # 薄い黄色
     }
     
-    def __init__(self, parent, obs_manager, config=None, on_close_callback=None):
+    def __init__(self, parent, obs_manager, config:Config=Config(), on_close_callback=None):
         self.parent = parent
         self.obs_manager = obs_manager
         self.config = config
@@ -712,8 +716,11 @@ class OBSControlWindow:
         self.update_ui_state()
         
         messagebox.showinfo("追加完了", "制御設定を追加しました。")
+        self.config.disp()
+        print(setting)
     
     def refresh_settings_list(self):
+        self.config.load_config()
         """設定一覧を更新（監視対象ソース設定を優先表示）"""
         # 既存の項目をクリア
         for item in self.tree.get_children():
@@ -854,6 +861,7 @@ class OBSControlWindow:
             return 0
     
     def on_save(self):
+        self.config.save_config()
         self.on_close()
 
     def on_close(self):

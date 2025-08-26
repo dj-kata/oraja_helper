@@ -109,6 +109,7 @@ class MainWindow:
         self.config = Config()
         self.config.save_config()
         self.start_time = datetime.datetime.now()
+        self.play_st    = datetime.datetime.now()
         
         # スレッド管理
         self.is_running = True
@@ -370,6 +371,11 @@ class MainWindow:
                 # 新しい状態の開始処理
                 if new_state:
                     self.execute_obs_trigger(f"{new_state}_start")
+
+                if new_state == 'play':
+                    self.play_st = datetime.datetime.now()
+                elif self.current_game_state == 'play':
+                    self.database_accessor.today_results.playtime += datetime.datetime.now() - self.play_st
                 
                 self.current_game_state = new_state
                 
@@ -460,7 +466,7 @@ class MainWindow:
         self.oraja_path_var.set(self.config.oraja_path or "未設定")
         
         # 設定の更新
-        self.config = Config()
+        self.config.load_config()
         self.obs_manager.set_config(self.config)
         self.database_accessor.set_config(self.config)
 

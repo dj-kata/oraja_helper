@@ -123,3 +123,9 @@ class Config:
         if self.oraja_path:
             return os.path.join(self.oraja_path, "target.txt")
         return ""
+    
+    def disp(self):
+        # print(self.__dict__)
+        print('obs_control_settings')
+        for s in self.obs_control_settings:
+            print(s)

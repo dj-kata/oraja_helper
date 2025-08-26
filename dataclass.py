@@ -259,7 +259,7 @@ class TodayResults:
         self.updates = {} # resultsは全て記録するが、こちらは同じ曲ならマージする
         self.start_time = datetime.datetime.now()
         self.playtime = datetime.timedelta(seconds=0)
-        self.pace_notes = 0 # ノーツ数について、時間計測ありで取得できたものを別にしておく
+        self.notes = 0
         self.load()
         self.save()
 
