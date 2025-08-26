@@ -213,8 +213,8 @@ class OBSControlWindow:
             self.window.geometry("1000x900")
             self.window.minsize(1000, 900)
         else:
-            self.window.geometry("850x700")
-            self.window.minsize(850, 700)
+            self.window.geometry("1000x700")
+            self.window.minsize(1000, 700)
         
         self.window.resizable(True, True)
         self.window.transient(parent)
