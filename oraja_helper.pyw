@@ -470,7 +470,7 @@ class MainWindow:
         self.obs_manager.set_config(self.config)
         self.database_accessor.set_config(self.config)
 
-        # DataBaseAccessorをリロードしておく
+        # 設定画面で更新される可能性があるため、DataBaseAccessorをリロードしておく
         self.database_accessor.today_results.load()
         
         # 現在のOBSステータスを取得して表示

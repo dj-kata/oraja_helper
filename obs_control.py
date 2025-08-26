@@ -46,7 +46,7 @@ class OBSControlData:
     """OBS制御設定のデータ管理クラス"""
     
     def __init__(self):
-        self.set_config()
+        self.config = None
     
     def set_config(self, config:Config=Config()):
         """設定ファイルを読み込み、各dbfileのパスを更新する。
@@ -99,7 +99,9 @@ class OBSControlData:
 class ImageRecognitionData:
     """画像認識設定のデータ管理クラス"""
     
-    def __init__(self, config:Config=Config(), image_dir="recognition_images"):
+    def __init__(self, config:Config=None, image_dir="recognition_images"):
+        if config is None:
+            config = Config()
         self.config = config
         self.image_dir = image_dir
         
@@ -192,7 +194,8 @@ class OBSControlWindow:
         self.config = config
         self.on_close_callback = on_close_callback
         self.control_data = OBSControlData()
-        self.image_recognition_data = ImageRecognitionData()
+        self.control_data.set_config(config)
+        self.image_recognition_data = ImageRecognitionData(config)
         
         # ウィンドウ設定
         self.window = tk.Toplevel(parent)
