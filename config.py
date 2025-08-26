@@ -11,8 +11,8 @@ class Config:
         self.websocket_password = ""
         self.enable_websocket = False
         self.enable_autotweet = False
-        self.autoload_offset = 0
-        self.enable_register_conditions = False  # 画面判定条件設定機能の有効/無効
+        self.autoload_offset = 4
+        self.enable_register_conditions = True  # 画面判定条件設定機能の有効/無効
         
         # ウィンドウ位置設定
         self.main_window_x = 100
