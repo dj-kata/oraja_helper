@@ -1740,13 +1740,7 @@ class OBSWebSocketManager:
 
     # 設定されたソースを取得し、PIL.Image形式で返す
     def get_screenshot(self):
-        b = self.client.get_source_screenshot(self.config.monitor_source_name, 'jpeg', None, None, 100)
-        return b
-        b = b.image_data
-        b = b.split(',')[1]
-        c = base64.b64decode(b) # バイナリ形式のはず？
-        tmp = io.BytesIO(c)
-        img = Image.open(tmp)
+        img = self.client.get_source_screenshot(self.config.monitor_source_name, 'jpeg', None, None, 100)
         return img
 
     def enable_source(self, scenename, sourceid): # グループ内のitemはscenenameにグループ名を指定する必要があるので注意
