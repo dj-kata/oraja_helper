@@ -11,8 +11,7 @@ import io
 import datetime
 from config import Config
 from settings import SettingsWindow
-from obssocket import OBSWebSocketManager
-from obs_control import OBSControlWindow, ImageRecognitionData
+from obs_control import OBSControlWindow, ImageRecognitionData, OBSWebSocketManager
 from dataclass import *
 
 # PILのインポート
@@ -319,7 +318,7 @@ class MainWindow:
         try:
             # OBSの現在のプログラム出力のスクリーンショットを取得
             result = self.obs_manager.send_command("get_source_screenshot", 
-                                                  source_name="Program",
+                                                  source_name=self.obs_manager.control_data.monitor_source_name,
                                                   image_format="png")
             
             # 上記が失敗した場合は代替方法を試行
