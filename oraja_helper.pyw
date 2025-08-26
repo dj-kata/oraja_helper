@@ -317,18 +317,7 @@ class MainWindow:
             
         try:
             # OBSの現在のプログラム出力のスクリーンショットを取得
-            result = self.obs_manager.send_command("get_source_screenshot", 
-                                                  source_name=self.obs_manager.control_data.monitor_source_name,
-                                                  image_format="png")
-            
-            # 上記が失敗した場合は代替方法を試行
-            if not result or not hasattr(result, 'image_data'):
-                # 現在のシーンのスクリーンショットを取得
-                scene_list = self.obs_manager.get_scene_list()
-                if scene_list and hasattr(scene_list, 'current_program_scene_name'):
-                    result = self.obs_manager.send_command("get_source_screenshot",
-                                                          source_name=scene_list.current_program_scene_name,
-                                                          image_format="png")
+            result = self.obs_manager.get_screenshot()
             
             if result and hasattr(result, 'image_data'):
                 # Base64デコードして画像データを返す
@@ -341,6 +330,7 @@ class MainWindow:
                 return image
             
         except Exception as e:
+            logger.error(traceback.format_exc())
             print(f"OBSスクリーンショット取得エラー: {e}")
             
         return None

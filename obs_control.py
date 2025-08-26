@@ -95,37 +95,14 @@ class OBSControlData:
 class ImageRecognitionData:
     """画像認識設定のデータ管理クラス"""
     
-    def __init__(self, config_file="image_recognition_config.json", image_dir="recognition_images"):
-        self.config_file = config_file
+    def __init__(self, config:Config=Config(), image_dir="recognition_images"):
+        self.config = config
         self.image_dir = image_dir
-        self.recognition_settings: Dict[str, Dict[str, Any]] = {}
         
         # 画像保存ディレクトリを作成
         if not os.path.exists(self.image_dir):
             os.makedirs(self.image_dir)
         
-        self.load_settings()
-    
-    def load_settings(self):
-        """設定ファイルから画像認識設定を読み込む"""
-        if os.path.exists(self.config_file):
-            try:
-                with open(self.config_file, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                    self.recognition_settings = data.get("recognition_settings", {})
-            except Exception as e:
-                print(f"画像認識設定読み込みエラー: {e}")
-                self.recognition_settings = {}
-    
-    def save_settings(self):
-        """設定ファイルに画像認識設定を保存"""
-        try:
-            data = {"recognition_settings": self.recognition_settings}
-            with open(self.config_file, 'w', encoding='utf-8') as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            print(f"画像認識設定保存エラー: {e}")
-    
     def save_condition(self, screen_type: str, image: Image.Image, coordinates: Dict[str, int], 
                       hash_value: str, threshold: int):
         """画像認識条件を保存"""
@@ -136,7 +113,7 @@ class ImageRecognitionData:
             image.save(image_path)
             
             # 設定を保存
-            self.recognition_settings[screen_type] = {
+            self.config.recognition_settings[screen_type] = {
                 "coordinates": coordinates,
                 "hash": hash_value,
                 "threshold": threshold,
@@ -153,15 +130,15 @@ class ImageRecognitionData:
     
     def get_condition(self, screen_type: str) -> Optional[Dict[str, Any]]:
         """指定された画面タイプの条件を取得"""
-        return self.recognition_settings.get(screen_type)
+        return self.config.recognition_settings.get(screen_type)
     
     def has_condition(self, screen_type: str) -> bool:
         """指定された画面タイプの条件が存在するかチェック"""
-        return screen_type in self.recognition_settings
+        return screen_type in self.config.recognition_settings
     
     def get_all_conditions(self) -> Dict[str, Dict[str, Any]]:
         """すべての条件を取得"""
-        return self.recognition_settings
+        return self.config.recognition_settings
 
 class OBSControlWindow:
     """OBS制御設定ウィンドウ"""
@@ -1763,7 +1740,9 @@ class OBSWebSocketManager:
 
     # 設定されたソースを取得し、PIL.Image形式で返す
     def get_screenshot(self):
-        b = self.client.get_source_screenshot(self.inf_source, 'jpeg', self.picw, self.pich, 100).image_data
+        b = self.client.get_source_screenshot(self.config.monitor_source_name, 'jpeg', None, None, 100)
+        return b
+        b = b.image_data
         b = b.split(',')[1]
         c = base64.b64decode(b) # バイナリ形式のはず？
         tmp = io.BytesIO(c)

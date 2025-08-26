@@ -42,6 +42,7 @@ class Config:
         # OBS自動制御設定
         self.obs_control_settings = []
         self.monitor_source_name = ""
+        self.recognition_settings = {}
         
         self.load_config()
     
@@ -59,7 +60,7 @@ class Config:
                     self.enable_websocket = config_data.get("enable_websocket", False)
                     self.enable_autotweet = config_data.get("enable_autotweet", False)
                     self.autoload_offset = config_data.get("autoload_offset", 0)
-                    self.enable_register_conditions = config_data.get("enable_register_conditions", False)
+                    self.enable_register_conditions = config_data.get("enable_register_conditions", True)
                     
                     # ウィンドウ位置設定
                     window_config = config_data.get("window", {})
@@ -73,6 +74,7 @@ class Config:
                     # OBS自動制御設定
                     self.obs_control_settings = config_data.get('obs_control_settings', [])
                     self.monitor_source_name = config_data.get('monitor_source_name', "")
+                    self.recognition_settings = config_data.get('recognition_settings', {})
             except Exception as e:
                 logger.error(traceback.format_exc())
                 print(f"設定ファイル読み込みエラー: {e}")
@@ -98,6 +100,7 @@ class Config:
             "difftable_nglist": self.difftable_nglist,
             "obs_control_settings": self.obs_control_settings,
             "monitor_source_name": self.monitor_source_name,
+            "recognition_settings": self.recognition_settings,
         }
         
         try:
