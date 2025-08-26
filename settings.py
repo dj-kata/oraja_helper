@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from dataclass import DiffTable, DataBaseAccessor
+from config import Config
 # from tooltip import ToolTip
 
 class SettingsWindow:
@@ -366,7 +367,14 @@ class SettingsWindow:
             entry.config(state=state)
 
     def load_oraja_log(self):
+        # 現在のUI状態でconfigを更新してからDataBaseAccessorを作成
+        temp_config = Config()
+        temp_config.oraja_path = self.oraja_path_var.get()
+        temp_config.player_path = self.player_path_var.get()
+        temp_config.autoload_offset = self.autoload_offset_var.get()
+
         acc = DataBaseAccessor()
+        acc.set_config(temp_config)
         acc.read_old_results()
         acc.today_results.save()
     

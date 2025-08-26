@@ -395,8 +395,6 @@ class DataBaseAccessor:
         self.today_results = TodayResults() # xml出力向けにOneResultの配列を持っておく
         self.playlog = None # 
         self.db_updated_date = {} # 各dbfileの最終更新日時を覚えておく、必要なものだけ読み込む
-        self.set_config()
-        self.reload_db()
 
     def is_valid(self):
         """すべての設定ファイルが存在すればTrue,無効な設定があればFalseを返す
@@ -412,7 +410,7 @@ class DataBaseAccessor:
         ret &= os.path.exists(self.db_songinfo)
         return ret
 
-    def set_config(self, config:Config=Config()):
+    def set_config(self, config:Config):
         """設定ファイルを読み込み、各dbfileのパスを更新する。
 
         Args:
@@ -425,6 +423,9 @@ class DataBaseAccessor:
         self.db_score        = os.path.join(self.config.player_path, 'score.db')
         self.db_scorelog     = os.path.join(self.config.player_path, 'scorelog.db')
         self.db_scoredatalog = os.path.join(self.config.player_path, 'scoredatalog.db')
+
+        # configが確定した時点でdbをリロード
+        self.reload_db()
 
     def load_one_dbfile(self, dbpath:str, dbname:str) -> pd.DataFrame:
         """1つのdbfileをロードする。最終更新時刻を用いて、更新のないものはスキップする。

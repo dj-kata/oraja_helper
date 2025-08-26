@@ -718,7 +718,7 @@ class MainWindow:
         
         try:
             self.database_accessor.today_results.save()
-            obs_control = OBSControlWindow(self.root, self.obs_manager, self.config, self.update_config_display())
+            obs_control = OBSControlWindow(self.root, self.obs_manager, self.config, self.update_config_display)
         except Exception as e:
             messagebox.showerror("エラー", f"OBS制御設定ウィンドウの起動に失敗しました。\n{str(e)}")
     
