@@ -109,7 +109,7 @@ class MainWindow:
         self.config = Config()
         self.config.save_config()
         self.start_time = datetime.datetime.now()
-        self.play_st    = datetime.datetime.now()
+        self.play_st    = None
         
         # スレッド管理
         self.is_running = True
@@ -335,7 +335,20 @@ class MainWindow:
             print(f"OBSスクリーンショット取得エラー: {e}")
             
         return None
-    
+
+    def update_playtime(self, old_state, new_state):
+        """プレイ時間を更新する共通メソッド"""
+        current_time = datetime.datetime.now()
+        
+        if new_state == 'play':
+            self.play_st = current_time
+        elif old_state == 'play' and self.play_st is not None:
+            # プレイ終了時に時間を加算
+            play_duration = current_time - self.play_st
+            self.database_accessor.today_results.playtime += play_duration
+            print(f"プレイ時間を追加: {play_duration}, 累計: {self.database_accessor.today_results.playtime}")
+            self.play_st = None
+
     def detect_game_state_from_screenshot(self, screenshot_image):
         """スクリーンショットからゲーム状態を判定"""
         if not IMAGEHASH_AVAILABLE:
@@ -364,19 +377,18 @@ class MainWindow:
             
             # 状態が変化した場合のみ処理
             if new_state != self.current_game_state:
+
                 # 前の状態の終了処理
                 if self.current_game_state:
                     self.execute_obs_trigger(f"{self.current_game_state}_end")
                 
+                # プレイ時間の更新
+                self.update_playtime(self.current_game_state, new_state)
+
                 # 新しい状態の開始処理
                 if new_state:
                     self.execute_obs_trigger(f"{new_state}_start")
 
-                if new_state == 'play':
-                    self.play_st = datetime.datetime.now()
-                elif self.current_game_state == 'play':
-                    self.database_accessor.today_results.playtime += datetime.datetime.now() - self.play_st
-                
                 self.current_game_state = new_state
                 
                 # UI更新
@@ -443,10 +455,14 @@ class MainWindow:
                 
                 # 状態が変化した場合
                 if new_state != self.current_game_state:
+
                     # 前の状態の終了処理
                     if self.current_game_state:
                         self.execute_obs_trigger(f"{self.current_game_state}_end")
-                    
+
+                    # プレイ時間の更新
+                    self.update_playtime(self.current_game_state, new_state)
+
                     # 新しい状態の開始処理
                     if new_state:
                         self.execute_obs_trigger(f"{new_state}_start")
