@@ -346,6 +346,7 @@ class MainWindow:
                         self.update_db_status()
                         self.database_accessor.read_one_result()
                         self.database_accessor.today_results.write_history_xml()
+                        self.update_config_display()
                     
                 else:
                     self.file_exists = False
