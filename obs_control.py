@@ -489,10 +489,14 @@ class OBSControlWindow:
                 # 全ソース一覧を作成（重複なし、ソート済み）
                 self.all_sources_list = sorted(list(all_sources_set))
                 
-                # ソース選択用コンボボックスに設定
+                # 初期状態では全ソース一覧を設定（監視対象ソース指定がデフォルト動作）
                 self.source_combo.configure(values=self.all_sources_list)
                 
                 self.obs_status_var.set(f"接続中 - {len(scene_names)}個のシーン、{len(self.all_sources_list)}個のソースを取得")
+                print(f"OBSデータ取得完了: シーン{len(scene_names)}個, ソース{len(self.all_sources_list)}個")
+                
+                # データ取得完了後、現在のアクションに応じてソース一覧を更新
+                self.update_source_list_by_action()
             else:
                 self.obs_status_var.set("シーン情報の取得に失敗")
                 
@@ -502,7 +506,7 @@ class OBSControlWindow:
         
         # 現在の監視対象ソース設定を表示
         self.update_monitor_source_display()
-    
+
     def reconnect_and_refresh(self):
         """OBSに再接続してデータを更新"""
         self.obs_status_var.set("OBSに再接続中...")
@@ -589,17 +593,14 @@ class OBSControlWindow:
         """シーン選択が変更された時の処理"""
         scene_name = self.selected_scene_var.get()
         print(f"シーン選択変更: {scene_name}")
-        
-        if scene_name and scene_name in self.sources_data:
-            # 選択されたシーンのソース一覧を更新（アクションが監視対象ソース指定以外の場合）
-            action = self.selected_action_var.get()
-            if action != "監視対象ソース指定":
-                pass  # source_comboは全ソース一覧のまま維持
+
+        self.update_source_list_by_action() 
     
     def on_action_changed(self, event=None):
         """アクション選択が変更された時の処理"""
         self.update_ui_state()
-    
+        self.update_source_list_by_action() 
+
     def update_ui_state(self):
         """アクション種別に応じてUI要素の有効/無効を切り替え"""
         action = self.selected_action_var.get()
@@ -629,6 +630,37 @@ class OBSControlWindow:
             self.source_combo.config(state="disabled")
             self.target_scene_combo.config(state="disabled")
     
+    def update_source_list_by_action(self):
+        """アクションに応じてソース一覧を更新"""
+        action = self.selected_action_var.get()
+        scene_name = self.selected_scene_var.get()
+        
+        if action == "監視対象ソース指定":
+            # 監視対象ソース指定の場合：全ソースを表示
+            self.source_combo.configure(values=self.all_sources_list)
+            print(f"ソース一覧を全ソースに更新: {len(self.all_sources_list)}個")
+            
+        elif action in ["ソースを表示", "ソースを非表示"]:
+            # ソース操作の場合：選択されたシーンのソースのみ表示
+            if scene_name and scene_name in self.sources_data:
+                scene_sources = self.sources_data[scene_name]
+                self.source_combo.configure(values=scene_sources)
+                print(f"ソース一覧を{scene_name}のソースに更新: {len(scene_sources)}個")
+                
+                # 現在の選択が新しいリストにない場合はクリア
+                current_source = self.selected_source_var.get()
+                if current_source and current_source not in scene_sources:
+                    self.selected_source_var.set("")
+                    print(f"選択されたソース'{current_source}'が{scene_name}にないためクリア")
+            else:
+                # シーンが選択されていない場合は空に
+                self.source_combo.configure(values=[])
+                self.selected_source_var.set("")
+                print("シーンが未選択のためソース一覧を空に設定")
+        else:
+            # その他のアクションの場合はソース一覧は関係ないので変更しない
+            pass
+
     def add_setting(self):
         """新しい制御設定を追加"""
         action_text = self.selected_action_var.get()
@@ -684,18 +716,40 @@ class OBSControlWindow:
             messagebox.showerror("設定エラー", "無効な実行タイミングです。")
             return
         
-        # 設定データ作成
-        setting = {
-            "trigger": trigger_key,
-            "action": action_key
-        }
-        
+        # シーン切り替えの重複チェックと上書き処理
         if action_key == "switch_scene":
             target_scene = self.target_scene_var.get()
             if not target_scene:
                 messagebox.showerror("入力エラー", "切り替え先シーンを選択してください。")
                 return
-            setting["target_scene"] = target_scene
+            
+            # 同じトリガーでのシーン切り替えが既に存在するかチェック
+            existing_index = -1
+            for i, existing_setting in enumerate(self.control_data.config.obs_control_settings):
+                if (existing_setting.get("trigger") == trigger_key and 
+                    existing_setting.get("action") == "switch_scene"):
+                    existing_index = i
+                    break
+            
+            if existing_index >= 0:
+                # 既存の設定がある場合は上書き確認
+                old_target = self.control_data.config.obs_control_settings[existing_index].get("target_scene", "不明")
+                if messagebox.askyesno("上書き確認", 
+                                     f"「{self.TRIGGERS[trigger_key]}」のシーン切り替え設定が既に存在します。\n"
+                                     f"現在の設定: {old_target}\n"
+                                     f"新しい設定: {target_scene}\n\n"
+                                     f"上書きしますか？"):
+                    # 既存設定を削除
+                    self.control_data.remove_setting(existing_index)
+                    print(f"既存のシーン切り替え設定を上書き: {trigger_key} -> {target_scene}")
+                else:
+                    return  # キャンセルされた場合は何もしない
+            
+            setting = {
+                "trigger": trigger_key,
+                "action": action_key,
+                "target_scene": target_scene
+            }
             
         elif action_key in ["show_source", "hide_source"]:
             scene_name = self.selected_scene_var.get()
@@ -703,8 +757,16 @@ class OBSControlWindow:
             if not scene_name or not source_name:
                 messagebox.showerror("入力エラー", "対象シーンとソースを選択してください。")
                 return
-            setting["scene_name"] = scene_name
-            setting["source_name"] = source_name
+            
+            setting = {
+                "trigger": trigger_key,
+                "action": action_key,
+                "scene_name": scene_name,
+                "source_name": source_name
+            }
+        else:
+            messagebox.showerror("設定エラー", "サポートされていないアクションです。")
+            return
         
         # 設定を追加
         self.control_data.add_setting(setting)
@@ -718,10 +780,14 @@ class OBSControlWindow:
         self.target_scene_var.set("")
         self.update_ui_state()
         
-        messagebox.showinfo("追加完了", "制御設定を追加しました。")
+        success_message = "制御設定を追加しました。"
+        if action_key == "switch_scene":
+            success_message += f"\n{self.TRIGGERS[trigger_key]} → {target_scene}"
+        
+        messagebox.showinfo("追加完了", success_message)
         self.config.disp()
         print(setting)
-    
+
     def refresh_settings_list(self):
         self.config.load_config()
         """設定一覧を更新（監視対象ソース設定を優先表示）"""
@@ -737,6 +803,8 @@ class OBSControlWindow:
                            tags=("monitor_source",))
         
         # 通常の設定を表示
+        trigger_scene_map = {}  # シーン切り替えの重複チェック用
+        
         for i, setting in enumerate(self.control_data.config.obs_control_settings):
             trigger_text = self.TRIGGERS.get(setting["trigger"], setting["trigger"])
             action_text = self.ACTIONS.get(setting["action"], setting["action"])
@@ -744,6 +812,15 @@ class OBSControlWindow:
             if setting["action"] == "switch_scene":
                 target = setting.get("target_scene", "未設定")
                 details = f"→ {target}"
+                
+                # シーン切り替えの重複をチェック（デバッグ用）
+                trigger_key = setting["trigger"]
+                if trigger_key in trigger_scene_map:
+                    print(f"[警告] 重複するシーン切り替え設定: {trigger_key}")
+                    print(f"  既存: {trigger_scene_map[trigger_key]}")
+                    print(f"  新規: {target}")
+                trigger_scene_map[trigger_key] = target
+                
             elif setting["action"] in ["show_source", "hide_source"]:
                 scene = setting.get("scene_name", "未設定")
                 source = setting.get("source_name", "未設定")
@@ -767,7 +844,10 @@ class OBSControlWindow:
         
         # 監視対象ソース表示を更新
         self.update_monitor_source_display()
-    
+        
+        print(f"設定一覧を更新: 監視対象ソース{'あり' if monitor_source else 'なし'}, "
+              f"制御設定{len(self.control_data.config.obs_control_settings)}個") 
+
     def delete_setting(self):
         """選択した設定を削除"""
         selected_items = self.tree.selection()
@@ -784,17 +864,23 @@ class OBSControlWindow:
                     self.refresh_settings_list()
                     messagebox.showinfo("削除完了", "監視対象ソース設定を削除しました。")
                 return
-        
+
         if messagebox.askyesno("削除確認", "選択した設定を削除しますか？"):
-            # 選択されたアイテムのインデックスを取得
+            # 選択されたアイテムのインデックスを取得（逆順で削除）
+            indices_to_delete = []
             for item in selected_items:
                 index = self.tree.index(item)
                 # 監視対象ソース設定がある場合はインデックスを調整
                 if self.control_data.get_monitor_source():
                     index -= 1  # 監視対象ソース設定の分を差し引く
                 if index >= 0:
-                    self.control_data.remove_setting(index)
+                    indices_to_delete.append(index)
             
+            # インデックスを降順でソートして後ろから削除
+            indices_to_delete.sort(reverse=True)
+            for index in indices_to_delete:
+                self.control_data.remove_setting(index)
+
             self.refresh_settings_list()
             messagebox.showinfo("削除完了", "設定を削除しました。")
     
