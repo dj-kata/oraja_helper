@@ -449,7 +449,8 @@ class DataBaseAccessor:
         self.db_scoredatalog = os.path.join(self.config.player_path, 'scoredatalog.db')
 
         # configが確定した時点でdbをリロード
-        self.reload_db()
+        reload = self.reload_db()
+        print(f"reloaded: {reload}")
         self.today_results.set_config(config)
 
     def load_one_dbfile(self, dbpath:str, dbname:str) -> pd.DataFrame:

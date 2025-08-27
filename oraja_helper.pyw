@@ -557,6 +557,7 @@ class MainWindow:
         self.config.load_config()
         self.obs_manager.set_config(self.config)
         self.database_accessor.set_config(self.config)
+        self.update_db_status()
 
         # 設定画面で更新される可能性があるため、DataBaseAccessorをリロードしておく
         self.database_accessor.today_results.load()
