@@ -545,9 +545,9 @@ class MainWindow:
         
         # 状態に応じて色を変更
         if self.current_game_state == "play":
-            self.game_state_label.config(foreground="red")
+            self.game_state_label.config(foreground="pink")
         elif self.current_game_state == "result":
-            self.game_state_label.config(foreground="blue")
+            self.game_state_label.config(foreground="purple")
         elif self.current_game_state == "select":
             self.game_state_label.config(foreground="green")
         else:
@@ -657,6 +657,7 @@ class MainWindow:
             from obs_control import OBSControlData
             
             control_data = OBSControlData()
+            control_data.set_config(self.config)
             settings = control_data.get_settings_by_trigger(trigger)
             
             if not settings:
@@ -702,6 +703,7 @@ class MainWindow:
                     print(f"制御実行エラー (trigger: {trigger}, setting: {setting}): {e}")
                     
         except Exception as e:
+            print(traceback.format_exc())
             print(f"トリガー実行エラー ({trigger}): {e}")
     
     def _get_scene_item_id(self, scene_name: str, source_name: str) -> int:
