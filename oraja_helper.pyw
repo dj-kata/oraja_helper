@@ -717,12 +717,8 @@ class MainWindow:
     
     def open_settings(self):
         """設定ダイアログを開く"""
-        def on_settings_close():
-            # 設定が更新されたら表示を更新
-            self.update_config_display()
-        
         self.database_accessor.today_results.save()
-        settings_window = SettingsWindow(self.root, self.config, on_settings_close)
+        settings_window = SettingsWindow(self.root, self.config, self.update_config_display)
     
     def open_obs_control(self):
         """OBS制御設定ダイアログを開く"""
