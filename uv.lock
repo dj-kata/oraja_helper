@@ -6,12 +6,6 @@ resolution-markers = [
     "python_full_version < '3.12'",
 ]
 
-[manifest]
-members = [
-    "old",
-    "oraja-helper",
-]
-
 [[package]]
 name = "altgraph"
 version = "0.17.4"
@@ -467,11 +461,6 @@ sdist = { url = "https://files.pythonhosted.org/packages/d6/2f/624af34a5b0f09fbf
 wheels = [
     { url = "https://files.pythonhosted.org/packages/97/4b/537f3d372f065b2aeeac3812228066eb70f47436adf88aaacc94eb5fd4e1/obsws_python-1.8.0-py3-none-any.whl", hash = "sha256:537bde416e149b6f59e0b2f31761d4a40329feafec171bde6fc1346ab8516e28", size = 30819, upload-time = "2025-07-01T08:24:10.086Z" },
 ]
-
-[[package]]
-name = "old"
-version = "0.1.0"
-source = { virtual = "old" }
 
 [[package]]
 name = "oraja-helper"
