@@ -13,6 +13,8 @@ from config import Config
 from settings import SettingsWindow
 from obs_control import OBSControlWindow, ImageRecognitionData, OBSWebSocketManager
 from dataclass import *
+import requests
+from bs4 import BeautifulSoup
 
 # PILのインポート
 try:
@@ -29,6 +31,27 @@ try:
 except ImportError:
     IMAGEHASH_AVAILABLE = False
     print("Warning: imagehash not installed. Install with: pip install imagehash")
+
+try:
+    with open('version.txt', 'r') as f:
+        SWVER = f.readline().strip()
+except Exception:
+    SWVER = "v?.?.?"
+
+import logging, logging.handlers
+os.makedirs('log', exist_ok=True)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+hdl = logging.handlers.RotatingFileHandler(
+    f'log/{os.path.basename(__file__).split(".")[0]}.log',
+    encoding='utf-8',
+    maxBytes=1024*1024*2,
+    backupCount=1,
+)
+hdl.setLevel(logging.DEBUG)
+hdl_formatter = logging.Formatter('%(asctime)s %(filename)s:%(lineno)5d %(funcName)s() [%(levelname)s] %(message)s')
+hdl.setFormatter(hdl_formatter)
+logger.addHandler(hdl)
 
 class ApplicationLock:
     """アプリケーションの二重起動防止クラス"""
@@ -103,7 +126,10 @@ class MainWindow:
                 "アプリケーションは既に起動しています。\n"
                 "複数のインスタンスを同時に実行することはできません。"
             )
+            logger.error('duplication check failed')
             sys.exit(1)
+
+        logger.info('started')
         
         self.root = tk.Tk()
         self.config = Config()
@@ -135,6 +161,7 @@ class MainWindow:
         self.restore_window_position()
         self.start_all_threads()
         self.update_display()
+        self.check_updates()
         
         # WebSocket自動接続開始
         if self.config.enable_websocket:
@@ -145,6 +172,39 @@ class MainWindow:
                     break
                 time.sleep(0.5)
         
+    def get_latest_version(self):
+        """GitHubから最新版のバージョンを取得する。
+
+        Returns:
+            str: バージョン番号
+        """
+        ret = None
+        url = 'https://github.com/dj-kata/oraja_helper/tags'
+        r = requests.get(url)
+        soup = BeautifulSoup(r.text,features="html.parser")
+        for tag in soup.find_all('a'):
+            if 'releases/tag/v.' in tag['href']:
+                ret = tag['href'].split('/')[-1]
+                break # 1番上が最新なので即break
+        return ret
+
+    def check_updates(self, always_disp_dialog=False):
+        ver = self.get_latest_version()
+        if (ver != SWVER) and (ver is not None):
+            logger.info(f'現在のバージョン: {SWVER}, 最新版:{ver}')
+            ans = tk.messagebox.askquestion('バージョン更新',f'アップデートが見つかりました。\n\n{SWVER} -> {ver}\n\nアプリを終了して更新します。', icon='warning')
+            if ans == "yes":
+                if os.path.exists('update.exe'):
+                    logger.info('アップデート確認のため終了します')
+                    res = subprocess.Popen('update.exe')
+                    self.on_close()
+                else:
+                    raise ValueError("update.exeがありません")
+        else:
+            logger.info(f'お使いのバージョンは最新です({SWVER})')
+            if always_disp_dialog:
+                messagebox.showinfo("oraja_helper", f'お使いのバージョンは最新です({SWVER})')
+
         # アプリ起動時のOBS制御実行
     def get_resource_path(self, relative_path):
         """埋め込みリソースのパスを取得"""
@@ -778,6 +838,7 @@ class MainWindow:
         
         print("アプリケーション終了処理完了")
         self.root.destroy()
+        logger.info('closed')
     
     def run(self):
         """アプリケーションを実行"""
