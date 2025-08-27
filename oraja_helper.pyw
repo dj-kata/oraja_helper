@@ -162,6 +162,7 @@ class MainWindow:
         self.start_all_threads()
         self.update_display()
         self.check_updates()
+        self.update_db_status()
         
         # WebSocket自動接続開始
         if self.config.enable_websocket:
@@ -269,40 +270,35 @@ class MainWindow:
         self.file_status_label = ttk.Label(main_frame, textvariable=self.file_status_var)
         self.file_status_label.grid(row=2, column=1, sticky=tk.W, padx=(10, 0), pady=5)
         
-        # 最終確認時刻表示
-        ttk.Label(main_frame, text="last update:").grid(row=3, column=0, sticky=tk.W, pady=5)
-        self.last_check_var = tk.StringVar(value="未確認")
-        ttk.Label(main_frame, textvariable=self.last_check_var).grid(row=3, column=1, sticky=tk.W, padx=(10, 0), pady=5)
-        
         # ゲーム状態表示
-        ttk.Label(main_frame, text="oraja state:").grid(row=4, column=0, sticky=tk.W, pady=5)
+        ttk.Label(main_frame, text="oraja state:").grid(row=3, column=0, sticky=tk.W, pady=5)
         self.game_state_var = tk.StringVar(value="未判定")
         self.game_state_label = ttk.Label(main_frame, textvariable=self.game_state_var, font=("Arial", 12, "bold"))
-        self.game_state_label.grid(row=4, column=1, sticky=tk.W, padx=(10, 0), pady=5)
+        self.game_state_label.grid(row=3, column=1, sticky=tk.W, padx=(10, 0), pady=5)
         
         # OBS WebSocket連携状況表示
-        ttk.Label(main_frame, text="OBS WebSocket:").grid(row=5, column=0, sticky=tk.W, pady=5)
+        ttk.Label(main_frame, text="OBS WebSocket:").grid(row=4, column=0, sticky=tk.W, pady=5)
         self.obs_status_var = tk.StringVar()
         self.obs_status_label = ttk.Label(main_frame, textvariable=self.obs_status_var, wraplength=300)
-        self.obs_status_label.grid(row=5, column=1, sticky=tk.W, padx=(10, 0), pady=5)
+        self.obs_status_label.grid(row=4, column=1, sticky=tk.W, padx=(10, 0), pady=5)
         
         # プレイ曲数
-        ttk.Label(main_frame, text="playcount:").grid(row=6, column=0, sticky=tk.W, pady=5)
+        ttk.Label(main_frame, text="playcount:").grid(row=5, column=0, sticky=tk.W, pady=5)
         self.playcount_var = tk.StringVar(value='0')
         self.playcount_label = ttk.Label(main_frame, textvariable=self.playcount_var, font=("Arial", 12, "bold"))
-        self.playcount_label.grid(row=6, column=1, sticky=tk.W, padx=(10, 0), pady=5)
+        self.playcount_label.grid(row=5, column=1, sticky=tk.W, padx=(10, 0), pady=5)
         
         # ノーツ数
-        ttk.Label(main_frame, text="notes:").grid(row=7, column=0, sticky=tk.W, pady=5)
+        ttk.Label(main_frame, text="notes:").grid(row=6, column=0, sticky=tk.W, pady=5)
         self.notes_var = tk.StringVar(value='0')
         self.notes_label = ttk.Label(main_frame, textvariable=self.notes_var, font=("Arial", 12, "bold"))
-        self.notes_label.grid(row=7, column=1, sticky=tk.W, padx=(10, 0), pady=5)
+        self.notes_label.grid(row=6, column=1, sticky=tk.W, padx=(10, 0), pady=5)
         
         # スコアレート
-        ttk.Label(main_frame, text="score rate:").grid(row=8, column=0, sticky=tk.W, pady=5)
+        ttk.Label(main_frame, text="score rate:").grid(row=7, column=0, sticky=tk.W, pady=5)
         self.score_rate_var = tk.StringVar(value='0.00%')
         self.score_rate_label = ttk.Label(main_frame, textvariable=self.score_rate_var, font=("Arial", 12, "bold"))
-        self.score_rate_label.grid(row=8, column=1, sticky=tk.W, padx=(10, 0), pady=5)
+        self.score_rate_label.grid(row=7, column=1, sticky=tk.W, padx=(10, 0), pady=5)
         
         # ステータスバー
         status_frame = ttk.Frame(self.root)
@@ -343,15 +339,12 @@ class MainWindow:
             try:
                 if self.database_accessor.is_valid():
                     if self.database_accessor.reload_db():
-                        # TODO とりあえず直近のリザルトを表示だけしている
+                        self.update_db_status()
                         self.database_accessor.read_one_result()
                         self.database_accessor.today_results.write_history_xml()
                     
                 else:
                     self.file_exists = False
-                
-                # メインスレッドでUI更新をスケジュール
-                # self.root.after(0, self.update_file_status)
                 
             except Exception as e:
                 print(f"ファイル監視エラー: {e}")
@@ -593,28 +586,14 @@ class MainWindow:
             self.obs_manager.stop_auto_reconnect()
             self.obs_manager.disconnect()
     
-    def update_file_status(self):
-        """ファイル状況の表示を更新"""
-        current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        self.last_check_var.set(current_time)
-        
-        # 使用中の判定方式を表示
-        if (self.config.enable_websocket and self.obs_manager.is_connected and 
-            self.config.enable_register_conditions):
-            detection_method = "（画像認識モード）"
-        elif self.config.enable_websocket and self.obs_manager.is_connected:
-            detection_method = "（ファイル監視 + OBS連携モード）"
+    def update_db_status(self):
+        """dbfile状態の表示を更新"""
+        if self.database_accessor.is_valid():
+            self.file_status_var.set("OK")
+            self.file_status_label.config(foreground="blue")
         else:
-            detection_method = "（ファイル監視のみ）"
-        
-        if self.file_exists:
-            self.file_status_var.set("存在します")
-            self.file_status_label.config(foreground="green")
-            self.status_var.set(f"ファイルが見つかりました {detection_method}")
-        else:
-            self.file_status_var.set("存在しません")
+            self.file_status_var.set("NG")
             self.file_status_label.config(foreground="red")
-            self.status_var.set(f"ファイルが見つかりません {detection_method}")
     
     def update_game_state_display(self):
         """ゲーム状態表示を更新"""
