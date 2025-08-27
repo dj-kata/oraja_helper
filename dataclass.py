@@ -483,6 +483,7 @@ class DataBaseAccessor:
             bool: score.dbに更新があった場合True
         """
         if not self.is_valid():
+            print('dbfiles invalid! skipped')
             return False
         tmp_df_scorelog = self.load_one_dbfile(self.db_scorelog, 'scorelog')
         self.df_scorelog = tmp_df_scorelog if tmp_df_scorelog is not None else self.df_scorelog
