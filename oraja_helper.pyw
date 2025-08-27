@@ -154,7 +154,7 @@ class MainWindow:
         self.database_accessor = DataBaseAccessor()
         self.database_accessor.set_config(self.config)
         # self.database_accessor.read_old_results()
-        self.database_accessor.write_history_xml()
+        self.database_accessor.today_results.write_history_xml()
         
         self.setup_ui()
         self.set_embedded_icon()
@@ -236,6 +236,7 @@ class MainWindow:
         """UIの初期設定"""
         self.root.title(f"oraja_helper")
         self.root.geometry("550x350")
+        self.root.minsize(550,350)    # 最小サイズも調整
         
         # メニューバー
         menubar = tk.Menu(self.root)
@@ -243,7 +244,7 @@ class MainWindow:
         
         # 設定メニュー
         settings_menu = tk.Menu(menubar, tearoff=0)
-        menubar.add_cascade(label="設定", menu=settings_menu)
+        menubar.add_cascade(label="File", menu=settings_menu)
         settings_menu.add_command(label="基本設定", command=self.open_settings)
         settings_menu.add_separator()
         settings_menu.add_command(label="OBS制御設定", command=self.open_obs_control)
@@ -253,28 +254,28 @@ class MainWindow:
         main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         
         # 経過時間表示
-        ttk.Label(main_frame, text="起動からの経過時間:").grid(row=0, column=0, sticky=tk.W, pady=5)
+        ttk.Label(main_frame, text="uptime:").grid(row=0, column=0, sticky=tk.W, pady=5)
         self.elapsed_time_var = tk.StringVar(value="00:00:00")
         ttk.Label(main_frame, textvariable=self.elapsed_time_var, font=("Arial", 12, "bold")).grid(row=0, column=1, sticky=tk.W, padx=(10, 0), pady=5)
         
         # 監視対象フォルダ表示
-        ttk.Label(main_frame, text="監視対象フォルダ:").grid(row=1, column=0, sticky=tk.W, pady=5)
+        ttk.Label(main_frame, text="beatoraja path:").grid(row=1, column=0, sticky=tk.W, pady=5)
         self.oraja_path_var = tk.StringVar()
         ttk.Label(main_frame, textvariable=self.oraja_path_var, wraplength=300).grid(row=1, column=1, sticky=tk.W, padx=(10, 0), pady=5)
         
         # ファイル存在状況表示
-        ttk.Label(main_frame, text="ファイル存在状況:").grid(row=2, column=0, sticky=tk.W, pady=5)
+        ttk.Label(main_frame, text="db state:").grid(row=2, column=0, sticky=tk.W, pady=5)
         self.file_status_var = tk.StringVar(value="確認中...")
-        self.file_status_label = ttk.Label(main_frame, textvariable=self.file_status_var, font=("Arial", 12, "bold"))
+        self.file_status_label = ttk.Label(main_frame, textvariable=self.file_status_var)
         self.file_status_label.grid(row=2, column=1, sticky=tk.W, padx=(10, 0), pady=5)
         
         # 最終確認時刻表示
-        ttk.Label(main_frame, text="最終確認時刻:").grid(row=3, column=0, sticky=tk.W, pady=5)
+        ttk.Label(main_frame, text="last update:").grid(row=3, column=0, sticky=tk.W, pady=5)
         self.last_check_var = tk.StringVar(value="未確認")
         ttk.Label(main_frame, textvariable=self.last_check_var).grid(row=3, column=1, sticky=tk.W, padx=(10, 0), pady=5)
         
         # ゲーム状態表示
-        ttk.Label(main_frame, text="現在のゲーム状態:").grid(row=4, column=0, sticky=tk.W, pady=5)
+        ttk.Label(main_frame, text="oraja state:").grid(row=4, column=0, sticky=tk.W, pady=5)
         self.game_state_var = tk.StringVar(value="未判定")
         self.game_state_label = ttk.Label(main_frame, textvariable=self.game_state_var, font=("Arial", 12, "bold"))
         self.game_state_label.grid(row=4, column=1, sticky=tk.W, padx=(10, 0), pady=5)
@@ -284,6 +285,24 @@ class MainWindow:
         self.obs_status_var = tk.StringVar()
         self.obs_status_label = ttk.Label(main_frame, textvariable=self.obs_status_var, wraplength=300)
         self.obs_status_label.grid(row=5, column=1, sticky=tk.W, padx=(10, 0), pady=5)
+        
+        # プレイ曲数
+        ttk.Label(main_frame, text="playcount:").grid(row=6, column=0, sticky=tk.W, pady=5)
+        self.playcount_var = tk.StringVar(value='0')
+        self.playcount_label = ttk.Label(main_frame, textvariable=self.playcount_var, font=("Arial", 12, "bold"))
+        self.playcount_label.grid(row=6, column=1, sticky=tk.W, padx=(10, 0), pady=5)
+        
+        # ノーツ数
+        ttk.Label(main_frame, text="notes:").grid(row=7, column=0, sticky=tk.W, pady=5)
+        self.notes_var = tk.StringVar(value='0')
+        self.notes_label = ttk.Label(main_frame, textvariable=self.notes_var, font=("Arial", 12, "bold"))
+        self.notes_label.grid(row=7, column=1, sticky=tk.W, padx=(10, 0), pady=5)
+        
+        # スコアレート
+        ttk.Label(main_frame, text="score rate:").grid(row=8, column=0, sticky=tk.W, pady=5)
+        self.score_rate_var = tk.StringVar(value='0.00%')
+        self.score_rate_label = ttk.Label(main_frame, textvariable=self.score_rate_var, font=("Arial", 12, "bold"))
+        self.score_rate_label.grid(row=8, column=1, sticky=tk.W, padx=(10, 0), pady=5)
         
         # ステータスバー
         status_frame = ttk.Frame(self.root)
@@ -326,7 +345,7 @@ class MainWindow:
                     if self.database_accessor.reload_db():
                         # TODO とりあえず直近のリザルトを表示だけしている
                         self.database_accessor.read_one_result()
-                        self.database_accessor.write_history_xml()
+                        self.database_accessor.today_results.write_history_xml()
                     
                 else:
                     self.file_exists = False
@@ -548,6 +567,12 @@ class MainWindow:
 
         # 設定画面で更新される可能性があるため、DataBaseAccessorをリロードしておく
         self.database_accessor.today_results.load()
+        self.database_accessor.today_results.write_history_xml()
+        self.database_accessor.today_results.write_updates_xml()
+
+        self.playcount_var.set(str(self.database_accessor.today_results.playcount))
+        self.notes_var.set(str(self.database_accessor.today_results.notes))
+        self.score_rate_var.set(f"{self.database_accessor.today_results.score_rate:.2f}%")
         
         # 現在のOBSステータスを取得して表示
         status_message, is_connected = self.obs_manager.get_status()
@@ -802,12 +827,12 @@ class MainWindow:
 
         # xml出力
         self.database_accessor.today_results.save()
-        self.database_accessor.write_history_xml()
+        self.database_accessor.today_results.write_history_xml()
         # self.database_accessor.write_updates_xml()
 
         # tweet
         if self.config.enable_autotweet:
-            self.database_accessor.tweet_summary()
+            self.database_accessor.today_results.tweet_summary()
         
         # ウィンドウ位置を保存
         self.save_window_position()
@@ -853,6 +878,8 @@ class MainWindow:
                 self.app_lock.release_lock()
 
 if __name__ == "__main__":
+    # app = MainWindow() # debug
+    # app.run()
     try:
         app = MainWindow()
         app.run()

@@ -256,12 +256,28 @@ class TodayResults:
     def __init__(self):
         logger.info('created')
         self.results = []
+        self.today_results = [] # resultsに対して日付でフィルタリングしたもの
         self.updates = {} # resultsは全て記録するが、こちらは同じ曲ならマージする
         self.start_time = datetime.datetime.now()
         self.playtime = datetime.timedelta(seconds=0)
         self.notes = 0
+        self.config = None
         self.load()
         self.save()
+
+    def set_config(self, config:Config):
+        """設定ファイルを読み込み、各dbfileのパスを更新する。
+
+        Args:
+            config (Config, optional): config情報。 Defaults to Config().
+        """
+        self.config = config
+        self.db_songdata     = os.path.join(self.config.oraja_path, 'songdata.db')
+        self.db_songinfo     = os.path.join(self.config.oraja_path, 'songinfo.db')
+        self.db_score        = os.path.join(self.config.player_path, 'score.db')
+        self.db_scorelog     = os.path.join(self.config.player_path, 'scorelog.db')
+        self.db_scoredatalog = os.path.join(self.config.player_path, 'scoredatalog.db')
+        self.update_stats()
 
     def save(self):
         """self.resultsをファイルに保存する
@@ -276,6 +292,27 @@ class TodayResults:
                 self.results = pickle.load(f)
         except:
             logger.error(traceback.format_exc())
+
+    def update_stats(self):
+        """統計情報(ノーツ数やスコアレート)を更新
+        """
+        sum_judge = [0, 0, 0, 0, 0, 0]
+        # offsetの条件を満たすものだけ抽出
+        target_results = []
+        for i,r in enumerate(self.results):
+            if r.date > int(datetime.datetime.now().timestamp()) - self.config.autoload_offset*3600:
+                target_results = self.results[i:]
+                break
+
+        for r in target_results:
+            for i in range(6):
+                sum_judge[i] += r.judge[i]
+        self.score_rate = 0 # total
+        self.notes = sum_judge[0]+sum_judge[1]+sum_judge[2]+sum_judge[3]+sum_judge[4]
+        if (self.notes) > 0:
+            self.score_rate = 100*(sum_judge[0]*2+sum_judge[1]) / (sum_judge[0]+sum_judge[1]+sum_judge[2]+sum_judge[3]+sum_judge[4]) / 2
+        self.today_results = target_results
+        self.playcount = len(target_results)
 
     def merge_results(self, pre:OneResult, new:OneResult) -> OneResult:
         assert(pre.sha256 == new.sha256)
@@ -298,30 +335,16 @@ class TodayResults:
                 self.updates[result.sha256] = new
             else:
                 self.updates[result.sha256] = result
+            self.update_stats()
 
-    def write_history_xml(self, autoload_offset:int=0, outfile='history.xml'):
-        sum_judge = [0, 0, 0, 0, 0, 0]
-        # offsetの条件を満たすものだけ抽出
-        target_results = []
-        for i,r in enumerate(self.results):
-            if r.date > int(datetime.datetime.now().timestamp()) - autoload_offset*3600:
-                target_results = self.results[i:]
-                break
-
-        for r in target_results:
-            for i in range(6):
-                sum_judge[i] += r.judge[i]
-        score_rate = 0 # total
-        notes = sum_judge[0]+sum_judge[1]+sum_judge[2]+sum_judge[3]+sum_judge[4]
-        if (notes) > 0:
-            score_rate = 100*(sum_judge[0]*2+sum_judge[1]) / (sum_judge[0]+sum_judge[1]+sum_judge[2]+sum_judge[3]+sum_judge[4]) / 2
+    def write_history_xml(self, outfile='history.xml'):
         with open(outfile, 'w', encoding='utf-8') as f:
             f.write(f'<?xml version="1.0" encoding="utf-8"?>\n')
             f.write("<Items>\n")
             f.write(f"    <date>{self.start_time.year}/{self.start_time.month:02d}/{self.start_time.day:02d}</date>\n")
-            f.write(f'    <notes>{notes}</notes>\n')
-            f.write(f'    <total_score_rate>{score_rate:.2f}</total_score_rate>\n')
-            f.write(f'    <playcount>{len(target_results)}</playcount>\n')
+            f.write(f'    <notes>{self.notes}</notes>\n')
+            f.write(f'    <total_score_rate>{self.score_rate:.2f}</total_score_rate>\n')
+            f.write(f'    <playcount>{self.playcount}</playcount>\n')
             # f.write(f'    <last_notes>{self.last_notes}</last_notes>\n')
             if self.playtime.seconds == 0:
                 f.write(f'    <playtime>0</playtime>\n') # HTML側で処理しやすくしている
@@ -330,7 +353,7 @@ class TodayResults:
                 f.write(f'    <playtime>{str(self.playtime).split(".")[0]}</playtime>\n')
                 f.write(f'    <pace>{int(3600*self.notes/self.playtime.seconds)}</pace>\n')
 
-            for r in target_results:
+            for r in self.today_results:
                 title_esc = r.title.replace('&', '&amp;').replace('<','&lt;').replace('>','&gt;').replace('"','&quot;').replace("'",'&apos;')
                 f.write(f'    <Result>\n')
                 # f.write(f'        <lv>{r.difficulties[0]}</lv>\n')
@@ -359,12 +382,12 @@ class TodayResults:
     def write_updates_xml(self):
         pass
 
-    def tweet_summary(self, autoload_offset):
+    def tweet_summary(self):
         """本日の統計情報をツイートする
         """
         target_results = []
         for i,r in enumerate(self.results):
-            if r.date > int(datetime.datetime.now().timestamp()) - autoload_offset*3600:
+            if r.date > int(datetime.datetime.now().timestamp()) - self.config.autoload_offset*3600:
                 target_results = self.results[i:]
                 break
 
@@ -418,6 +441,7 @@ class DataBaseAccessor:
         """
         self.config = config
         self.difftable.set_config(config)
+        self.today_results.set_config(config)
         self.db_songdata     = os.path.join(self.config.oraja_path, 'songdata.db')
         self.db_songinfo     = os.path.join(self.config.oraja_path, 'songinfo.db')
         self.db_score        = os.path.join(self.config.player_path, 'score.db')
@@ -426,6 +450,7 @@ class DataBaseAccessor:
 
         # configが確定した時点でdbをリロード
         self.reload_db()
+        self.today_results.set_config(config)
 
     def load_one_dbfile(self, dbpath:str, dbname:str) -> pd.DataFrame:
         """1つのdbfileをロードする。最終更新時刻を用いて、更新のないものはスキップする。
@@ -576,14 +601,6 @@ class DataBaseAccessor:
 
         with open('test.pkl', 'wb') as f:
             pickle.dump(out_list, f)
-
-    def write_history_xml(self):
-        """XML出力用関数。データの実体を持つがconfigを持たないTodayResultsクラスを叩くためだけに用意している。
-        """
-        self.today_results.write_history_xml(autoload_offset=self.config.autoload_offset)
-
-    def tweet_summary(self):
-        self.today_results.tweet_summary(autoload_offset=self.config.autoload_offset)
 
 if __name__ == '__main__':
     acc = DataBaseAccessor()
