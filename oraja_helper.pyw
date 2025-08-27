@@ -249,6 +249,10 @@ class MainWindow:
         settings_menu.add_command(label="基本設定", command=self.open_settings)
         settings_menu.add_separator()
         settings_menu.add_command(label="OBS制御設定", command=self.open_obs_control)
+        tweet_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label='Tweet', menu=tweet_menu)
+        tweet_menu.add_command(label='daily', command=self.database_accessor.today_results.tweet_summary)
+        tweet_menu.add_command(label='history', command=self.database_accessor.today_results.tweet_history)
         
         # メインフレーム
         main_frame = ttk.Frame(self.root, padding="10")

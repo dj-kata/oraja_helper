@@ -411,6 +411,30 @@ class TodayResults:
         encoded_msg = urllib.parse.quote(msg)
         webbrowser.open(f"https://twitter.com/intent/tweet?text={encoded_msg}")
 
+    def tweet_history(self):
+        """月、年の統計情報をツイートする
+        """
+        stats_month = defaultdict(int)
+        stats_year  = defaultdict(int)
+        for i,r in enumerate(self.results):
+            ts = datetime.datetime.fromtimestamp(r.date)
+            key = f"{ts.year}/{ts.month:02d}"
+            for i in range(4):
+                stats_month[key] += r.judge[i]
+                stats_year[str(ts.year)] += r.judge[i]
+        total_notes = sum(list(stats_month.values()))
+
+        msg = f"total notes: {total_notes:,}\n"
+        last_year = "init"
+        for month in reversed(list(stats_month.keys())):
+            year = month[:4]
+            if year != last_year:
+                msg += f"\n({year}: {stats_year[year]:,})\n"
+                last_year = year
+            msg += f"{month}: {stats_month[month]:,}\n"
+        msg += '#oraja_helper\n'
+        encoded_msg = urllib.parse.quote(msg)
+        webbrowser.open(f"https://twitter.com/intent/tweet?text={encoded_msg}")
 
 class DataBaseAccessor:
     def __init__(self):
