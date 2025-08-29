@@ -6,42 +6,50 @@
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
         <link href="https://fonts.googleapis.com/css2?family=RocknRoll+One&display=swap" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@900&display=swap" rel="stylesheet">
         <style>
             body { 
             
-            background-color: rgba(0, 0, 0, 0.99);
-            margin: 0px;
-            padding: 0px;
-            overflow: hidden;
-            font-family: 'RocknRoll One', sans-serif;
-            color:#aaddff;   
-            font-size: 64px;
-            color: #fff;
-            text-shadow: 6px 6px 0 #000,
-                         -2px 2px 0 #000,
-                         2px -2px 0 #000,
-                         -2px -2px 0 #000;
+                background-color: rgba(0, 0, 0, 0.99);
+                margin: 0px;
+                padding: 0px;
+                overflow: hidden;
+                font-family: 'RocknRoll One', sans-serif;
+                color:#aaddff;   
+                color: #fff;
+                text-shadow: 6px 6px 0 #000,
+                             -2px 2px 0 #000,
+                             2px -2px 0 #000,
+                             -2px -2px 0 #000;
             }
             :root{
                 --num: 20;
                 --skip-no-update: 0; /* 1:更新のない行を飛ばす */
+                --font-size-title: 96px;
+                --font-size-info0: 30px;
+                --font-size-info1: 46px;
+                --font-size-result-main: 64px;
+                --font-size-result-bp: 45px;
+                --font-size-result-small: 32px;
+                --width-difficulty: 300px;
+                --width-lamp: 40px;
+                --width-score: 200px;
+                --width-scorerate: 200px;
+                --width-bp: 180px;
+                --width-bp-diff: 120px;
+                --width-title: calc(100% - var(--width-difficulty) - var(--width-lamp) - var(--width-score) - var(--width-scorerate) - var(--width-bp) - var(var(--width-bp-diff)));
+                --enable-header: 1;
             }
             div#all{
                 min-height:1480px;
+                min-width: 1920px; /* 幅1920px固定 */
                 background-color: rgba(0, 0, 0, 0.9);
                 border: 4px solid #2222aa;
                 overflow: hidden;
-                /*
-                background-image: url("stat_bg.png");
-                background-repeat: repeat;
-                background-size: cover;
-                background-position: center;
-                background-blend-mode:overlay;
-                */
             }
             /* タイトル部分 */
             table#title {
-                color: #aaddff;
+                color: #ffffff;
                 background-color: rgba(0, 0, 100, 0.95);
                 background-color: #222;
                 background: linear-gradient(
@@ -49,98 +57,95 @@
                     ,rgba(0,0,60,0.9)
                     ,rgba(12,42,77,0.9)
                 );
-                font-size: 64px;
+                font-size: var(--font-size-title);
                 line-height: 130%;
                 width:100%;
-                padding-top: 20px;
+                padding-top: 0px;
                 padding-left: 20px;
+                font-family:"Noto Sans JP";
+                font-weight: 900;
             }
             table#info {
+                width: 100%;
                 background: linear-gradient(
                     180deg
                     ,rgba(12,42,77,0.9)
                     ,rgba(35,85,155,0.9)
                 );
-                font-size: 64px;
-            }
-            table#title td {
-                font-family:"LINE Seed JP App_TTF ExtraBold";
-            }
-            table#title td {
-                font-size: 96px;
-                color: #ffffff;
-            }
-            table#info tr:nth-child(1) {
-                font-size: 45px;
-            }
-            table#title tr:nth-child(2) {
-                font-size: 60px;
+                font-size: var(--font-size-info0);
             }
             table#info td{
                 text-align: center;
                 vertical-align: top;
-                width: 500px;
+                width: 300px;
             }
-            table#info tr:nth-child(1) td{
+            table#info tr:nth-child(1) {
                 color: #77ddff;
+                font-size: var(--font-size-info0);
+            }
+            table#info tr:nth-child(2){
+                font-size: var(--font-size-info1);
             }
             table#info td:nth-child(8){
             	overflow:hidden;
             	text-overflow:ellipsis;
-            	max-width:90px;
             }
-            /* リザルト部分 */
+
             table#result {
                 overflow: hidden;
-            	width:100%;
-            	height:100%;
+            	width: 100%; 
+            	height: 100%;
+                table-layout: fixed; /* テーブルレイアウトを固定に */
             }
             table#result td {
-            	white-space:nowrap;
+            	white-space: nowrap;
             }
             table#result tr:nth-child(even) td{
                 color: #aaaaaa;
-                font-size: 30px;
+                font-size: var(--font-size-result-small);
                 text-align: center;
             }
             table#result td:nth-child(1) {
-            	width:225px;
+                font-size: var(--font-size-result-main);
+            	width: var(--width-difficulty); /* 1列目：225px固定 */
                 color: #ffddaa;
-                text-align: center;
-                padding-right:20px;
+                text-align: left;
+                padding-left: 20px;
+                padding-right: 20px;
+            	overflow: hidden;
+            	text-overflow: ellipsis;
             }
             table#result td:nth-child(2) {
-            	width:40px;
-                padding-right:20px;
+                font-size: var(--font-size-result-main);
+            	width: var(--width-lamp); /* 2列目：全角スペース1文字分の幅 */
+                padding-right: 20px;
             }
             table#result td:nth-child(3) {
-            	overflow:hidden;
-            	text-overflow:ellipsis;
-            	max-width:90px;
+                font-size: var(--font-size-result-main);
+            	min-width: 90px;
+            	width: var(--width-title);
+                padding-left: 20px;
                 color: #bbffee;
+            	overflow: hidden;
+            	text-overflow: ellipsis;
             }
             table#result td:nth-child(4) {
+                font-size: var(--font-size-result-main);
+            	width: var(--width-score);
                 color: #aa22aa;
-            	width:250px;
                 text-align: right;
                 padding-right: 20px;
             }
             table#result td:nth-child(5) {
-            	width:230px;
+                font-size: var(--font-size-result-small);
+            	width: var(--width-scorerate);
                 text-align: center;
-                font-size:30px;
             }
             table#result td:nth-child(6) { /* bp */
+                font-size: var(--font-size-result-small);
+            	width: var(--width-bp);
                 color: #ccffcc;
-            	width:150px;
-                text-align: right;
-                font-size:50px;
-            }
-            table#result td:nth-child(7) { /* diff_bp */
-                color: #aaaaaa;
-            	width:110px;
                 text-align: center;
-                font-size:30px;
             }
             .MAX{
                 animation-name: flashmax;
@@ -250,7 +255,6 @@
             } 
             .stats_sub{ /* 統計情報 目立つ方のやつ */
                 color: #aaffdd;
-                font-size:45px;
             } 
             /* SP☆12地力表用のスタイル */
             sp12hard{
@@ -265,6 +269,7 @@
                 font-size: 50px;
             }
         </style>
+    </head>
     <body>
         <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
         <script>
@@ -285,6 +290,7 @@
                 var playcount = $(xml).find('Items playcount').text();
                 var maxnum = getComputedStyle(document.documentElement).getPropertyValue('--num');
                 var skip_no_update = getComputedStyle(document.documentElement).getPropertyValue('--skip-no-update');
+                var enable_header = getComputedStyle(document.documentElement).getPropertyValue('--enable-header');
 
                 var update_lamp = 0;
                 var update_score = 0;
@@ -369,12 +375,12 @@
                     one_result += '<td rowspan="2">'+title+'</td>';
                     one_result += '<td rowspan="2">'+score+'</td>';
                     one_result += '<td>('+score_rate.toFixed(2)+'%)</td>';
-                    one_result += '<td rowspan="2">'+bp+'</td>';
-                    one_result += '<td rowspan="2">'+diff_bp+'</td>';
+                    one_result += '<td>'+bp+'</td>';
                     one_result += '</tr>';
                     // 2段目
                     one_result += '<tr>';
                     one_result += '<td>'+diff_score+'</td>';
+                    one_result += '<td>'+diff_bp+'</td>';
                     one_result += '</tr>';
 
                     // スキップ処理
@@ -389,7 +395,11 @@
                         out += one_result;
                     }
                     });
-                //$('notes').html("notes: <span class='title_value'>" + notes + "</span>");
+                if (enable_header==1){
+                    $('#header-container').show()
+                }else{
+                    $('#header-container').hide()
+                }
                 $('notes').html(notes);
                 $('date').html(date);
                 //$('playcount').html("&nbsp;&nbsp;&nbsp;&nbsp;plays: <span class='title_value'>" + playcount + '</span>');
@@ -430,41 +440,42 @@
         });
 
 </script>
-</head>
-<body>
-  <div id="all">
-    <table id="title">
-      <tr>
-        <td><date></date></td>
-      </tr>
-    </table>
-    <table id="info">
-        <!--TODO 列の中身を固定せず、spanでスタイルを指定してタイトルとともに変数として書く(pace0でもレイアウトが崩れないように)-->
-      <tr>
-        <td>notes</td><td>plays</td>
-        <td><header_3></header_3></td>
-        <td><header_4></header_4></td>
-        <td><header_5></header_5></td>
-        <td><header_6></header_6></td>
-        <td><header_7></header_7></td>
-        <td></td>
-      </tr>
-      <tr>
-        <td><span class="stats_main"><notes></notes></span></td>
-        <td><span class="stats_main"><playcount></playcount></span></td>
+    <body>
+      <div id="all">
+        <div id="header-container" style="display: none;">
+            <table id="title">
+              <tr>
+                <td><date></date></td>
+              </tr>
+            </table>
+            <table id="info">
+                <!--TODO 列の中身を固定せず、spanでスタイルを指定してタイトルとともに変数として書く(pace0でもレイアウトが崩れないように)-->
+              <tr>
+                <td>notes</td><td>plays</td>
+                <td><header_3></header_3></td>
+                <td><header_4></header_4></td>
+                <td><header_5></header_5></td>
+                <td><header_6></header_6></td>
+                <td><header_7></header_7></td>
+                <td></td>
+              </tr>
+              <tr>
+                <td><span class="stats_main"><notes></notes></span></td>
+                <td><span class="stats_main"><playcount></playcount></span></td>
 
-        <td><value_3></value_3></td>
-        <td><value_4></value_4></td>
-        <td><value_5></value_5></td>
-        <td><value_6></value_6></td>
-        <td><value_7></value_7></td>
-        <td></td>
-      </tr>
-    </table>
-    <table id="result">
-      <tbody>
-      </tbody>
-    </table>
-  </div>
-</body>
+                <td><value_3></value_3></td>
+                <td><value_4></value_4></td>
+                <td><value_5></value_5></td>
+                <td><value_6></value_6></td>
+                <td><value_7></value_7></td>
+                <td></td>
+              </tr>
+            </table>
+        </div>
+        <table id="result">
+          <tbody>
+          </tbody>
+        </table>
+      </div>
+    </body>
 </html>
