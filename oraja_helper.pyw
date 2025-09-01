@@ -154,7 +154,7 @@ class MainWindow:
         self.database_accessor = DataBaseAccessor()
         self.database_accessor.set_config(self.config)
         # self.database_accessor.read_old_results()
-        self.database_accessor.today_results.write_history_xml()
+        self.database_accessor.manage_results.write_history_xml()
         
         self.setup_ui()
         self.set_embedded_icon()
@@ -251,8 +251,8 @@ class MainWindow:
         settings_menu.add_command(label="OBS制御設定", command=self.open_obs_control)
         tweet_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label='Tweet', menu=tweet_menu)
-        tweet_menu.add_command(label='daily', command=self.database_accessor.today_results.tweet_summary)
-        tweet_menu.add_command(label='history', command=self.database_accessor.today_results.tweet_history)
+        tweet_menu.add_command(label='daily', command=self.database_accessor.manage_results.tweet_summary)
+        tweet_menu.add_command(label='history', command=self.database_accessor.manage_results.tweet_history)
         
         # メインフレーム
         main_frame = ttk.Frame(self.root, padding="10")
@@ -345,7 +345,7 @@ class MainWindow:
                     if self.database_accessor.reload_db():
                         self.update_db_status()
                         self.database_accessor.read_one_result()
-                        self.database_accessor.today_results.write_history_xml()
+                        self.database_accessor.manage_results.write_history_xml()
                         self.update_config_display()
                     
                 else:
@@ -422,8 +422,8 @@ class MainWindow:
         elif old_state == 'play' and self.play_st is not None:
             # プレイ終了時に時間を加算
             play_duration = current_time - self.play_st
-            self.database_accessor.today_results.playtime += play_duration
-            print(f"プレイ時間を追加: {play_duration}, 累計: {self.database_accessor.today_results.playtime}")
+            self.database_accessor.manage_results.playtime += play_duration
+            print(f"プレイ時間を追加: {play_duration}, 累計: {self.database_accessor.manage_results.playtime}")
             self.play_st = None
 
     def detect_game_state_from_screenshot(self, screenshot_image):
@@ -565,14 +565,14 @@ class MainWindow:
         self.update_db_status()
 
         # 設定画面で更新される可能性があるため、DataBaseAccessorをリロードしておく
-        self.database_accessor.today_results.save()
-        self.database_accessor.today_results.load()
-        self.database_accessor.today_results.write_history_xml()
-        self.database_accessor.today_results.write_updates_xml()
+        self.database_accessor.manage_results.save()
+        self.database_accessor.manage_results.load()
+        self.database_accessor.manage_results.write_history_xml()
+        self.database_accessor.manage_results.write_updates_xml()
 
-        self.playcount_var.set(str(self.database_accessor.today_results.playcount))
-        self.notes_var.set(str(self.database_accessor.today_results.notes))
-        self.score_rate_var.set(f"{self.database_accessor.today_results.score_rate:.2f}%")
+        self.playcount_var.set(str(self.database_accessor.manage_results.playcount))
+        self.notes_var.set(str(self.database_accessor.manage_results.notes))
+        self.score_rate_var.set(f"{self.database_accessor.manage_results.score_rate:.2f}%")
         
         # 現在のOBSステータスを取得して表示
         status_message, is_connected = self.obs_manager.get_status()
@@ -790,7 +790,7 @@ class MainWindow:
     
     def open_settings(self):
         """設定ダイアログを開く"""
-        self.database_accessor.today_results.save()
+        self.database_accessor.manage_results.save()
         settings_window = SettingsWindow(self.root, self.config, self.update_config_display)
     
     def open_obs_control(self):
@@ -802,7 +802,7 @@ class MainWindow:
             return
         
         try:
-            self.database_accessor.today_results.save()
+            self.database_accessor.manage_results.save()
             obs_control = OBSControlWindow(self.root, self.obs_manager, self.config, self.update_config_display)
         except Exception as e:
             messagebox.showerror("エラー", f"OBS制御設定ウィンドウの起動に失敗しました。\n{str(e)}")
@@ -812,13 +812,13 @@ class MainWindow:
         print("アプリケーション終了処理開始")
 
         # xml出力
-        self.database_accessor.today_results.save()
-        self.database_accessor.today_results.write_history_xml()
+        self.database_accessor.manage_results.save()
+        self.database_accessor.manage_results.write_history_xml()
         # self.database_accessor.write_updates_xml()
 
         # tweet
         if self.config.enable_autotweet:
-            self.database_accessor.today_results.tweet_summary()
+            self.database_accessor.manage_results.tweet_summary()
         
         # ウィンドウ位置を保存
         self.save_window_position()
