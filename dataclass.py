@@ -580,7 +580,7 @@ class DataBaseAccessor:
         idx = len(self.df_scoredatalog) - 1
         tmp_song = self.df_scoredatalog.iloc[idx, :]
         tmp_result = self.parse(tmp_song)
-        print(f'read_one_result, idx={idx}')
+        logger.info(f'read_one_result, idx={idx}, title={tmp_result.title}, difficulties={tmp_result.difficulties}')
         tmp_result.disp()
         self.today_results.add_result(tmp_result)
         # oraja_helper用プレーログにも追加
@@ -590,6 +590,7 @@ class DataBaseAccessor:
         """oraja_helper起動前のリザルトをself.today_resultsに追加する。設定されたオフセット時刻以後のものを参照。
         oraja_helperで取ったログを書き出すようにしたら不要になる予定。
         """
+        self.today_results.results = []
         if self.is_valid():
             #log = self.df_scoredatalog[self.df_scoredatalog['date'] > cur_time.timestamp()]
             log = self.df_score
@@ -630,6 +631,8 @@ class DataBaseAccessor:
 
 if __name__ == '__main__':
     acc = DataBaseAccessor()
+    config = Config()
+    acc.set_config(config)
     table_names = [t['name'] for t in acc.difftable.tables]
     acc.config.autoload_offset = 12
 
@@ -637,4 +640,4 @@ if __name__ == '__main__':
     # acc.today_results.tweet_summary()
     acc.read_old_results()
     acc.today_results.save()
-    acc.write_history_xml()
+    acc.today_results.write_history_xml()
