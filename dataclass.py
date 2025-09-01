@@ -256,7 +256,7 @@ class ManageResults:
     """
     def __init__(self):
         logger.info('created')
-        self.all_results = []
+        self.all_results = [] # oraja_helperで記録した全てのログ。orhファイルへの保存対象。
         self.today_results = [] # resultsに対して日付でフィルタリングしたもの
         self.updates = {} # resultsは全て記録するが、こちらは同じ曲ならマージする
         self.start_time = datetime.datetime.now()
