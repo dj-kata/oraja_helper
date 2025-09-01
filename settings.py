@@ -376,7 +376,7 @@ class SettingsWindow:
         acc = DataBaseAccessor()
         acc.set_config(temp_config)
         acc.read_old_results()
-        acc.today_results.save()
+        acc.manage_results.save()
     
     def validate_settings(self):
         """設定値の妥当性をチェック"""

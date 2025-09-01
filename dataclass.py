@@ -229,6 +229,7 @@ class OneResult:
         print(f"bp:{self.bp}", end=',')
         print(f"notes:{self.notes}, density={self.density:.2f}", end=',')
         print(f"date:{datetime.datetime.fromtimestamp(self.date)}")
+        logger.info(f"title:{self.title}, difficulties:{self.difficulties}, lamp:{self.lamp}, score:{self.score} ({self.score_rate}%), bp:{self.bp}, notes:{self.notes}, density={self.density:.2f}, date:{datetime.datetime.fromtimestamp(self.date)}")
 
     def to_dataframe(self) -> pd.DataFrame:
         out = {}
@@ -250,12 +251,12 @@ class OneResult:
         out['date']      = self.date
         return pd.DataFrame(out, index=[0])
 
-class TodayResults:
+class ManageResults:
     """OneResultの配列を管理するクラス。xml出力とかもやる。
     """
     def __init__(self):
         logger.info('created')
-        self.results = []
+        self.all_results = []
         self.today_results = [] # resultsに対して日付でフィルタリングしたもの
         self.updates = {} # resultsは全て記録するが、こちらは同じ曲ならマージする
         self.start_time = datetime.datetime.now()
@@ -280,16 +281,16 @@ class TodayResults:
         self.update_stats()
 
     def save(self):
-        """self.resultsをファイルに保存する
+        """self.all_resultsをファイルに保存する
         """
-        print(f"number of results: {len(self.results)}")
+        print(f"number of results: {len(self.all_results)}")
         with bz2.BZ2File('playlog.orh', 'wb', compresslevel=9) as f:
-            pickle.dump(self.results, f)
+            pickle.dump(self.all_results, f)
 
     def load(self):
         try:
             with bz2.BZ2File('playlog.orh', 'rb', compresslevel=9) as f:
-                self.results = pickle.load(f)
+                self.all_results = pickle.load(f)
         except:
             logger.error(traceback.format_exc())
 
@@ -299,9 +300,9 @@ class TodayResults:
         sum_judge = [0, 0, 0, 0, 0, 0]
         # offsetの条件を満たすものだけ抽出
         target_results = []
-        for i,r in enumerate(self.results):
+        for i,r in enumerate(self.all_results):
             if r.date > int(datetime.datetime.now().timestamp()) - self.config.autoload_offset*3600:
-                target_results = self.results[i:]
+                target_results = self.all_results[i:]
                 break
 
         for r in target_results:
@@ -326,8 +327,17 @@ class TodayResults:
         return ret
 
     def add_result(self, result:OneResult):
-        if result not in self.results:
-            self.results.append(result)
+        """parse後のリザルトを受け取り、本クラス内の配列に登録する。
+        all_resultsには全て登録、today_resultsとupdatesにはオフセット条件を満たすもののみ追加。
+
+        Args:
+            result (OneResult): _description_
+        """
+        if result not in self.all_results:
+            self.all_results.append(result)
+        if result.date > int(datetime.datetime.now().timestamp()) - self.config.autoload_offset*3600:
+            if result not in self.today_results:
+                self.today_results.append(result)
             if result.sha256 in self.updates.keys():
                 import copy
                 pre = copy.copy(self.updates[result.sha256])
@@ -335,7 +345,6 @@ class TodayResults:
                 self.updates[result.sha256] = new
             else:
                 self.updates[result.sha256] = result
-            self.update_stats()
 
     def write_history_xml(self, outfile='history.xml'):
         with open(outfile, 'w', encoding='utf-8') as f:
@@ -386,9 +395,9 @@ class TodayResults:
         """本日の統計情報をツイートする
         """
         target_results = []
-        for i,r in enumerate(self.results):
+        for i,r in enumerate(self.all_results):
             if r.date > int(datetime.datetime.now().timestamp()) - self.config.autoload_offset*3600:
-                target_results = self.results[i:]
+                target_results = self.all_results[i:]
                 break
 
         sum_judge = [0, 0, 0, 0, 0, 0]
@@ -416,7 +425,7 @@ class TodayResults:
         """
         stats_month = defaultdict(int)
         stats_year  = defaultdict(int)
-        for i,r in enumerate(self.results):
+        for i,r in enumerate(self.all_results):
             ts = datetime.datetime.fromtimestamp(r.date)
             key = f"{ts.year}/{ts.month:02d}"
             for i in range(4):
@@ -439,7 +448,7 @@ class TodayResults:
 class DataBaseAccessor:
     def __init__(self):
         self.difftable = DiffTable() # 難易度情報を取得するために持っておく
-        self.today_results = TodayResults() # xml出力向けにOneResultの配列を持っておく
+        self.manage_results = ManageResults() # xml出力向けにOneResultの配列を持っておく
         self.playlog = None # 
         self.db_updated_date = {} # 各dbfileの最終更新日時を覚えておく、必要なものだけ読み込む
 
@@ -465,7 +474,7 @@ class DataBaseAccessor:
         """
         self.config = config
         self.difftable.set_config(config)
-        self.today_results.set_config(config)
+        self.manage_results.set_config(config)
         self.db_songdata     = os.path.join(self.config.oraja_path, 'songdata.db')
         self.db_songinfo     = os.path.join(self.config.oraja_path, 'songinfo.db')
         self.db_score        = os.path.join(self.config.player_path, 'score.db')
@@ -475,7 +484,7 @@ class DataBaseAccessor:
         # configが確定した時点でdbをリロード
         reload = self.reload_db()
         print(f"reloaded: {reload}")
-        self.today_results.set_config(config)
+        self.manage_results.set_config(config)
 
     def load_one_dbfile(self, dbpath:str, dbname:str) -> pd.DataFrame:
         """1つのdbfileをロードする。最終更新時刻を用いて、更新のないものはスキップする。
@@ -575,30 +584,33 @@ class DataBaseAccessor:
         #return title, lampid, score, pre_score, score_rate, tmpdat.date, judge
 
     def read_one_result(self):
-        """最新のリザルト1つを受け取って処理する。today_results及びplaylogに登録する。
+        """最新のリザルト1つを受け取って処理する。manage_results及びplaylogに登録する。
         """
         idx = len(self.df_scoredatalog) - 1
         tmp_song = self.df_scoredatalog.iloc[idx, :]
         tmp_result = self.parse(tmp_song)
         logger.info(f'read_one_result, idx={idx}, title={tmp_result.title}, difficulties={tmp_result.difficulties}')
         tmp_result.disp()
-        self.today_results.add_result(tmp_result)
+        self.manage_results.add_result(tmp_result)
         # oraja_helper用プレーログにも追加
         self.playlog = pd.concat([self.playlog, tmp_result.to_dataframe()])
 
     def read_old_results(self):
-        """oraja_helper起動前のリザルトをself.today_resultsに追加する。設定されたオフセット時刻以後のものを参照。
-        oraja_helperで取ったログを書き出すようにしたら不要になる予定。
+        """oraja_helper起動前のリザルトをself.manage_resultsに追加する。
+        manage_results.all_resultsへの登録及び、オフセット条件を満たすもののmanage_results.today_resultsへの登録も行う。
         """
-        self.today_results.results = []
+        logger.info(f'この時刻以降のリザルトを読み込む: {datetime.datetime.fromtimestamp(int(datetime.datetime.now().timestamp()) - self.config.autoload_offset*3600)}')
+        self.manage_results.load() # orh(ログ)を読み出した状態にしておく
         if self.is_valid():
             #log = self.df_scoredatalog[self.df_scoredatalog['date'] > cur_time.timestamp()]
             log = self.df_score
             for index,row in log.iterrows():
                 tmp_result = self.parse(row)
                 if tmp_result:
-                    self.today_results.add_result(tmp_result)
-        self.today_results.results.sort()
+                    self.manage_results.add_result(tmp_result)
+        # 全件ロード後に統計情報更新を行い、today_resultsの更新もする
+        self.manage_results.update_stats()
+        self.manage_results.all_results.sort()
 
     def test_write_playlog(self):
         """テスト用。scoredatalogからparseして作ったDataFrameを書き出す
@@ -637,7 +649,7 @@ if __name__ == '__main__':
     acc.config.autoload_offset = 12
 
 
-    # acc.today_results.tweet_summary()
+    # acc.manage_results.tweet_summary()
     acc.read_old_results()
-    acc.today_results.save()
-    acc.today_results.write_history_xml()
+    acc.manage_results.save()
+    acc.manage_results.write_history_xml()
