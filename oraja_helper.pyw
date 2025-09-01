@@ -565,6 +565,7 @@ class MainWindow:
         self.update_db_status()
 
         # 設定画面で更新される可能性があるため、DataBaseAccessorをリロードしておく
+        self.database_accessor.today_results.save()
         self.database_accessor.today_results.load()
         self.database_accessor.today_results.write_history_xml()
         self.database_accessor.today_results.write_updates_xml()
