@@ -258,7 +258,7 @@ class ManageResults:
         logger.info('created')
         self.all_results = [] # oraja_helperで記録した全てのログ。orhファイルへの保存対象。
         self.today_results = [] # resultsに対して日付でフィルタリングしたもの
-        self.updates = {} # resultsは全て記録するが、こちらは同じ曲ならマージする
+        self.today_updates = {} # resultsは全て記録するが、こちらは同じ曲ならマージする
         self.start_time = datetime.datetime.now()
         self.playtime = datetime.timedelta(seconds=0)
         self.notes = 0
@@ -313,6 +313,7 @@ class ManageResults:
         if (self.notes) > 0:
             self.score_rate = 100*(sum_judge[0]*2+sum_judge[1]) / (sum_judge[0]+sum_judge[1]+sum_judge[2]+sum_judge[3]+sum_judge[4]) / 2
         self.today_results = target_results
+        # TODO today_updatesも更新しておく
         self.playcount = len(target_results)
 
     def merge_results(self, pre:OneResult, new:OneResult) -> OneResult:
@@ -320,6 +321,9 @@ class ManageResults:
         ret = pre
         ret.lamp = max(pre.lamp, new.lamp)
         ret.bp = min(pre.bp, new.bp)
+        ret.pre_bp = max(pre.pre_bp, new.pre_bp)
+        ret.pre_lamp = min(pre.pre_lamp, new.pre_lamp)
+        ret.pre_score = min(pre.pre_score, new.pre_score)
         if new.score > pre.score:
             ret.score = new.score
             ret.score_rate = new.score_rate
@@ -338,13 +342,13 @@ class ManageResults:
         if result.date > int(datetime.datetime.now().timestamp()) - self.config.autoload_offset*3600:
             if result not in self.today_results:
                 self.today_results.append(result)
-            if result.sha256 in self.updates.keys():
+            if result.sha256 in self.today_updates.keys():
                 import copy
-                pre = copy.copy(self.updates[result.sha256])
+                pre = copy.copy(self.today_updates[result.sha256])
                 new = self.merge_results(pre, copy.copy(result))
-                self.updates[result.sha256] = new
+                self.today_updates[result.sha256] = new
             else:
-                self.updates[result.sha256] = result
+                self.today_updates[result.sha256] = result
 
     def write_history_xml(self, outfile='history.xml'):
         with open(outfile, 'w', encoding='utf-8') as f:
@@ -387,9 +391,47 @@ class ManageResults:
                 f.write('    </Result>\n')
             f.write("</Items>\n")
 
+    def write_updates_xml(self, outfile='updates.xml'):
+        with open(outfile, 'w', encoding='utf-8') as f:
+            f.write(f'<?xml version="1.0" encoding="utf-8"?>\n')
+            f.write("<Items>\n")
+            f.write(f"    <date>{self.start_time.year}/{self.start_time.month:02d}/{self.start_time.day:02d}</date>\n")
+            f.write(f'    <notes>{self.notes}</notes>\n')
+            f.write(f'    <total_score_rate>{self.score_rate:.2f}</total_score_rate>\n')
+            f.write(f'    <playcount>{self.playcount}</playcount>\n')
+            # f.write(f'    <last_notes>{self.last_notes}</last_notes>\n')
+            if self.playtime.seconds == 0:
+                f.write(f'    <playtime>0</playtime>\n') # HTML側で処理しやすくしている
+                f.write(f'    <pace>0</pace>\n')
+            else:
+                f.write(f'    <playtime>{str(self.playtime).split(".")[0]}</playtime>\n')
+                f.write(f'    <pace>{int(3600*self.notes/self.playtime.seconds)}</pace>\n')
 
-    def write_updates_xml(self):
-        pass
+            for k in self.today_updates.keys():
+                r = self.today_updates[k]
+                title_esc = r.title.replace('&', '&amp;').replace('<','&lt;').replace('>','&gt;').replace('"','&quot;').replace("'",'&apos;')
+                f.write(f'    <Result>\n')
+                # f.write(f'        <lv>{r.difficulties[0]}</lv>\n')
+                f.write(f'        <lv>{",".join(r.difficulties)}</lv>\n')
+                f.write(f'        <title>{title_esc}</title>\n')
+                f.write(f'        <lamp>{r.lamp}</lamp>\n')
+                f.write(f'        <pre_lamp>{r.pre_lamp}</pre_lamp>\n')
+                f.write(f'        <score>{r.score}</score>\n')
+                f.write(f'        <pre_score>{r.pre_score}</pre_score>\n')
+                f.write(f'        <bp>{r.bp}</bp>\n')
+                f.write(f'        <pre_bp>{r.pre_bp}</pre_bp>\n')
+                if r.pre_score > 0:
+                    f.write(f'        <diff_score>{r.score-r.pre_score:+}</diff_score>\n')
+                else: # 初プレイ時は空白
+                    f.write(f'        <diff_score></diff_score>\n')
+                if r.pre_bp < 100000:
+                    f.write(f'        <diff_bp>{r.bp-r.pre_bp:+}</diff_bp>\n')
+                else: # 初プレイ時は空白
+                    f.write(f'        <diff_bp></diff_bp>\n')
+                f.write(f'        <score_rate>{float(r.score_rate):.2f}</score_rate>\n')
+                f.write(f'        <timestamp>{datetime.datetime.fromtimestamp(r.date)}</timestamp>\n')
+                f.write('    </Result>\n')
+            f.write("</Items>\n")
 
     def tweet_summary(self):
         """本日の統計情報をツイートする
@@ -423,6 +465,7 @@ class ManageResults:
     def tweet_history(self):
         """月、年の統計情報をツイートする
         """
+        logger.info(f"len(all_results):{len(self.all_results)}")
         stats_month = defaultdict(int)
         stats_year  = defaultdict(int)
         for i,r in enumerate(self.all_results):
@@ -599,11 +642,12 @@ class DataBaseAccessor:
         """oraja_helper起動前のリザルトをself.manage_resultsに追加する。
         manage_results.all_resultsへの登録及び、オフセット条件を満たすもののmanage_results.today_resultsへの登録も行う。
         """
-        logger.info(f'この時刻以降のリザルトを読み込む: {datetime.datetime.fromtimestamp(int(datetime.datetime.now().timestamp()) - self.config.autoload_offset*3600)}')
         self.manage_results.load() # orh(ログ)を読み出した状態にしておく
+        logger.info(f'現在の曲数:{len(self.manage_results.all_results)}, この時刻以降のリザルトを読み込む: {datetime.datetime.fromtimestamp(int(datetime.datetime.now().timestamp()) - self.config.autoload_offset*3600)}')
         if self.is_valid():
             #log = self.df_scoredatalog[self.df_scoredatalog['date'] > cur_time.timestamp()]
             log = self.df_score
+            logger.info(f'len(df_score): {len(log)}')
             for index,row in log.iterrows():
                 tmp_result = self.parse(row)
                 if tmp_result:
@@ -611,6 +655,7 @@ class DataBaseAccessor:
         # 全件ロード後に統計情報更新を行い、today_resultsの更新もする
         self.manage_results.update_stats()
         self.manage_results.all_results.sort()
+        self.manage_results.save()
 
     def test_write_playlog(self):
         """テスト用。scoredatalogからparseして作ったDataFrameを書き出す
@@ -650,6 +695,8 @@ if __name__ == '__main__':
 
 
     # acc.manage_results.tweet_summary()
-    acc.read_old_results()
+    #acc.read_old_results()
+    acc.manage_results.update_stats()
     acc.manage_results.save()
     acc.manage_results.write_history_xml()
+    acc.manage_results.write_updates_xml()

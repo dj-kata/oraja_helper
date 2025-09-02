@@ -155,6 +155,7 @@ class MainWindow:
         self.database_accessor.set_config(self.config)
         # self.database_accessor.read_old_results()
         self.database_accessor.manage_results.write_history_xml()
+        self.database_accessor.manage_results.write_updates_xml()
         
         self.setup_ui()
         self.set_embedded_icon()
@@ -565,7 +566,6 @@ class MainWindow:
         self.update_db_status()
 
         # 設定画面で更新される可能性があるため、DataBaseAccessorをリロードしておく
-        self.database_accessor.manage_results.save()
         self.database_accessor.manage_results.load()
         self.database_accessor.manage_results.write_history_xml()
         self.database_accessor.manage_results.write_updates_xml()
@@ -814,7 +814,7 @@ class MainWindow:
         # xml出力
         self.database_accessor.manage_results.save()
         self.database_accessor.manage_results.write_history_xml()
-        # self.database_accessor.write_updates_xml()
+        self.database_accessor.manage_results.write_updates_xml()
 
         # tweet
         if self.config.enable_autotweet:
