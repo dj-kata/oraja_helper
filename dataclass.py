@@ -8,6 +8,7 @@ import datetime
 import os
 import sqlite3
 import pandas as pd
+import copy
 import webbrowser, urllib
 from config import Config
 from collections import defaultdict
@@ -278,6 +279,7 @@ class ManageResults:
         self.db_score        = os.path.join(self.config.player_path, 'score.db')
         self.db_scorelog     = os.path.join(self.config.player_path, 'scorelog.db')
         self.db_scoredatalog = os.path.join(self.config.player_path, 'scoredatalog.db')
+        self.init_today_results()
         self.update_stats()
 
     def save(self):
@@ -293,6 +295,16 @@ class ManageResults:
                 self.all_results = pickle.load(f)
         except:
             logger.error(traceback.format_exc())
+
+    def init_today_results(self):
+        """self.all_resultsからself.today_resultsに条件を満たすものを登録する
+        """
+        self.today_results = []
+        for r in self.all_results:
+            if r not in self.today_results:
+                if r.date > int(self.start_time.timestamp()) - self.config.autoload_offset*3600:
+                    self.today_results.append(r)
+                    print('added!', r.title)
 
     def update_stats(self):
         """統計情報(ノーツ数やスコアレート)を更新
@@ -332,18 +344,21 @@ class ManageResults:
         Args:
             result (OneResult): _description_
         """
+        logger.info(f"add_result() called. title:{result.title}")
         if result not in self.all_results:
             self.all_results.append(result)
-        if result.date > int(datetime.datetime.now().timestamp()) - self.config.autoload_offset*3600:
+            logger.debug(f"all_results updated! -> len:{len(self.all_results)}")
+        if result.date > int(self.start_time.timestamp()) - self.config.autoload_offset*3600:
+            logger.debug(f"offset check passed")
             if result not in self.today_results:
                 self.today_results.append(result)
-            if result.sha256 in self.today_updates.keys():
-                import copy
-                pre = copy.copy(self.today_updates[result.sha256])
-                new = self.merge_results(pre, copy.copy(result))
-                self.today_updates[result.sha256] = new
-            else:
-                self.today_updates[result.sha256] = result
+                logger.debug(f"today_results updated! -> len:{len(self.today_results)}")
+            # if result.sha256 in self.today_updates.keys():
+            #     pre = copy.copy(self.today_updates[result.sha256])
+            #     new = self.merge_results(pre, copy.copy(result))
+            #     self.today_updates[result.sha256] = new
+            # else:
+            #     self.today_updates[result.sha256] = result
 
     def write_history_xml(self, outfile='history.xml'):
         with open(outfile, 'w', encoding='utf-8') as f:
@@ -433,7 +448,7 @@ class ManageResults:
         """
         target_results = []
         for i,r in enumerate(self.all_results):
-            if r.date > int(datetime.datetime.now().timestamp()) - self.config.autoload_offset*3600:
+            if r.date > int(self.start_time.timestamp()) - self.config.autoload_offset*3600:
                 target_results = self.all_results[i:]
                 break
 
@@ -487,7 +502,6 @@ class DataBaseAccessor:
     def __init__(self):
         self.difftable = DiffTable() # 難易度情報を取得するために持っておく
         self.manage_results = ManageResults() # xml出力向けにOneResultの配列を持っておく
-        self.playlog = None # 
         self.db_updated_date = {} # 各dbfileの最終更新日時を覚えておく、必要なものだけ読み込む
 
     def is_valid(self):
@@ -630,8 +644,6 @@ class DataBaseAccessor:
         logger.info(f'read_one_result, idx={idx}, title={tmp_result.title}, difficulties={tmp_result.difficulties}')
         tmp_result.disp()
         self.manage_results.add_result(tmp_result)
-        # oraja_helper用プレーログにも追加
-        self.playlog = pd.concat([self.playlog, tmp_result.to_dataframe()])
 
     def read_old_results(self):
         """oraja_helper起動前のリザルトをself.manage_resultsに追加する。
