@@ -346,6 +346,7 @@ class MainWindow:
                     if self.database_accessor.reload_db():
                         self.update_db_status()
                         self.database_accessor.read_one_result()
+                        self.database_accessor.manage_results.update_stats()
                         self.database_accessor.manage_results.write_history_xml()
                         self.update_config_display()
                     
