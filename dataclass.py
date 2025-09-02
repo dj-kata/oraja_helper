@@ -299,22 +299,17 @@ class ManageResults:
         """
         sum_judge = [0, 0, 0, 0, 0, 0]
         # offsetの条件を満たすものだけ抽出
-        target_results = []
-        for i,r in enumerate(self.all_results):
-            if r.date > int(datetime.datetime.now().timestamp()) - self.config.autoload_offset*3600:
-                target_results = self.all_results[i:]
-                break
 
-        for r in target_results:
+        for r in self.today_results:
             for i in range(6):
                 sum_judge[i] += r.judge[i]
         self.score_rate = 0 # total
         self.notes = sum_judge[0]+sum_judge[1]+sum_judge[2]+sum_judge[3]+sum_judge[4]
         if (self.notes) > 0:
             self.score_rate = 100*(sum_judge[0]*2+sum_judge[1]) / (sum_judge[0]+sum_judge[1]+sum_judge[2]+sum_judge[3]+sum_judge[4]) / 2
-        self.today_results = target_results
+        # self.today_results = target_results
         # TODO today_updatesも更新しておく
-        self.playcount = len(target_results)
+        self.playcount = len(self.today_results)
 
     def merge_results(self, pre:OneResult, new:OneResult) -> OneResult:
         assert(pre.sha256 == new.sha256)
