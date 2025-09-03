@@ -348,6 +348,8 @@ class MainWindow:
                         self.database_accessor.read_one_result()
                         self.database_accessor.manage_results.update_stats()
                         self.database_accessor.manage_results.write_history_xml()
+                        self.database_accessor.manage_results.save()
+                        logger.info(f"added! len(all_results):{len(self.database_accessor.manage_results.all_results)}, len(today_results):{len(self.database_accessor.manage_results.today_results)}")
                         self.update_config_display()
                         logger.info(f"added! len(all_results):{len(self.database_accessor.manage_results.all_results)}, len(today_results):{len(self.database_accessor.manage_results.today_results)}")
                     
@@ -564,7 +566,9 @@ class MainWindow:
         # 設定の更新
         self.config.load_config()
         self.obs_manager.set_config(self.config)
+        logger.info(f"added! len(all_results):{len(self.database_accessor.manage_results.all_results)}, len(today_results):{len(self.database_accessor.manage_results.today_results)}")
         self.database_accessor.set_config(self.config)
+        logger.info(f"added! len(all_results):{len(self.database_accessor.manage_results.all_results)}, len(today_results):{len(self.database_accessor.manage_results.today_results)}")
         self.update_db_status()
 
         # 設定画面で更新される可能性があるため、DataBaseAccessorをリロードしておく
