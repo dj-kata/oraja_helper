@@ -251,6 +251,9 @@ class OneResult:
         out['ms']        = self.judge[5]
         out['date']      = self.date
         return pd.DataFrame(out, index=[0])
+    
+    def is_valid(self):
+        return (self.title is not None) and (self.judge is not None) and (self.sha256 is not None)
 
 class ManageResults:
     """OneResultの配列を管理するクラス。xml出力とかもやる。
@@ -376,6 +379,9 @@ class ManageResults:
                 f.write(f'    <pace>{int(3600*self.notes/self.playtime.seconds)}</pace>\n')
 
             for r in self.today_results:
+                if not r.is_valid():
+                    logger.debug(f"invalid data! skipped")
+                    continue
                 title_esc = r.title.replace('&', '&amp;').replace('<','&lt;').replace('>','&gt;').replace('"','&quot;').replace("'",'&apos;')
                 f.write(f'    <Result>\n')
                 # f.write(f'        <lv>{r.difficulties[0]}</lv>\n')
@@ -418,6 +424,9 @@ class ManageResults:
 
             for k in self.today_updates.keys():
                 r = self.today_updates[k]
+                if not r.is_valid():
+                    logger.debug(f"invalid data! skipped")
+                    continue
                 title_esc = r.title.replace('&', '&amp;').replace('<','&lt;').replace('>','&gt;').replace('"','&quot;').replace("'",'&apos;')
                 f.write(f'    <Result>\n')
                 # f.write(f'        <lv>{r.difficulties[0]}</lv>\n')
