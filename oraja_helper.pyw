@@ -348,6 +348,8 @@ class MainWindow:
                         self.database_accessor.read_one_result()
                         self.database_accessor.manage_results.update_stats()
                         self.database_accessor.manage_results.save()
+                        self.database_accessor.manage_results.write_history_xml()
+                        self.database_accessor.manage_results.write_updates_xml()
                         logger.info(f"added! len(all_results):{len(self.database_accessor.manage_results.all_results)}, len(today_results):{len(self.database_accessor.manage_results.today_results)}")
                         self.update_stats_gui()
                         logger.info(f"added! len(all_results):{len(self.database_accessor.manage_results.all_results)}, len(today_results):{len(self.database_accessor.manage_results.today_results)}")
