@@ -325,16 +325,15 @@ class ManageResults:
 
     def merge_results(self, pre:OneResult, new:OneResult) -> OneResult:
         assert(pre.sha256 == new.sha256)
-        ret = pre
+        ret = OneResult()
         ret.lamp = max(pre.lamp, new.lamp)
         ret.bp = min(pre.bp, new.bp)
         ret.pre_bp = max(pre.pre_bp, new.pre_bp)
         ret.pre_lamp = min(pre.pre_lamp, new.pre_lamp)
         ret.pre_score = min(pre.pre_score, new.pre_score)
-        if new.score > pre.score:
-            ret.score = new.score
-            ret.score_rate = new.score_rate
-            ret.judge = new.judge
+        ret.score = max(pre.score, new.score)
+        ret.score_rate = max(pre.score_rate, new.score_rate)
+        ret.judge = new.judge if new.score > pre.score else pre.judge
         return ret
 
     def add_result(self, result:OneResult):
@@ -353,12 +352,12 @@ class ManageResults:
             if result not in self.today_results:
                 self.today_results.append(result)
                 logger.debug(f"today_results updated! -> len:{len(self.today_results)}")
-            # if result.sha256 in self.today_updates.keys():
-            #     pre = copy.copy(self.today_updates[result.sha256])
-            #     new = self.merge_results(pre, copy.copy(result))
-            #     self.today_updates[result.sha256] = new
-            # else:
-            #     self.today_updates[result.sha256] = result
+            if result.sha256 in self.today_updates.keys():
+                pre = self.today_updates[result.sha256]
+                new = self.merge_results(pre, result)
+                self.today_updates[result.sha256] = new
+            else:
+                self.today_updates[result.sha256] = result
 
     def write_history_xml(self, outfile='history.xml'):
         with open(outfile, 'w', encoding='utf-8') as f:
