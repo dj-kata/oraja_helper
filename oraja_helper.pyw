@@ -349,7 +349,7 @@ class MainWindow:
                         self.database_accessor.manage_results.update_stats()
                         self.database_accessor.manage_results.write_history_xml()
                         self.update_config_display()
-                        logger.debug(f"added! len(all_results):{len(self.database_accessor.manage_results.all_results)}, len(today_results):{len(self.database_accessor.manage_results.today_results)}")
+                        logger.info(f"added! len(all_results):{len(self.database_accessor.manage_results.all_results)}, len(today_results):{len(self.database_accessor.manage_results.today_results)}")
                     
                 else:
                     self.file_exists = False
