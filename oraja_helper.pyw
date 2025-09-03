@@ -347,10 +347,9 @@ class MainWindow:
                         self.update_db_status()
                         self.database_accessor.read_one_result()
                         self.database_accessor.manage_results.update_stats()
-                        self.database_accessor.manage_results.write_history_xml()
                         self.database_accessor.manage_results.save()
                         logger.info(f"added! len(all_results):{len(self.database_accessor.manage_results.all_results)}, len(today_results):{len(self.database_accessor.manage_results.today_results)}")
-                        self.update_config_display()
+                        self.update_stats_gui()
                         logger.info(f"added! len(all_results):{len(self.database_accessor.manage_results.all_results)}, len(today_results):{len(self.database_accessor.manage_results.today_results)}")
                     
                 else:
@@ -559,6 +558,14 @@ class MainWindow:
         except Exception as e:
             print(f"ファイルベースゲーム状態判定エラー: {e}")
     
+    def update_stats_gui(self):
+        """db監視スレッドから呼び出す最低限のGUI更新メソッド
+        """
+        self.oraja_path_var.set(self.config.oraja_path or "未設定")
+        self.playcount_var.set(str(self.database_accessor.manage_results.playcount))
+        self.notes_var.set(str(self.database_accessor.manage_results.notes))
+        self.score_rate_var.set(f"{self.database_accessor.manage_results.score_rate:.2f}%")
+
     def update_config_display(self):
         """設定情報の表示を更新"""
         self.oraja_path_var.set(self.config.oraja_path or "未設定")

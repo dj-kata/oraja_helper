@@ -591,7 +591,7 @@ class DataBaseAccessor:
         self.df_songinfo = tmp_df_songinfo if tmp_df_songinfo is not None else self.df_songinfo
 
         #return (tmp_df_scorelog is not None) or (tmp_df_score is not None) or (tmp_df_scoredatalog is not None) or (tmp_df_songdata is not None) or (tmp_df_songinfo is not None)
-        return tmp_df_score is not None
+        return (tmp_df_score is not None) and (tmp_df_scoredatalog is not None)
 
     def parse(self, tmpdat) -> OneResult:
         """df_dataの1エントリを受けてOneResultに格納して返す。難易度の取得もここで行う。
