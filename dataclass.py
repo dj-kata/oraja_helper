@@ -315,7 +315,7 @@ class ManageResults:
     def save(self):
         """self.all_resultsをファイルに保存する
         """
-        print(f"number of results: {len(self.all_results)}")
+        logger.info(f"number of results: {len(self.all_results)}")
         with bz2.BZ2File('playlog.orh', 'wb', compresslevel=9) as f:
             pickle.dump(self.all_results, f)
 
@@ -330,11 +330,16 @@ class ManageResults:
         """起動時の初回登録用メソッド。self.all_resultsからtoday_results/updatesに条件を満たすものを登録する
         """
         self.today_results = []
-        # self.today_updates = {}
+        self.today_updates = {}
         for r in self.all_results:
-            if (r.is_valid()) and (r not in self.today_results):
+            if r.is_valid():
                 if r.date > int(self.start_time.timestamp()) - self.config.autoload_offset*3600:
-                    self.today_results.append(r)
+                    if r not in self.today_results:
+                        self.today_results.append(r)
+                    if r.sha256 not in self.today_updates.keys():
+                        self.today_updates[r.sha256] = r
+                    else:
+                        self.today_updates[r.sha256] += r
 
     def update_stats(self):
         """統計情報(ノーツ数やスコアレート)を更新
@@ -387,6 +392,10 @@ class ManageResults:
             if result not in self.today_results:
                 self.today_results.append(result)
                 logger.debug(f"today_results updated! -> len:{len(self.today_results)}")
+            if result.sha256 not in self.today_updates.keys():
+                self.today_updates[result.sha256] = result
+            else:
+                self.today_updates[result.sha256] += result
 
     def write_history_xml(self, outfile='history.xml'):
         with open(outfile, 'w', encoding='utf-8') as f:
@@ -433,14 +442,6 @@ class ManageResults:
             f.write("</Items>\n")
 
     def write_updates_xml(self, outfile='updates.xml'):
-        updates = {}
-        for r in self.today_results:
-            r.disp()
-            if r.sha256 not in updates.keys():
-                updates[r.sha256] = copy.deepcopy(r)
-            else:
-                updates[r.sha256] += r
-        self.today_updates = updates
         with open(outfile, 'w', encoding='utf-8') as f:
             f.write(f'<?xml version="1.0" encoding="utf-8"?>\n')
             f.write("<Items>\n")
@@ -458,7 +459,6 @@ class ManageResults:
 
             for k in self.today_updates.keys():
                 r = self.today_updates[k]
-                r.disp()
                 if not r.is_valid():
                     logger.debug(f"invalid data! skipped")
                     continue
