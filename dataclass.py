@@ -352,6 +352,12 @@ class ManageResults:
                 sum_judge[i] += r.judge[i]
         self.score_rate = 0 # total
         self.notes = sum_judge[0]+sum_judge[1]+sum_judge[2]+sum_judge[3]+sum_judge[4]
+        self.notes_month = 0
+        for r in reversed(self.all_results):
+            result_date = datetime.datetime.fromtimestamp(r.date)
+            if (result_date.month == self.start_time.month) and (result_date.year == self.start_time.year):
+                for i in range(5):
+                    self.notes_month += r.judge[i]
         if (self.notes) > 0:
             self.score_rate = 100*(sum_judge[0]*2+sum_judge[1]) / (sum_judge[0]+sum_judge[1]+sum_judge[2]+sum_judge[3]+sum_judge[4]) / 2
         self.playcount = len(self.today_results)
@@ -403,6 +409,7 @@ class ManageResults:
             f.write("<Items>\n")
             f.write(f"    <date>{self.start_time.year}/{self.start_time.month:02d}/{self.start_time.day:02d}</date>\n")
             f.write(f'    <notes>{self.notes}</notes>\n')
+            f.write(f'    <notes_month>{self.notes_month}</notes_month>\n')
             f.write(f'    <total_score_rate>{self.score_rate:.2f}</total_score_rate>\n')
             f.write(f'    <playcount>{self.playcount}</playcount>\n')
             # f.write(f'    <last_notes>{self.last_notes}</last_notes>\n')
@@ -447,6 +454,7 @@ class ManageResults:
             f.write("<Items>\n")
             f.write(f"    <date>{self.start_time.year}/{self.start_time.month:02d}/{self.start_time.day:02d}</date>\n")
             f.write(f'    <notes>{self.notes}</notes>\n')
+            f.write(f'    <notes_month>{self.notes_month}</notes_month>\n')
             f.write(f'    <total_score_rate>{self.score_rate:.2f}</total_score_rate>\n')
             f.write(f'    <playcount>{self.playcount}</playcount>\n')
             # f.write(f'    <last_notes>{self.last_notes}</last_notes>\n')
