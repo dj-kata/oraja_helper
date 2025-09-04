@@ -222,14 +222,40 @@ class OneResult:
         if not isinstance(other, OneResult):
             return NotImplemented
         return self.date < other.date
+    
+    def __add__(self, other):
+        if not isinstance(other, OneResult):
+            return NotImplemented
+        ret = OneResult()
+        ret.lamp = max(self.lamp, other.lamp)
+        ret.bp = min(self.bp, other.bp)
+        ret.pre_bp = max(self.pre_bp, other.pre_bp)
+        ret.pre_lamp = min(self.pre_lamp, other.pre_lamp)
+        ret.pre_score = min(self.pre_score, other.pre_score)
+        ret.score = max(self.score, other.score)
+        ret.score_rate = max(self.score_rate, other.score_rate)
+        ret.judge = other.judge if other.score > self.score else self.judge
+        ret.sha256 = self.sha256
+        ret.title = self.title
+        ret.difficulties = self.difficulties
+        ret.one_difficulty = self.one_difficulty
+        ret.date = self.date
+        ret.notes = self.notes
+        ret.length = self.length
+        ret.density = self.density
+        return ret
+
+
 
     def disp(self):
         print(f"title:{self.title}", end=',')
         print(f"difficulties:{self.difficulties}", end=',')
         print(f"lamp:{self.lamp}, score:{self.score} ({self.score_rate}%)", end=',')
         print(f"bp:{self.bp}", end=',')
-        print(f"notes:{self.notes}, density={self.density:.2f}", end=',')
-        print(f"date:{datetime.datetime.fromtimestamp(self.date)}")
+        print(f"notes:{self.notes}, density={self.density:.2f}, ", end=',')
+        print(f"judge:{list(map(int, self.judge))}", end=',')
+        print(f"date:{datetime.datetime.fromtimestamp(self.date)}, ", end=',')
+        print(f"sha256:{self.sha256[:10]}")
         logger.info(f"title:{self.title}, difficulties:{self.difficulties}, lamp:{self.lamp}, score:{self.score} ({self.score_rate}%), bp:{self.bp}, notes:{self.notes}, density={self.density:.2f}, date:{datetime.datetime.fromtimestamp(self.date)}")
 
     def to_dataframe(self) -> pd.DataFrame:
@@ -276,6 +302,7 @@ class ManageResults:
         Args:
             config (Config, optional): config情報。 Defaults to Config().
         """
+        logger.info('config updated')
         self.config = config
         self.db_songdata     = os.path.join(self.config.oraja_path, 'songdata.db')
         self.db_songinfo     = os.path.join(self.config.oraja_path, 'songinfo.db')
@@ -300,14 +327,14 @@ class ManageResults:
             logger.error(traceback.format_exc())
 
     def init_today_results(self):
-        """self.all_resultsからself.today_resultsに条件を満たすものを登録する
+        """起動時の初回登録用メソッド。self.all_resultsからtoday_results/updatesに条件を満たすものを登録する
         """
         self.today_results = []
+        # self.today_updates = {}
         for r in self.all_results:
-            if r not in self.today_results:
+            if (r.is_valid()) and (r not in self.today_results):
                 if r.date > int(self.start_time.timestamp()) - self.config.autoload_offset*3600:
                     self.today_results.append(r)
-                    print('added!', r.title)
 
     def update_stats(self):
         """統計情報(ノーツ数やスコアレート)を更新
@@ -322,12 +349,15 @@ class ManageResults:
         self.notes = sum_judge[0]+sum_judge[1]+sum_judge[2]+sum_judge[3]+sum_judge[4]
         if (self.notes) > 0:
             self.score_rate = 100*(sum_judge[0]*2+sum_judge[1]) / (sum_judge[0]+sum_judge[1]+sum_judge[2]+sum_judge[3]+sum_judge[4]) / 2
-        # self.today_results = target_results
-        # TODO today_updatesも更新しておく
         self.playcount = len(self.today_results)
 
     def merge_results(self, pre:OneResult, new:OneResult) -> OneResult:
-        assert(pre.sha256 == new.sha256)
+        if (pre.sha256 != new.sha256):
+            print('hash mismatch!, ', pre.sha256, new.sha256)
+            return None
+        if (not pre.is_valid() or not new.is_valid()):
+            print('invalid data!', pre.is_valid(), new.is_valid())
+            return None
         ret = OneResult()
         ret.lamp = max(pre.lamp, new.lamp)
         ret.bp = min(pre.bp, new.bp)
@@ -337,6 +367,8 @@ class ManageResults:
         ret.score = max(pre.score, new.score)
         ret.score_rate = max(pre.score_rate, new.score_rate)
         ret.judge = new.judge if new.score > pre.score else pre.judge
+        print(type(new.judge), type(pre.judge), type(ret.judge))
+        ret.sha256 = pre.sha256
         return ret
 
     def add_result(self, result:OneResult):
@@ -355,12 +387,6 @@ class ManageResults:
             if result not in self.today_results:
                 self.today_results.append(result)
                 logger.debug(f"today_results updated! -> len:{len(self.today_results)}")
-            if result.sha256 in self.today_updates.keys():
-                pre = self.today_updates[result.sha256]
-                new = self.merge_results(pre, result)
-                self.today_updates[result.sha256] = new
-            else:
-                self.today_updates[result.sha256] = result
 
     def write_history_xml(self, outfile='history.xml'):
         with open(outfile, 'w', encoding='utf-8') as f:
@@ -407,6 +433,14 @@ class ManageResults:
             f.write("</Items>\n")
 
     def write_updates_xml(self, outfile='updates.xml'):
+        updates = {}
+        for r in self.today_results:
+            r.disp()
+            if r.sha256 not in updates.keys():
+                updates[r.sha256] = copy.deepcopy(r)
+            else:
+                updates[r.sha256] += r
+        self.today_updates = updates
         with open(outfile, 'w', encoding='utf-8') as f:
             f.write(f'<?xml version="1.0" encoding="utf-8"?>\n')
             f.write("<Items>\n")
@@ -424,6 +458,7 @@ class ManageResults:
 
             for k in self.today_updates.keys():
                 r = self.today_updates[k]
+                r.disp()
                 if not r.is_valid():
                     logger.debug(f"invalid data! skipped")
                     continue
@@ -532,6 +567,7 @@ class DataBaseAccessor:
         Args:
             config (Config, optional): config情報。 Defaults to Config().
         """
+        logger.info('config updated')
         self.config = config
         self.difftable.set_config(config)
         self.manage_results.set_config(config)

@@ -414,7 +414,6 @@ class MainWindow:
                 return image
             
         except Exception as e:
-            logger.error(traceback.format_exc())
             print(f"OBSスクリーンショット取得エラー: {e}")
             
         return None
@@ -889,4 +888,6 @@ if __name__ == "__main__":
         pass
     except Exception as e:
         print(f"アプリケーション起動エラー: {e}")
+        print(traceback.format_exc())
+        logger.error(traceback.format_exc())
         messagebox.showerror("エラー", f"アプリケーションの起動に失敗しました。\n{str(e)}")
