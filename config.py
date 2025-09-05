@@ -25,9 +25,13 @@ class Config:
         self.websocket_port = 4444
         self.websocket_password = ""
         self.enable_websocket = False
-        self.enable_autotweet = False
         self.autoload_offset = 4
         self.enable_register_conditions = True  # 画面判定条件設定機能の有効/無効
+
+        # ツイート機能関連
+        self.enable_autotweet = False # 終了時の自動ツイート
+        self.enable_judge = False # 判定部分
+        self.enable_folder_updates = True # フォルダごとの更新数表示
         
         # ウィンドウ位置設定
         self.main_window_x = 100
@@ -59,6 +63,8 @@ class Config:
                     self.websocket_password = config_data.get("websocket_password", "")
                     self.enable_websocket = config_data.get("enable_websocket", False)
                     self.enable_autotweet = config_data.get("enable_autotweet", False)
+                    self.enable_judge = config_data.get("enable_judge", True)
+                    self.enable_folder_updates = config_data.get("enable_folder_updates", False)
                     self.autoload_offset = config_data.get("autoload_offset", 0)
                     self.enable_register_conditions = config_data.get("enable_register_conditions", True)
                     
@@ -89,6 +95,8 @@ class Config:
             "websocket_password": self.websocket_password,
             "enable_websocket": self.enable_websocket,
             "enable_autotweet": self.enable_autotweet,
+            "enable_judge": self.enable_judge,
+            "enable_folder_updates": self.enable_folder_updates,
             "autoload_offset": self.autoload_offset,
             # "enable_register_conditions": self.enable_register_conditions,
             "window": {

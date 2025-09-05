@@ -27,6 +27,8 @@ class SettingsWindow:
         self.websocket_password_var = tk.StringVar(value=self.config.websocket_password)
         self.enable_websocket_var = tk.BooleanVar(value=self.config.enable_websocket)
         self.enable_autotweet_var = tk.BooleanVar(value=self.config.enable_autotweet)
+        self.enable_judge_var = tk.BooleanVar(value=self.config.enable_judge)
+        self.enable_folder_updates_var = tk.BooleanVar(value=self.config.enable_folder_updates)
         self.autoload_offset_var = tk.IntVar(value=self.config.autoload_offset)
         self.enable_register_conditions_var = tk.BooleanVar(value=self.config.enable_register_conditions)
         self.nglist_vars = {}
@@ -51,14 +53,6 @@ class SettingsWindow:
         # スクロール可能なメインフレームを作成
         self.setup_scrollable_frame()
         
-        # 自動ツイート機能on/off
-        self.enable_autotweet_cb = ttk.Checkbutton(
-            self.scrollable_frame, 
-            text="終了時に結果を自動でTweetする",
-            variable=self.enable_autotweet_var,
-        )
-        self.enable_autotweet_cb.pack(anchor=tk.W, pady=(0, 10))
-        
         # 起動時に自動で読み込む範囲の設定
         autoload_offset_frame = ttk.Frame(self.scrollable_frame)
         autoload_offset_frame.pack(fill=tk.X, pady=2)
@@ -70,6 +64,31 @@ class SettingsWindow:
         self.button_load_oraja_log = ttk.Button(autoload_offset_frame, text="過去ログ取得", command=self.load_oraja_log).pack(side=tk.RIGHT)
         # ToolTip(self.button_load_oraja_log, 'beatorajaのdbからプレーログを取得して本ツールのログとして保存します。\n連奏した曲は取得漏れとなるので注意。')
 
+        # ツイート設定セクション
+        tweet_frame = ttk.LabelFrame(self.scrollable_frame, text="ツイート設定", padding="10")
+        tweet_frame.pack(fill=tk.X, pady=(0, 15))
+        # 自動ツイート機能on/off
+        self.enable_autotweet_cb = ttk.Checkbutton(
+            tweet_frame, 
+            text="終了時に結果を自動でTweetする",
+            variable=self.enable_autotweet_var,
+        )
+        self.enable_autotweet_cb.pack(anchor=tk.W, pady=(0, 10))
+        # 判定内訳のon/off
+        self.enable_judge_cb = ttk.Checkbutton(
+            tweet_frame, 
+            text="判定内訳を含む(PG,GRなど)",
+            variable=self.enable_judge_var,
+        )
+        self.enable_judge_cb.pack(anchor=tk.W, pady=(0, 10))
+        # フォルダ更新状況のon/off
+        self.enable_folder_updates_cb = ttk.Checkbutton(
+            tweet_frame, 
+            text="フォルダごとのランプ更新数を出力する",
+            variable=self.enable_folder_updates_var,
+        )
+        self.enable_folder_updates_cb.pack(anchor=tk.W, pady=(0, 10))
+        
         # フォルダ設定セクション
         folder_frame = ttk.LabelFrame(self.scrollable_frame, text="監視設定", padding="10")
         folder_frame.pack(fill=tk.X, pady=(0, 15))
@@ -413,6 +432,8 @@ class SettingsWindow:
             self.config.websocket_password = self.websocket_password_var.get()
             self.config.enable_websocket = self.enable_websocket_var.get()
             self.config.enable_autotweet = self.enable_autotweet_var.get()
+            self.config.enable_judge = self.enable_judge_var.get()
+            self.config.enable_folder_updates = self.enable_folder_updates_var.get()
             self.config.autoload_offset = self.autoload_offset_var.get()
             self.config.enable_register_conditions = self.enable_register_conditions_var.get()
 

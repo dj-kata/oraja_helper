@@ -513,12 +513,33 @@ class ManageResults:
             score_rate = 100*(sum_judge[0]*2+sum_judge[1]) / (sum_judge[0]+sum_judge[1]+sum_judge[2]+sum_judge[3]+sum_judge[4]) / 2
         pace = int(3600*self.notes/self.playtime.seconds) if self.playtime.seconds > 0 else 0
         ontime = datetime.datetime.now() - self.start_time
-        msg = f"plays:{len(target_results):,}, notes: {notes:,}, score_rate: {score_rate:.2f}%\n"
-        msg += f"(PG:{sum_judge[0]:,}, GR:{sum_judge[1]:,}, GD: {sum_judge[2]:,}, BD: {sum_judge[3]:,}, PR:{sum_judge[4]:,}, MISS:{sum_judge[5]:,})\n"
+        msg = f"plays:{len(target_results):,}, notes: {notes:,}, {score_rate:.2f}%\n"
+        msg += f"({self.start_time.year}/{self.start_time.month:02d}: {self.notes_month:,})\n"
+        if self.config.enable_judge: # 判定内訳表示
+            msg += f"(PG:{sum_judge[0]:,}, GR:{sum_judge[1]:,}, GD: {sum_judge[2]:,}, BD: {sum_judge[3]:,}, PR:{sum_judge[4]:,}, MISS:{sum_judge[5]:,})\n"
         if pace > 0:
             msg += f"uptime: {str(ontime).split('.')[0]}, playtime: {str(self.playtime).split('.')[0]}, pace: {pace:,}notes/h\n"
         else:
             msg += f"uptime: {str(ontime).split('.')[0]}\n"
+        # フォルダごとのランプ更新数
+        if self.config.enable_folder_updates:
+            lamps = ['', '', '', '', 'E', 'C', 'H', 'EXH', 'FC', 'P', 'MAX']
+            folder_updates = {}
+            for k in self.today_updates.keys():
+                r = self.today_updates[k]
+                if r.lamp > r.pre_lamp: # 更新した曲
+                    for d in r.difficulties:
+                        if d not in folder_updates.keys():
+                            folder_updates[d] = [0]*11
+                        folder_updates[d][r.lamp] += 1
+
+            for d in sorted(list(folder_updates.keys())):
+                msg += f"{d.strip()}: "
+                for i,u in enumerate(folder_updates[d]):
+                    if u > 0:
+                        msg += f"{lamps[i]}+{u},"
+                msg += '\n'
+
         msg += '#oraja_helper\n'
         encoded_msg = urllib.parse.quote(msg)
         webbrowser.open(f"https://twitter.com/intent/tweet?text={encoded_msg}")
