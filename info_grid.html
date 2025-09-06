@@ -21,6 +21,9 @@
             overflow: hidden;
             height: 100vh;
             position: relative;
+            /* iframe内表示用の調整 */
+            padding: 0;
+            margin: 0;
         }
 
         /* サイバーグリッド背景 */
@@ -56,7 +59,6 @@
                 rgba(0, 255, 255, 0.03) 52%,
                 transparent 100%
             );
-            animation: scanline 3s linear infinite;
             pointer-events: none;
             z-index: 1000;
         }
@@ -67,9 +69,12 @@
             align-items: center;
             justify-content: center;
             min-height: 100vh;
-            padding: 20px;
             position: relative;
             z-index: 10;
+            /* iframe内表示用の調整 - paddingを削除し、flex配置で中央揃え */
+            padding: 0;
+            width: 100%;
+            height: 100vh;
         }
 
         .header {
@@ -125,11 +130,15 @@
 
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(var(--grid-columns), 1fr);
-            gap: var(--grid-gap);
+            grid-template-columns: repeat(var(--grid-columns, 6), 1fr);
+            gap: var(--grid-gap, 20px);
             width: 100%;
             max-width: 100%;
             transition: all 0.3s ease;
+            /* iframe内表示用の調整 - コンテナの最大幅を制限し中央配置 */
+            max-width: calc(100% - 40px);
+            margin: 0 auto;
+            padding: 20px;
         }
 
         .stat-panel {
@@ -141,8 +150,15 @@
             overflow: hidden;
             transition: all 0.3s ease;
             backdrop-filter: blur(10px);
-            min-width: var(--panel-min-width);
-            max-width: var(--panel-max-width);
+            min-width: var(--panel-min-width, 120px);
+            max-width: var(--panel-max-width, none);
+            /* iframe内表示用の調整 */
+            min-height: 120px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
         }
 
         .stat-panel:hover {
@@ -197,6 +213,7 @@
             color: #00ff88;
             font-family: 'Share Tech Mono', monospace;
             text-shadow: 0 0 5px #00ff88;
+            margin-top: 5px;
         }
 
         /* 特殊なスタイル */
@@ -294,6 +311,11 @@
             #dashboard {
                 padding: 15px;
             }
+            
+            .stats-grid {
+                padding: 15px;
+                gap: 15px;
+            }
         }
 
         @media (max-width: 480px) {
@@ -320,6 +342,33 @@
             .stat-panel {
                 padding: 15px;
             }
+            
+            .stats-grid {
+                padding: 10px;
+                gap: 10px;
+            }
+        }
+
+        /* iframe内での表示最適化 */
+        body.iframe-mode {
+            padding: 0;
+            margin: 0;
+        }
+
+        body.iframe-mode #dashboard {
+            padding: 10px;
+            min-height: 100vh;
+        }
+
+        body.iframe-mode .stats-grid {
+            max-width: 100%;
+            padding: 10px;
+            gap: 15px;
+        }
+
+        body.iframe-mode .stat-panel {
+            padding: 20px 15px;
+            min-height: 100px;
         }
     </style>
 </head>
@@ -381,6 +430,13 @@
 
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
     <script>
+        // iframe内での表示かどうかを検出
+        function detectIframeMode() {
+            if (window.parent !== window) {
+                document.body.classList.add('iframe-mode');
+            }
+        }
+
         // 時計の更新
         function updateClock() {
             const now = new Date();
@@ -400,8 +456,10 @@
             // const displayTime = timeString.replace(/0/g, 'o');
             
             // 別々の要素に表示
-            document.getElementById('clock-date').textContent = displayDate;
-            document.getElementById('clock-time').textContent = displayTime;
+            const clockDate = document.getElementById('clock-date');
+            const clockTime = document.getElementById('clock-time');
+            if (clockDate) clockDate.textContent = dateString;
+            if (clockTime) clockTime.textContent = timeString;
         }
 
         function loadXml() {
@@ -433,8 +491,12 @@
                 // alert('failed');
             });
         }
+
         // 初期化とイベントリスナー
         document.addEventListener('DOMContentLoaded', function() {
+            // iframe表示モードの検出
+            detectIframeMode();
+            
             // 時計を1秒ごとに更新
             setInterval(updateClock, 1000);
             setInterval(loadXml, 1000);
