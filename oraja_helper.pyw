@@ -677,19 +677,11 @@ class MainWindow:
     def restore_window_position(self):
         """ウィンドウ位置を復元"""
         try:
-            # 画面サイズを取得
-            screen_width = self.root.winfo_screenwidth()
-            screen_height = self.root.winfo_screenheight()
-            
             # 設定されたウィンドウ位置を取得
             x = self.config.main_window_x
             y = self.config.main_window_y
             width = self.config.main_window_width
             height = self.config.main_window_height
-            
-            # 画面内に収まるように調整
-            x = max(0, min(x, screen_width - width))
-            y = max(0, min(y, screen_height - height))
             
             # ウィンドウサイズと位置を設定
             self.root.geometry(f"{width}x{height}+{x}+{y}")
@@ -733,7 +725,7 @@ class MainWindow:
         
         # 1秒後に再実行
         self.root.after(1000, self.update_display)
-    
+
     def execute_obs_trigger(self, trigger: str):
         """OBS制御トリガーを実行"""
         try:
