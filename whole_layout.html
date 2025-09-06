@@ -114,11 +114,7 @@
         .clock-area {
             flex: var(--clock-ratio);
             background-color: #1e1e1e;
-            /* border: 10px solid var(--color-upper-border); */
-            border-width: 10px;
-            border-style: solid;
-            border-image-source: linear-gradient(20deg, #001, #010, #100);
-            border-image-slice: 1;
+            border: 10px solid black;
             overflow: hidden;
             position: relative;
         }
@@ -126,15 +122,18 @@
         .comment-area {
             flex: var(--comment-ratio);
             background-color: transparent;
-            border-width: 10px;
-            border-style: solid;
-            border-image-source: linear-gradient(20deg, #003, #117);
-            border-image-slice: 1;
+            border: 10px solid black;
             display: flex;
             align-items: center;
             justify-content: center;
             color: #666;
             font-size: 18px;
+        }
+        .comment-inner {
+            border: 2px solid #aaaaaa;
+            border-radius: 10px;
+            width: 100%;
+            height: 100%;
         }
 
         /* 区切り線 - #003背景 */
@@ -159,7 +158,7 @@
             overflow: hidden;
             position: relative;
             background-color: transparent;
-            border: 2px solid #ffffff;
+            border: 2px solid #aaaaaa;
             border-radius: 10px;
         }
 
@@ -373,6 +372,7 @@
                     <iframe class="normal-iframe" src="https://dj-kata.github.io/obs_misc/2356_clock/cyber_banner_clock.html"></iframe>
                 </div>
                 <div class="comment-area">
+                    <div class="comment-inner"></div>
                 </div>
             </div>
         </div>
