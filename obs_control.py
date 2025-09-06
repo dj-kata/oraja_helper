@@ -13,6 +13,7 @@ import traceback
 import base64
 import io
 from config import Config
+from draggable_window import DraggableWindow
 
 try:
     import obsws_python as obs
@@ -233,6 +234,7 @@ class OBSControlWindow:
         self.setup_ui()
         self.refresh_obs_data()
         self.refresh_settings_list()
+        self.draggable = DraggableWindow(self.window)
         
         # ウィンドウを中央に配置
         self.center_window()
@@ -444,10 +446,6 @@ class OBSControlWindow:
         # 親ウィンドウの中央に配置する座標を計算
         x = parent_x + (parent_width - window_width) // 2
         y = parent_y + (parent_height - window_height) // 2
-        
-        # 画面内に収まるように調整
-        x = max(0, min(x, screen_width - window_width))
-        y = max(0, min(y, screen_height - window_height))
         
         self.window.geometry(f"{window_width}x{window_height}+{x}+{y}")
     

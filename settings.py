@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from dataclass import DiffTable, DataBaseAccessor
 from config import Config
+from draggable_window import DraggableWindow
 # from tooltip import ToolTip
 
 class SettingsWindow:
@@ -41,6 +42,7 @@ class SettingsWindow:
         
         self.setup_ui()
         self.update_websocket_state()
+        self.draggable = DraggableWindow(self.window)
         
         # ウィンドウを中央に配置
         self.center_window()
@@ -345,10 +347,6 @@ class SettingsWindow:
         # 親ウィンドウの中央に配置する座標を計算
         x = parent_x + (parent_width - window_width) // 2
         y = parent_y + (parent_height - window_height) // 2
-        
-        # 画面内に収まるように調整
-        x = max(0, min(x, screen_width - window_width))
-        y = max(0, min(y, screen_height - window_height))
         
         self.window.geometry(f"{window_width}x{window_height}+{x}+{y}")
     
