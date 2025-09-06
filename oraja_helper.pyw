@@ -13,6 +13,7 @@ from config import Config
 from settings import SettingsWindow
 from obs_control import OBSControlWindow, ImageRecognitionData, OBSWebSocketManager
 from dataclass import *
+from pickle_converter import *
 import requests
 from bs4 import BeautifulSoup
 
@@ -133,6 +134,7 @@ class MainWindow:
         
         self.root = tk.Tk()
         self.config = Config()
+        self.convert_old_settings()
         self.config.save_config()
         self.start_time = datetime.datetime.now()
         self.play_st    = None
@@ -233,6 +235,27 @@ class MainWindow:
                 self.try_alternative_icons()
         except Exception as e:
             print(f"アイコン設定エラー: {e}")    
+
+    def convert_old_settings(self):
+        """1.16以前のpkl形式の設定がある場合はconvert
+        """
+        data = convert_with_dummy_class('settings.pkl')
+        if data:
+            ret = messagebox.askyesno('確認', '前のバージョンの設定(settings.pkl)を変換しますか？\n変換後に元の設定ファイルは削除されます。\n\n※注意:OBS制御設定は引き継げません。お手数ですが再設定をお願いします。')
+            if ret:
+                self.config.main_window_x = data.get('lx', self.config.main_window_x)
+                self.config.main_window_y = data.get('ly', self.config.main_window_y)
+                self.config.oraja_path = data.get('dir_oraja', self.config.oraja_path)
+                self.config.player_path = data.get('dir_player', self.config.player_path)
+                self.config.enable_autotweet = data.get('tweet_on_exit', self.config.enable_autotweet)
+                self.config.monitor_source_name = data.get('obs_source', self.config.monitor_source_name)
+                self.config.websocket_host = data.get('host', self.config.websocket_host)
+                self.config.websocket_port = data.get('port', self.config.websocket_port)
+                self.config.websocket_password = data.get('passwd', self.config.websocket_password)
+
+                # pkl削除
+                os.remove('settings.pkl')
+                logger.info('convert succeeded. settings.pkl was removed.')
 
     def setup_ui(self):
         """UIの初期設定"""
