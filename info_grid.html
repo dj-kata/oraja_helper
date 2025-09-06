@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cyber Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: radial-gradient(ellipse at center, #001122 0%, #000000 100%);
+            color: #00ffff;
+            font-family: 'Orbitron', monospace;
+            overflow: hidden;
+            height: 100vh;
+            position: relative;
+        }
+
+        /* サイバーグリッド背景 */
+        body::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image: 
+                linear-gradient(rgba(0, 255, 255, 0.1) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 255, 255, 0.1) 1px, transparent 1px);
+            background-size: 50px 50px;
+            pointer-events: none;
+            animation: gridPulse 4s ease-in-out infinite alternate;
+        }
+
+        /* スキャンライン効果 */
+        body::after {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: 0;
+            right: 0;
+            height: 200%;
+            background: linear-gradient(
+                transparent 0%,
+                rgba(0, 255, 255, 0.03) 48%,
+                rgba(0, 255, 255, 0.08) 49%,
+                rgba(0, 255, 255, 0.15) 50%,
+                rgba(0, 255, 255, 0.08) 51%,
+                rgba(0, 255, 255, 0.03) 52%,
+                transparent 100%
+            );
+            animation: scanline 3s linear infinite;
+            pointer-events: none;
+            z-index: 1000;
+        }
+
+        #dashboard {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+            position: relative;
+            z-index: 10;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            position: relative;
+        }
+
+        .title {
+            font-size: 3rem;
+            font-weight: 900;
+            background: linear-gradient(45deg, #00ffff, #ff0080, #00ff00, #ffff00);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-shadow: 0 0 30px rgba(0, 255, 255, 0.5);
+            animation: titleGlow 2s ease-in-out infinite alternate;
+        }
+
+        .subtitle {
+            font-size: 1.2rem;
+            color: #888;
+            font-family: 'Share Tech Mono', monospace;
+            margin-top: 10px;
+            letter-spacing: 3px;
+        }
+
+        .clock-display {
+            font-weight: 700;
+            color: #00ff00;
+            text-shadow: 0 0 20px #00ff00;
+            font-family: 'Share Tech Mono', monospace;
+            margin-bottom: 30px;
+            border: 2px solid #00ff00;
+            padding: 20px 30px;
+            background: rgba(0, 255, 0, 0.05);
+            border-radius: 10px;
+            animation: clockPulse 1s ease-in-out infinite alternate;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .clock-date {
+            font-size: 1.8rem;
+            opacity: 0.9;
+        }
+
+        .clock-time {
+            font-size: 2.5rem;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(var(--grid-columns), 1fr);
+            gap: var(--grid-gap);
+            width: 100%;
+            max-width: 100%;
+            transition: all 0.3s ease;
+        }
+
+        .stat-panel {
+            background: rgba(0, 20, 40, 0.8);
+            border: 2px solid #00ffff;
+            border-radius: 15px;
+            padding: 25px;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+            min-width: var(--panel-min-width);
+            max-width: var(--panel-max-width);
+        }
+
+        .stat-panel:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0, 255, 255, 0.3);
+            border-color: #ff0080;
+        }
+
+        .stat-panel::before {
+            content: '';
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            background: linear-gradient(45deg, #00ffff, #ff0080, #00ff00, #ffff00);
+            border-radius: 15px;
+            z-index: -1;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .stat-panel:hover::before {
+            opacity: 0.8;
+        }
+
+        .stat-label {
+            font-size: 1rem;
+            color: #ffff00;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 10px;
+            text-shadow: 0 0 10px #ffff00;
+        }
+
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #00ffff;
+            text-shadow: 0 0 15px #00ffff;
+            margin-bottom: 5px;
+        }
+
+        .stat-unit {
+            font-size: 0.9rem;
+            color: #ff8800;
+            text-shadow: 0 0 8px #ff8800;
+        }
+
+        .stat-subtitle {
+            font-size: 0.8rem;
+            color: #00ff88;
+            font-family: 'Share Tech Mono', monospace;
+            text-shadow: 0 0 5px #00ff88;
+        }
+
+        /* 特殊なスタイル */
+        .plays-panel {
+            border-color: #ffff00;
+        }
+        .plays-panel .stat-value {
+            color: #ffff00;
+            text-shadow: 0 0 15px #ffff00;
+        }
+
+        .pace-panel {
+            border-color: #ff0080;
+        }
+
+        .pace-panel .stat-value {
+            color: #ff0080;
+            text-shadow: 0 0 15px #ff0080;
+        }
+
+        .score-panel {
+            border-color: #00ff00;
+        }
+
+        .score-panel .stat-value {
+            color: #00ff00;
+            text-shadow: 0 0 15px #00ff00;
+        }
+
+        .daily-panel {
+            border-color: #ff00cc;
+        }
+
+        .daily-panel .stat-value {
+            color: #ff00cc;
+            text-shadow: 0 0 15px #ff00cc;
+        }
+
+        .monthly-panel {
+            border-color: #ff8800;
+        }
+
+        .monthly-panel .stat-value {
+            color: #ff8800;
+            text-shadow: 0 0 15px #ff8800;
+        }
+
+        /* アニメーション */
+        @keyframes gridPulse {
+            0% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        @keyframes scanline {
+            0% { transform: translateY(-100vh); }
+            100% { transform: translateY(100vh); }
+        }
+
+        @keyframes titleGlow {
+            0% { text-shadow: 0 0 30px rgba(0, 255, 255, 0.5); }
+            100% { text-shadow: 0 0 50px rgba(255, 0, 128, 0.8); }
+        }
+
+        @keyframes clockPulse {
+            0% { box-shadow: 0 0 20px rgba(0, 255, 0, 0.3); }
+            100% { box-shadow: 0 0 30px rgba(0, 255, 0, 0.6); }
+        }
+
+        /* レスポンシブ対応 */
+        @media (max-width: 768px) {
+            .title {
+                font-size: 2rem;
+            }
+            
+            .clock-date {
+                font-size: 1.4rem;
+            }
+            
+            .clock-time {
+                font-size: 1.8rem;
+            }
+            
+            .clock-display {
+                padding: 15px 25px;
+            }
+            
+            .stat-value {
+                font-size: 2rem;
+            }
+            
+            .stat-panel {
+                padding: 20px;
+            }
+            
+            #dashboard {
+                padding: 15px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .title {
+                font-size: 1.5rem;
+            }
+            
+            .clock-date {
+                font-size: 1.2rem;
+            }
+            
+            .clock-time {
+                font-size: 1.4rem;
+            }
+            
+            .clock-display {
+                padding: 12px 20px;
+            }
+            
+            .stat-value {
+                font-size: 1.8rem;
+            }
+            
+            .stat-panel {
+                padding: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="dashboard">
+        <!-- <div class="header">
+            <h1 class="title">oraja helper</h1>
+            <p class="subtitle">SYSTEM STATUS MONITOR</p>
+        </div> -->
+
+        <!-- <div class="clock-display">
+            <div class="clock-date" id="clock-date">2025/08/27</div>
+            <div class="clock-time" id="clock-time">23:45:32</div>
+        </div> -->
+
+        <div class="stats-grid">
+            <div class="stat-panel plays-panel">
+                <div class="stat-label">PLAYS</div>
+                <div class="stat-value"><plays></plays></div>
+                <div class="stat-subtitle">COMPLETED SESSIONS</div>
+            </div>
+
+            <div class="stat-panel playtime-panel">
+                <div class="stat-label">PLAYTIME</div>
+                <div class="stat-value"><playtime></playtime></div>
+                <div class="stat-subtitle">TOTAL SESSION TIME</div>
+            </div>
+
+            <div class="stat-panel daily-panel">
+                <div class="stat-label">DAILY NOTES</div>
+                <div class="stat-value"><notes></notes></div>
+                <div class="stat-unit">NOTES</div>
+                <div class="stat-subtitle">TODAY'S PERFORMANCE</div>
+            </div>
+
+            <div class="stat-panel pace-panel">
+                <div class="stat-label">PACE</div>
+                <div class="stat-value"><pace></pace></div>
+                <div class="stat-unit">NOTES/SEC</div>
+                <div class="stat-subtitle">PERFORMANCE RATE</div>
+            </div>
+
+            <div class="stat-panel score-panel">
+                <div class="stat-label">SCORE RATE</div>
+                <div class="stat-value"><score_rate></score_rate></div>
+                <div class="stat-unit">%</div>
+                <div class="stat-subtitle">ACCURACY RATING</div>
+            </div>
+
+            <div class="stat-panel monthly-panel">
+                <div class="stat-label">MONTHLY NOTES</div>
+                <div class="stat-value"><notes_month></notes_month></div>
+                <div class="stat-unit">NOTES</div>
+                <div class="stat-subtitle">CURRENT MONTH TOTAL</div>
+            </div>
+
+        </div>
+    </div>
+
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script>
+        // 時計の更新
+        function updateClock() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const date = String(now.getDate()).padStart(2, '0');
+            const hour = String(now.getHours()).padStart(2, '0');
+            const minute = String(now.getMinutes()).padStart(2, '0');
+            const second = String(now.getSeconds()).padStart(2, '0');
+            
+            // 日付と時刻を別々に作成
+            const dateString = `${year}/${month}/${date}`;
+            const timeString = `${hour}:${minute}:${second}`;
+            
+            // 0をoに変換
+            // const displayDate = dateString.replace(/0/g, 'o');
+            // const displayTime = timeString.replace(/0/g, 'o');
+            
+            // 別々の要素に表示
+            document.getElementById('clock-date').textContent = displayDate;
+            document.getElementById('clock-time').textContent = displayTime;
+        }
+
+        function loadXml() {
+            var getxml = $.ajax({
+                url: './history.xml',
+                type: 'GET',
+                dataType: 'xml',
+                cache: false
+            });
+            getxml.done(function(xml){
+                // xmlデータからほしいデータをfindで探し処理
+                var notes = Number($(xml).find('Items notes').text()).toLocaleString();
+                var notes_month = Number($(xml).find('Items notes_month').text()).toLocaleString();
+                var date = $(xml).find('Items date').text();
+                var sr = $(xml).find('Items total_score_rate').text();
+                var plays = $(xml).find('Items playcount').text();
+                var playtime = $(xml).find('Items playtime').text();
+                var pace = Number($(xml).find('Items pace').text()).toLocaleString();
+
+                $('notes').html(notes);
+                $('notes_month').html(notes_month);
+                $('plays').html(plays);
+                $('score_rate').html(sr);
+                $('date').html(date);
+                $('playtime').html(playtime);
+                $('pace').html(pace);
+            });
+            getxml.fail(function(err) {
+                // alert('failed');
+            });
+        }
+        // 初期化とイベントリスナー
+        document.addEventListener('DOMContentLoaded', function() {
+            // 時計を1秒ごとに更新
+            setInterval(updateClock, 1000);
+            setInterval(loadXml, 1000);
+            updateClock();
+            loadXml();
+            
+            // パネルにホバー効果を追加
+            document.querySelectorAll('.stat-panel').forEach(panel => {
+                panel.addEventListener('mouseenter', () => {
+                    panel.style.transform = 'translateY(-5px) scale(1.02)';
+                });
+                
+                panel.addEventListener('mouseleave', () => {
+                    panel.style.transform = 'translateY(0) scale(1)';
+                });
+            });
+        });
+    </script>
+</body>
+</html>
