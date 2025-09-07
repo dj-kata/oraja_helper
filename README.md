@@ -74,6 +74,9 @@ OBSでtoday_result.htmlのカスタムCSSに以下のプロパティを設定す
 幅1920，高さ1080
 <img width="1590" alt="Image" src="https://github.com/user-attachments/assets/01e3111f-3d40-4ae5-a5a7-1b0ae185768a" />
 
+注意:OBS制御設定からプレー画面の登録をしないとplaytime及びpaceが0のままになります。
+(0のときはgridを消すように変更する予定)
+
 ## info_grid.html (情報ビュー、サイバー調)
 幅1920，高さ200(横6列時)
 <img width="1308" alt="Image" src="https://github.com/user-attachments/assets/0a6be005-80be-4000-bc6a-ad0e98750c23" />
