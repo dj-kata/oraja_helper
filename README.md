@@ -6,7 +6,7 @@ beatorajaのプレーログ及び、その日に叩いたノーツ数をOBSで�
 (pg+gr+gd+bd+見逃しprのみ加算)
 
 OBSにこういう感じのやつが出せます。  
-<img width="558" height="531" alt="Image" src="https://github.com/user-attachments/assets/3b032369-8eb9-49a4-84f2-6735e1685803" />
+<img width="558" alt="Image" src="https://github.com/user-attachments/assets/3b032369-8eb9-49a4-84f2-6735e1685803" />
 
 OBSソースの自動制御を行うこともできます。  
 選曲画面/プレイ画面/リザルト画面のキャプチャ画像を登録することで、どんなスキンを使っていてもシーン検出ができます。  
@@ -28,19 +28,19 @@ https://x.com/cold_planet_/status/1964573250895434226
   - 統計情報ビューを追加する場合はinfo_detailed.htmlまたはinfo_grid.htmlを利用
   - その日の成果まとめビューを追加する場合はreceipt.htmlを利用(幅2400，高さ3000)
 7. シーン(選曲、プレー、リザルト)ごとにOBSソースやシーンを自動制御したい場合は[wiki](https://github.com/dj-kata/oraja_helper/wiki/OBS%E9%80%A3%E6%90%BA%E6%A9%9F%E8%83%BD%E3%81%AE%E8%A8%AD%E5%AE%9A%E6%96%B9%E6%B3%95)を参考に設定する。一度上記設定を行っていれば、それ以降はoraja_helper.exeを実行するだけでOKですメイン画面に```db state: OK```と出ていれば動いています。  
-<img width="546" height="403" alt="Image" src="https://github.com/user-attachments/assets/4d13ade7-aa34-4e66-8e12-5d0e7bf0aa76" />
+<img width="546" alt="Image" src="https://github.com/user-attachments/assets/4d13ade7-aa34-4e66-8e12-5d0e7bf0aa76" />
 
 beatorajaのパス設定は以下のようになっていればOKです。
 playerフォルダはdbファイルが入っているフォルダを指定してください。  
-<img width="591" height="363" alt="Image" src="https://github.com/user-attachments/assets/405c5d73-de60-41e7-81be-790acf61df70" />
+<img width="591" alt="Image" src="https://github.com/user-attachments/assets/405c5d73-de60-41e7-81be-790acf61df70" />
 
 自動ツイート設定により、oraja_helper終了時にブラウザ上で以下のようなツイート画面が出ます。  
 こちらの機能は```メニューバー内のTweet->daily```からも利用できます。  
 ※playtime(プレイ画面のみの合計時間)はOBS制御設定からプレイ画面の判定条件を登録した場合のみ表示されます。
-<img width="588" height="473" alt="Image" src="https://github.com/user-attachments/assets/6d1de99d-d022-4f6f-97ec-eda0c6c0d56b" />
+<img width="588" alt="Image" src="https://github.com/user-attachments/assets/6d1de99d-d022-4f6f-97ec-eda0c6c0d56b" />
 
 各ビューで表示対象とする難易度表を指定することもできます。
-<img width="432" height="245" alt="Image" src="https://github.com/user-attachments/assets/2a726cfc-793f-4385-9264-4615c63bef39" />
+<img width="432" alt="Image" src="https://github.com/user-attachments/assets/2a726cfc-793f-4385-9264-4615c63bef39" />
 
 # 各HTMLファイルについて
 仕様上、OBSのブラウザソース以外では表示できないので注意。
@@ -48,7 +48,7 @@ playerフォルダはdbファイルが入っているフォルダを指定して
 
 ## today_result.html (プレーログ)
 幅2000，高さ1500
-<img width="557" height="391" alt="Image" src="https://github.com/user-attachments/assets/a917bad9-dfe5-4f7c-b410-3fa817184ab9" />
+<img width="557" alt="Image" src="https://github.com/user-attachments/assets/a917bad9-dfe5-4f7c-b410-3fa817184ab9" />
 
 OBSでtoday_result.htmlのカスタムCSSに以下のプロパティを設定することで、表示する曲数を変更できます。  
 ランプ、スコア、BPが一切更新されなかったプレイを非表示にするための設定も可能です。
@@ -68,19 +68,19 @@ OBSでtoday_result.htmlのカスタムCSSに以下のプロパティを設定す
 
 ## receipt.html (成果まとめ)
 幅2400，高さ3000
-<img width="613" height="457" alt="Image" src="https://github.com/user-attachments/assets/6b122384-c17b-4aeb-86b4-d93493ddc6fd" />
+<img width="613" alt="Image" src="https://github.com/user-attachments/assets/6b122384-c17b-4aeb-86b4-d93493ddc6fd" />
 
 ## whole_layout.html (配信画面風レイアウト)
 幅1920，高さ1080
-<img width="1590" height="898" alt="Image" src="https://github.com/user-attachments/assets/01e3111f-3d40-4ae5-a5a7-1b0ae185768a" />
+<img width="1590" alt="Image" src="https://github.com/user-attachments/assets/01e3111f-3d40-4ae5-a5a7-1b0ae185768a" />
 
 ## info_grid.html (情報ビュー、サイバー調)
 幅1920，高さ200(横6列時)
-<img width="1308" height="138" alt="Image" src="https://github.com/user-attachments/assets/0a6be005-80be-4000-bc6a-ad0e98750c23" />
+<img width="1308" alt="Image" src="https://github.com/user-attachments/assets/0a6be005-80be-4000-bc6a-ad0e98750c23" />
 
 ## info_detailed.html (情報ビュー、シンプルな見た目)
 幅1920，高さ160
-<img width="1356" height="120" alt="Image" src="https://github.com/user-attachments/assets/2add8d33-1227-4192-8e22-08f4e97e0aeb" />
+<img width="1356" alt="Image" src="https://github.com/user-attachments/assets/2add8d33-1227-4192-8e22-08f4e97e0aeb" />
 
 # その他
 今後追加するかもしれない機能
