@@ -14,7 +14,6 @@ from settings import SettingsWindow
 from obs_control import OBSControlWindow, ImageRecognitionData, OBSWebSocketManager
 from dataclass import *
 from pickle_converter import *
-from draggable_window import DraggableWindow
 import requests
 from bs4 import BeautifulSoup
 
@@ -161,7 +160,6 @@ class MainWindow:
         self.database_accessor.manage_results.write_updates_xml()
         
         self.setup_ui()
-        self.draggable = DraggableWindow(self.root)
         self.set_embedded_icon()
         self.restore_window_position()
         self.start_all_threads()
