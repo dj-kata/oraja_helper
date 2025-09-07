@@ -6,45 +6,52 @@ beatorajaのプレーログ及び、その日に叩いたノーツ数をOBSで�
 (pg+gr+gd+bd+見逃しprのみ加算)
 
 OBSにこういう感じのやつが出せます。  
-![image](https://github.com/user-attachments/assets/c45d8e91-7f53-4c8b-a3eb-44e1b5e0ec5b)  
+<img width="558" height="531" alt="Image" src="https://github.com/user-attachments/assets/3b032369-8eb9-49a4-84f2-6735e1685803" />
 
-v.1.0.6からOBSソースの自動制御にも対応しました。  
-選曲画面などのキャプチャ画像を登録することで、どんなスキンを使っていてもシーン検出ができます。  
+OBSソースの自動制御を行うこともできます。  
+選曲画面/プレイ画面/リザルト画面のキャプチャ画像を登録することで、どんなスキンを使っていてもシーン検出ができます。  
 (~~それどころか、beatoraja以外の音ゲーでも動く気がします~~)  
 詳しくは[wiki](https://github.com/dj-kata/oraja_helper/wiki/OBS%E9%80%A3%E6%90%BA%E6%A9%9F%E8%83%BD%E3%81%AE%E8%A8%AD%E5%AE%9A%E6%96%B9%E6%B3%95)を参照してください。
 
-プレーログ(today_result.html)+統計情報(info.html)+OBS制御の動作例(動画)  
-https://x.com/cold_planet_/status/1791741023158460618
+配信画面風ビュー(whole_layout.html)、成果まとめビュー(receipt.html)、OBS自動制御の動作例(動画)  
+https://x.com/cold_planet_/status/1964573250895434226
 
 # 設定方法
 1. [releaseページ](https://github.com/dj-kata/oraja_helper/releases)から一番上のoraja_helper.zipをDLし、好きなフォルダに解凍する
 2. oraja_helper.exeを実行する
 3. メニューバー->settingsよりbeatorajaのパス(本体、プレーヤーフォルダ)を指定する
-5. 必要に応じて、```終了時にツイート画面を開く```をチェックする。
-4. 必要に応じて、表示したい難易度表のURLを追加することもできます。reloadボタンを押すことで反映されます。
-5. OBSにtoday_result.html(プレーログ表示)をD&Dする (-> 幅2000,高さ1500)
-6. 必要に応じてOBSにinfo.html(統計情報表示)をD&Dする (-> 幅1200,高さ162)
-7. 必要に応じてOBSにreceipt.html(その日の成果まとめ)をD&Dする (-> 幅2400,高さ3000)
-8. シーン(選曲、プレー、リザルト)ごとにOBSソースやシーンを自動制御したい場合は[wiki](https://github.com/dj-kata/oraja_helper/wiki/OBS%E9%80%A3%E6%90%BA%E6%A9%9F%E8%83%BD%E3%81%AE%E8%A8%AD%E5%AE%9A%E6%96%B9%E6%B3%95)を参考に設定する。
-
-初期設定後に一度再起動しないとdbの変更が取得されないかもしれません(調査中)
-
-※一度上記設定を行っていれば、それ以降はoraja_helper.exeを実行するだけでOKです
-
-メイン画面にOKと出ていれば動いています。  
-![image](https://github.com/dj-kata/oraja_helper/assets/61326119/7acb4c0f-2039-42d8-8bfc-1390a830df85)
+4. 必要に応じて、beatorajaの過去ログを取得する。(月のノーツ数計算などに利用可能だが、連奏した曲などは取得不可)
+5. 必要に応じて、ツイート設定を変更する。
+6. 必要に応じて、難易度表選択の欄で表示したくない難易度表のチェックを外す。
+7. OBSに情報表示用HTMLをドラッグ&ドロップで挿入する。(ソース→追加→ブラウザからでも出来ます)  - 配信画面を想定したレイアウトを使いたい場合はwhole_layout.htmlを利用(幅1920，高さ1080)
+  - プレーログ表示を追加する場合はtoday_result.htmlを利用(幅2000,高さ1500)
+  - 統計情報ビューを追加する場合はinfo_detailed.htmlまたはinfo_grid.htmlを利用
+  - その日の成果まとめビューを追加する場合はreceipt.htmlを利用(幅2400，高さ3000)
+7. シーン(選曲、プレー、リザルト)ごとにOBSソースやシーンを自動制御したい場合は[wiki](https://github.com/dj-kata/oraja_helper/wiki/OBS%E9%80%A3%E6%90%BA%E6%A9%9F%E8%83%BD%E3%81%AE%E8%A8%AD%E5%AE%9A%E6%96%B9%E6%B3%95)を参考に設定する。一度上記設定を行っていれば、それ以降はoraja_helper.exeを実行するだけでOKですメイン画面に```db state: OK```と出ていれば動いています。  
+<img width="546" height="403" alt="Image" src="https://github.com/user-attachments/assets/4d13ade7-aa34-4e66-8e12-5d0e7bf0aa76" />
 
 beatorajaのパス設定は以下のようになっていればOKです。
 playerフォルダはdbファイルが入っているフォルダを指定してください。  
-![image](https://github.com/dj-kata/ytlive_helper/assets/61326119/6f7ee76e-77a6-4635-ac02-a3ecc102f403)
+<img width="591" height="363" alt="Image" src="https://github.com/user-attachments/assets/405c5d73-de60-41e7-81be-790acf61df70" />
 
-自動ツイート設定をすると、oraja_helper終了時にブラウザ上で以下のようなツイート画面が出ます。  
-こちらの機能は```メニューバー内のTool->ノーツ数をTweet```からも利用できます。  
-![image](https://github.com/user-attachments/assets/b30eb7f1-6740-4321-88e6-0e218a734269)  
+自動ツイート設定により、oraja_helper終了時にブラウザ上で以下のようなツイート画面が出ます。  
+こちらの機能は```メニューバー内のTweet->daily```からも利用できます。  
 ※playtime(プレイ画面のみの合計時間)はOBS制御設定からプレイ画面の判定条件を登録した場合のみ表示されます。
+<img width="588" height="473" alt="Image" src="https://github.com/user-attachments/assets/6d1de99d-d022-4f6f-97ec-eda0c6c0d56b" />
 
-また、OBSでtoday_result.htmlのカスタムCSSに以下のプロパティを設定することで、表示する曲数を変更できます。  
-(2025/4/10更新)ランプ、スコア、BPが一切更新されなかったプレイを非表示にするための設定も可能です。
+各ビューで表示対象とする難易度表を指定することもできます。
+<img width="432" height="245" alt="Image" src="https://github.com/user-attachments/assets/2a726cfc-793f-4385-9264-4615c63bef39" />
+
+# 各HTMLファイルについて
+仕様上、OBSのブラウザソース以外では表示できないので注意。
+各ファイルのサンプルを以下に示す。推奨サイズを記載するが、配信画面のレイアウトに合わせて変えるとよい。
+
+## today_result.html (プレーログ)
+幅2000，高さ1500
+<img width="557" height="391" alt="Image" src="https://github.com/user-attachments/assets/a917bad9-dfe5-4f7c-b410-3fa817184ab9" />
+
+OBSでtoday_result.htmlのカスタムCSSに以下のプロパティを設定することで、表示する曲数を変更できます。  
+ランプ、スコア、BPが一切更新されなかったプレイを非表示にするための設定も可能です。
 
 ```css
 :root{
@@ -53,22 +60,28 @@ playerフォルダはdbファイルが入っているフォルダを指定して
 
     /*   更新のないログを表示しない   */
     --skip-no-update: 1;
+
+    /* 1なら日付、ノーツ数などのヘッダ部を表示*/
+    --enable-header: 1;
 }
 ```
 
-today_result.htmlは幅2000,高さ1500ぐらいを想定しています。
-(高さはもっと大きくすることもできます)
+## receipt.html (成果まとめ)
+幅2400，高さ3000
+<img width="613" height="457" alt="Image" src="https://github.com/user-attachments/assets/6b122384-c17b-4aeb-86b4-d93493ddc6fd" />
 
-info.htmlでは以下のような情報が表示されます。  
-幅1200,高さ162ぐらいを想定しています。  
-(幅はレイアウトに応じて変更してください)
-![image](https://github.com/dj-kata/oraja_helper/assets/61326119/fda9ce59-a35f-498f-b1cd-3e015520283e)
+## whole_layout.html (配信画面風レイアウト)
+幅1920，高さ1080
+<img width="1590" height="898" alt="Image" src="https://github.com/user-attachments/assets/01e3111f-3d40-4ae5-a5a7-1b0ae185768a" />
 
-receipt.htmlでは以下のような情報が表示されます。
-幅2400，高さ3000ぐらいを想定しています。こちらも配信画面などに合わせて適宜修正してください。
-![image](https://github.com/user-attachments/assets/ff5c8e9b-720b-4c55-a913-3b6feb0fbf33)
+## info_grid.html (情報ビュー、サイバー調)
+幅1920，高さ200(横6列時)
+<img width="1308" height="138" alt="Image" src="https://github.com/user-attachments/assets/0a6be005-80be-4000-bc6a-ad0e98750c23" />
+
+## info_detailed.html (情報ビュー、シンプルな見た目)
+幅1920，高さ160
+<img width="1356" height="120" alt="Image" src="https://github.com/user-attachments/assets/2add8d33-1227-4192-8e22-08f4e97e0aeb" />
 
 # その他
 今後追加するかもしれない機能
 - リザルト画像の自動保存
-- 月間、年間ノーツ数の表示
