@@ -26,43 +26,6 @@
             margin: 0;
         }
 
-        /* サイバーグリッド背景 */
-        body::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-image: 
-                linear-gradient(rgba(0, 255, 255, 0.1) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(0, 255, 255, 0.1) 1px, transparent 1px);
-            background-size: 50px 50px;
-            pointer-events: none;
-            animation: gridPulse 4s ease-in-out infinite alternate;
-        }
-
-        /* スキャンライン効果 */
-        body::after {
-            content: '';
-            position: absolute;
-            top: -50%;
-            left: 0;
-            right: 0;
-            height: 200%;
-            background: linear-gradient(
-                transparent 0%,
-                rgba(0, 255, 255, 0.03) 48%,
-                rgba(0, 255, 255, 0.08) 49%,
-                rgba(0, 255, 255, 0.15) 50%,
-                rgba(0, 255, 255, 0.08) 51%,
-                rgba(0, 255, 255, 0.03) 52%,
-                transparent 100%
-            );
-            pointer-events: none;
-            z-index: 1000;
-        }
-
         #dashboard {
             display: flex;
             flex-direction: column;
