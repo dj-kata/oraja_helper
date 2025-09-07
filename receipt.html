@@ -6,6 +6,7 @@
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
         <link href="https://fonts.googleapis.com/css2?family=RocknRoll+One&display=swap" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@900&display=swap" rel="stylesheet">
         <style>
             body { 
             
@@ -15,7 +16,6 @@
             overflow: hidden;
             font-family: 'RocknRoll One', sans-serif;
             color:#aaddff;   
-            font-size: 64px;
             color: #fff;
             text-shadow: 6px 6px 0 #000,
                          -2px 2px 0 #000,
@@ -25,23 +25,31 @@
             :root{
                 --num: 20;
                 --skip-no-update: 0; /* 1:更新のない行を飛ばす */
+
+                --enable-header: 1;
+
+                --font-size-title: 96px;
+                --font-size-info0: 30px;
+                --font-size-info1: 46px;
+                --font-size-main: 64px;
+                --font-size-middle: 45px;
+                --font-size-small: 32px;
+                --width-info: 250px;
+                --width-difficulty: 500px;
+                --width-cursor: 50px;
+                --width-bp: 200px;
+                --width-bp-diff: 270px;
+                --width-bp-title: calc(100% - var(--width-difficulty) - var(--width-cursor) - var(--width-bp) - var(--width-bp-diff));
             }
             div#all{
                 min-height:1480px;
                 background-color: rgba(0, 0, 0, 0.9);
                 border: 4px solid #2222aa;
                 overflow: hidden;
-                /*
-                background-image: url("stat_bg.png");
-                background-repeat: repeat;
-                background-size: cover;
-                background-position: center;
-                background-blend-mode:overlay;
-                */
             }
             /* タイトル部分 */
             table#title {
-                color: #aaddff;
+                color: #ffffff;
                 background-color: rgba(0, 0, 100, 0.95);
                 background-color: #222;
                 background: linear-gradient(
@@ -49,42 +57,34 @@
                     ,rgba(0,0,60,0.9)
                     ,rgba(12,42,77,0.9)
                 );
-                font-size: 64px;
+                font-size: var(--font-size-title);
                 line-height: 130%;
                 width:100%;
-                padding-top: 20px;
+                padding-top: 0px;
                 padding-left: 20px;
+                font-family:"Noto Sans JP";
+                font-weight: 900;
             }
             table#info {
+                width: 100%;
+            	height:100%;
                 background: linear-gradient(
                     180deg
                     ,rgba(12,42,77,0.9)
                     ,rgba(35,85,155,0.9)
                 );
-                font-size: 64px;
-            }
-            table#title td {
-                font-family:"LINE Seed JP App_TTF ExtraBold";
-            }
-            table#title td {
-                font-size: 96px;
-                color: #ffffff;
-            }
-
-            table#info {
-            	width:100%;
-            	height:100%;
+                font-size: var(--font-size-info0);
             }
             table#info tr:nth-child(1) {
-                font-size: 45px;
+                font-size: var(--font-size-info0);
             }
-            table#title tr:nth-child(2) {
-                font-size: 60px;
+            table#info tr:nth-child(2) {
+                font-size: var(--font-size-info1);
             }
             table#info td{
                 text-align: center;
                 vertical-align: top;
-                width: 300px;
+                width: var(--width-info);
             }
             table#info tr:nth-child(1) td{
                 color: #77ddff;
@@ -95,18 +95,11 @@
             	max-width:90px;
             }
             /* リザルト部分 */
-            table.update {
-                overflow: hidden;
-            	width:100%;
-            	height:100%;
-            }
             table.lamp {
+                font-size: var(--font-size-main);
                 overflow: hidden;
             	width:100%;
             	height:100%;
-            }
-            table.update td {
-            	white-space:nowrap;
             }
             table#max th{background-color: #aa12ff;}
             table#perfect th{background-color: #bb328d;}
@@ -115,57 +108,84 @@
             table#hc th{background-color: #aa2222}
             table#nc th{background-color: #22aaaa}
             table#ec th{background-color: #22bb77}
-            table.update th{background-color: #472686;}
+            /* BP, score用設定 */
+            div.update{
+                background-color: #472686;
+                text-align: center;
+                font-size: var(--font-size-main);
+            }
+            table.update{
+                font-size: var(--font-size-main);
+                overflow: hidden;
+            	width: 100%;
+            	height: 100%;
+                table-layout: fixed;
+                box-sizing: border-box;
+                white-space: nowrap;
+            }
+            table#score th{background-color: #472686;}
+
             table.lamp td:nth-child(1){
                 color: #ffddaa;
-                width: 200px;
-                text-align: center;
-            }
-            table.update td:nth-child(1){
-                color: #ffddaa;
-                width: 200px;
-                text-align: center;
+                width: var(--width-difficulty);
+                text-align: left;
+                padding-left: 30px;
+            	overflow:hidden;
+            	text-overflow:ellipsis;
             }
             table.lamp td:nth-child(2) {
             	overflow:hidden;
             	text-overflow:ellipsis;
             	max-width:10px;
                 color: #bbffee;
-                padding-left: 100px;
+                padding-left: 20px;
             }
-            table.update td:nth-child(2){
-                width: 200px;
-                text-align: right;
-            }
-            table.update td:nth-child(3){
-                width: 150px;
-                text-align: center;
-            }
-            table.update td:nth-child(4){
-                width: 200px;
-                text-align: left;
-            }
-            table#bp td:nth-child(5){
-                width: 270px;
-                text-align: left;
-            }
-            table#bp td:nth-child(6) {
+            table.update td:nth-child(1){
+                color: #ffddaa;
             	overflow:hidden;
             	text-overflow:ellipsis;
-            	max-width:1000px;
+                width: var(--width-difficulty);
+                text-align: left;
+                padding-left: 20px;
+            }
+            table.update td:nth-child(2){
+                width: var(--width-cursor);
+                text-align: center;
+                font-size: var(--font-size-small);
+                color: #bbb;
+                padding-right: 10px;
+                padding: 0px;
+            }
+            table.update td:nth-child(3){
+                width: var(--width-bp);
+                font-size: var(--font-size-main);
+                text-align: right;
+                padding-right: 10px;
+                padding: 0px;
+            }
+            table.update td:nth-child(4){
+                width: var(--width-bp-diff);
+                text-align: center;
+                font-size: var(--font-size-middle);
+                padding: 0px;
+            }
+            table#bp td:nth-child(5) { /* BP側曲名 */
+            	overflow:hidden;
+            	text-overflow:ellipsis;
+            	/* width: var(--width-bp-title); */
+                width: auto;
                 color: #bbffee;
+                padding-left: 20px;
+                padding: 0px;
             }
+
             table#score td:nth-child(5){
-                font-size: 40px;
-                width: 150px;
+                font-size: var(--font-size-middle);
+                width: var(--width-bp-diff);
                 text-align: left;
+                padding-left: 20px;
             }
-            table#score td:nth-child(6){
-                width: 270px;
-                text-align: left;
-                padding-left: 30px;
-            }
-            table#score td:nth-child(7) {
+            table#score td:nth-child(6) { /* Score側曲名 */
             	overflow:hidden;
             	text-overflow:ellipsis;
             	max-width:1000px;
@@ -199,26 +219,15 @@
                 color:#aa22aa;
                 font-size: 0px; /* この行を消せば初Fも表示 */
             }
-            .updated{ color: #ffcccc} /* BPやスコアの更新した場合につける色*/
+            .updated{
+                color: #ffcccc;
+            } /* BPやスコアの更新した場合につける色*/
             .stats_main{ /* 統計情報 目立つ方のやつ */
                 color: #ffffaa;
             } 
             .stats_sub{ /* 統計情報 目立つ方のやつ */
                 color: #aaffdd;
-                font-size:45px;
             } 
-            /* SP☆12地力表用のスタイル */
-            sp12hard{
-                color:#ff86b4;
-                padding: 0px;
-                font-size: 50px;
-            }
-            sp12clear{
-                color:#9ee7ff;
-                padding: 0px;
-                display: none;
-                font-size: 50px;
-            }
         </style>
     <body>
         <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
@@ -240,6 +249,7 @@
                 var playcount = $(xml).find('Items playcount').text();
                 var maxnum = getComputedStyle(document.documentElement).getPropertyValue('--num');
                 var skip_no_update = getComputedStyle(document.documentElement).getPropertyValue('--skip-no-update');
+                var enable_header = getComputedStyle(document.documentElement).getPropertyValue('--enable-header');
 
                 var update_lamp = 0;
                 var update_score = 0;
@@ -364,6 +374,11 @@
 
                     });
                 //$('notes').html("notes: <span class='title_value'>" + notes + "</span>");
+                if (enable_header==1){
+                    $('#header-container').show()
+                }else{
+                    $('#header-container').hide()
+                }
                 $('notes').html(notes);
                 $('date').html(date);
                 //$('playcount').html("&nbsp;&nbsp;&nbsp;&nbsp;plays: <span class='title_value'>" + playcount + '</span>');
@@ -483,41 +498,26 @@
 
                 out = "";
                 if (new_bp.length >= 1){ // BP更新がある場合
-                    out = '<table id="bp"><tr><th colspan="6">BP updates</th></tr>';
                     for (let i=0; i<new_bp.length; i++){
                         out += '<tr>'
                         out += '<td>' + new_bp[i][0] + '</td>' // lv
-                        //out += '<td>' + new_bp[i][2] + '</td>' // pre_bp
-                        out += '<td></td>' // pre_bp
                         out += '<td>-></td>'
                         out += '<td>' + new_bp[i][3] + '</td>' // current bp
                         out += '<td>(<span class="updated">' + new_bp[i][4] + '</span>)</td>' // diff bp
                         out += '<td>' + new_bp[i][1] + '</td>' // title
                         out += '</tr>'
                     }
-                    out += '<br>'
+                    $('#bp-container').show()
+                }else{
+                    $('#bp-container').hide()
                 }
                 $('#bp tbody').html(out);
 
                 out = "";
                 if (new_score.length >= 1){ // Score更新がある場合
-                    //new_score.sort((a, b) => {
-                    //    let an = parseInt(a[0]);
-                    //    let bn = parseInt(b[0]);
-                    //    let as = a[0].replace('/\d+/g', '')
-                    //    let bs = b[0].replace('/\d+/g', '')
-                    //    //if ((an > bn) && (as > bs)) return -1;
-                    //    //else if ((an < bn) && (as < bs)) return 1;
-                    //    if ((as > bs)) return -1;
-                    //    else if ((as < bs)) return 1;
-                    //    else 0;
-                    //});
-                    out = '<table id="bp"><tr><th colspan="7">Score updates</th></tr>';
                     for (let i=0; i<new_score.length; i++){
                         out += '<tr>'
                         out += '<td>' + new_score[i][0] + '</td>' // lv
-                        //out += '<td>' + new_score[i][2] + '</td>' // pre
-                        out += '<td></td>' // pre
                         out += '<td>-></td>'
                         out += '<td>' + new_score[i][3] + '</td>' // current
                         out += '<td>' + new_score[i][5] + '%</td>' // rate
@@ -525,6 +525,9 @@
                         out += '<td>' + new_score[i][1] + '</td>' // title
                         out += '</tr>'
                     }
+                    $('#score-container').show()
+                }else{
+                    $('#score-container').hide()
                 }
                 $('#score tbody').html(out);
 
@@ -542,34 +545,37 @@
 </head>
 <body>
   <div id="all">
-    <table id="title">
-      <tr>
-        <td><date></date></td>
-      </tr>
-    </table>
-    <table id="info">
-        <!--TODO 列の中身を固定せず、spanでスタイルを指定してタイトルとともに変数として書く(pace0でもレイアウトが崩れないように)-->
-      <tr>
-        <td>notes</td><td>plays</td>
-        <td><header_3></header_3></td>
-        <td><header_4></header_4></td>
-        <td><header_5></header_5></td>
-        <td><header_6></header_6></td>
-        <td><header_7></header_7></td>
-        <td></td>
-      </tr>
-      <tr>
-        <td><span class="stats_main"><notes></notes></span></td>
-        <td><span class="stats_main"><playcount></playcount></span></td>
+    <div id="header-container" style="display: none;">
+        <table id="title">
+          <tr>
+            <td><date></date></td>
+          </tr>
+        </table>
+        <table id="info">
+            <!--TODO 列の中身を固定せず、spanでスタイルを指定してタイトルとともに変数として書く(pace0でもレイアウトが崩れないように)-->
+          <tr>
+            <td>notes</td><td>plays</td>
+            <td><header_3></header_3></td>
+            <td><header_4></header_4></td>
+            <td><header_5></header_5></td>
+            <td><header_6></header_6></td>
+            <td><header_7></header_7></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td><span class="stats_main"><notes></notes></span></td>
+            <td><span class="stats_main"><playcount></playcount></span></td>
 
-        <td><value_3></value_3></td>
-        <td><value_4></value_4></td>
-        <td><value_5></value_5></td>
-        <td><value_6></value_6></td>
-        <td><value_7></value_7></td>
-        <td></td>
-      </tr>
-    </table>
+            <td><value_3></value_3></td>
+            <td><value_4></value_4></td>
+            <td><value_5></value_5></td>
+            <td><value_6></value_6></td>
+            <td><value_7></value_7></td>
+            <td></td>
+          </tr>
+        </table>
+    </div>
+
     <table class="lamp" id="max"><tbody></tbody></table>
     <table class="lamp" id="perfect"><tbody></tbody></table>
     <table class="lamp" id="fc"><tbody></tbody></table>
@@ -577,8 +583,14 @@
     <table class="lamp" id="hc"><tbody></tbody></table>
     <table class="lamp" id="nc"><tbody></tbody></table>
     <table class="lamp" id="ec"><tbody></tbody></table>
-    <table class="update" id="bp"><tbody></tbody></table>
-    <table class="update" id="score"><tbody></tbody></table>
+    <div id="bp-container" style="display: none;">
+        <div class="update">BP updates</div>
+        <table class="update" id="bp"><tbody></tbody></table>
+    </div>
+    <div id="score-container" style="display: none;">
+        <div class="update">Score updates</div>
+        <table class="update" id="score"><tbody></tbody></table>
+    </div>
   </div>
 </body>
 </html>

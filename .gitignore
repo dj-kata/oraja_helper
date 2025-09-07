@@ -1,0 +1,5 @@
+log/*
+__pycache__/*
+build/*
+*oraja_helper/*
+*.json

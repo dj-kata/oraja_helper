@@ -1,29 +1,46 @@
-import sqlite3, json
-import webbrowser, urllib, requests, traceback, re, os, datetime
-import time, sys
-import pandas as pd
-from bs4 import BeautifulSoup
-from settings import *
-from obssocket import *
-import PySimpleGUI as sg
-from PIL import ImageDraw, Image
-from enum import Enum
-import logging, logging.handlers
-from functools import partial
-from tkinter import filedialog
+import tkinter as tk
+from tkinter import ttk, messagebox
 import threading
 import subprocess
-import copy
-import imagehash
+import time
+import os, sys
+import tempfile
+import sys
+import base64
+import io
+import datetime
+from config import Config
+from settings import SettingsWindow
+from obs_control import OBSControlWindow, ImageRecognitionData, OBSWebSocketManager
+from dataclass import *
+from pickle_converter import *
+import requests
+from bs4 import BeautifulSoup
 
-FONT = ('Meiryo',12)
-FONTs = ('Meiryo',8)
-par_text = partial(sg.Text, font=FONT)
-par_btn = partial(sg.Button, pad=(3,0), font=FONT, enable_events=True, border_width=0)
-sg.theme('SystemDefault')
+# PILのインポート
+try:
+    from PIL import Image
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
+    print("Warning: PIL not installed. Install with: pip install pillow")
 
+# imagehashのインポート
+try:
+    import imagehash
+    IMAGEHASH_AVAILABLE = True
+except ImportError:
+    IMAGEHASH_AVAILABLE = False
+    print("Warning: imagehash not installed. Install with: pip install imagehash")
+
+try:
+    with open('version.txt', 'r') as f:
+        SWVER = f.readline().strip()
+except Exception:
+    SWVER = "v?.?.?"
+
+import logging, logging.handlers
 os.makedirs('log', exist_ok=True)
-os.makedirs('out', exist_ok=True)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 hdl = logging.handlers.RotatingFileHandler(
@@ -36,161 +53,129 @@ hdl.setLevel(logging.DEBUG)
 hdl_formatter = logging.Formatter('%(asctime)s %(filename)s:%(lineno)5d %(funcName)s() [%(levelname)s] %(message)s')
 hdl.setFormatter(hdl_formatter)
 logger.addHandler(hdl)
-lamp = ['NO PLAY', 'FAILED', 'FAILED', 'A-CLEAR', 'E-CLEAR', 'CLEAR', 'H-CLEAR', 'EXH-CLEAR', 'F-COMBO', 'PERFECT']
 
-class gui_mode(Enum):
-    init = 0
-    main = 1
-    settings = 2
-    obs_control = 3
-    register_scene = 4
-
-class detect_mode(Enum):
-    init = 0
-    select = 1
-    play = 2
-    result = 3
-
-try:
-    with open('version.txt', 'r') as f:
-        SWVER = f.readline().strip()
-except Exception:
-    SWVER = "v?.?.?"
-
-# 1つのリザルトに対応
-class OneResult: 
-    def __init__(self, title=None, difficulties=None
-                 ,one_difficulty=None
-                 ,score=None, pre_score=0
-                 ,bp=None, pre_bp=999999
-                 ,lamp=None, pre_lamp = 0
-                 ,score_rate=None, date=None, judge=None, sha256=None
-                ):
-        self.title = title
-        self.difficulties = difficulties
-        self.one_difficulty = one_difficulty
-        self.score = score
-        self.pre_score = pre_score
-        self.bp = bp
-        self.pre_bp = pre_bp
-        self.lamp = lamp
-        self.pre_lamp = pre_lamp
-        self.score_rate = score_rate
-        self.date = date
-        self.judge = judge
-        self.sha256 = sha256
-
-    def __eq__(self, other):
-        if not isinstance(other, OneResult):
-            return NotImplemented
-        diff_date = abs(self.date - other.date)
-        if type(diff_date) is datetime.timedelta:
-            diff_date = diff_date.total_seconds()
-        return (self.title == other.title) and (self.sha256 == other.sha256) and (self.score == other.score) and (self.bp == other.bp) and (self.lamp == other.lamp) and (diff_date<10.0)
-    
-    def __lt__(self, other):
-        if not isinstance(other, OneResult):
-            return NotImplemented
-        return self.date < other.date
-class Misc:
-    SONGDATA = '/mnt/d/bms/beatoraja/songdata.db'
-    SONGINFO = '/mnt/d/bms/beatoraja/songinfo.db'
-    SCORELOG = '/mnt/d/bms/beatoraja/player/player1/scorelog.db'
-    SCOREDATALOG = '/mnt/d/bms/beatoraja/player/player1/scoredatalog.db'
-    SCORE    = '/mnt/d/bms/beatoraja/player/player1/score.db'
-    def __init__(self):
-        self.gui_mode = gui_mode.init
-        self.detect_mode = detect_mode.init
-        self.window = None
-        self.imgpath = os.getcwd()+'/out/capture.png'
-        self.obs = None
-        self.img = None
-        self.th_obs = None
-        self.stop_thread = False
-        self.settings = BmsMiscSettings()
-        self.difftable = []
-        self.update_db_settings()
-        self.load()
-        self.start_time = datetime.datetime.now()
-        self.playtime = datetime.timedelta(seconds=0)
-        self.last = (datetime.datetime.now() - datetime.timedelta(minutes=0)).timestamp()
-        self.result_log = []
-        self.notes = 0
-        self.last_notes = 0
-        self.ico=self.ico_path('icon.ico')
-        self.write_xml()
-        logger.debug('constructor end')
-
-    def ico_path(self, relative_path:str):
-        """アイコン表示用
-
-        Args:
-            relative_path (str): アイコンファイル名
-
-        Returns:
-            str: アイコンファイルの絶対パス
-        """
+class ApplicationLock:
+    """アプリケーションの二重起動防止クラス"""
+    def __init__(self, app_name="db_monitor_app"):
+        self.app_name = app_name
+        self.lock_file_path = os.path.join(tempfile.gettempdir(), f"{app_name}.lock")
+        self.lock_file = None
+        
+    def acquire_lock(self) -> bool:
+        """ロックを取得"""
         try:
-            base_path = sys._MEIPASS
-        except Exception:
-            base_path = os.path.abspath(".")
-        return os.path.join(base_path, relative_path)
-
-    def control_obs_sources(self, name:str):
-        """OBSソースの表示・非表示及びシーン切り替えを行う。
-        nameで適切なシーン名を指定する必要がある。
-
-        Args:
-            name (str): シーン名(boot,exit,play{0,1},select{0,1},result{0,1})
-
-        Returns:
-            bool: 正常終了していればTrue
-        """
-        if self.obs == None:
-            logger.debug('cannot connect to OBS -> exit')
-            return False
-        logger.debug(f"name={name} (detect_mode={self.detect_mode.name})")
-        print(f"name={name} (detect_mode={self.detect_mode.name})")
-        name_common = name
-        if name[-1] in ('0','1'):
-            name_common = name[:-1]
-        scene = self.settings.obs_scene[name_common]
-        # TODO 前のシーンと同じなら変えないようにしたい
-        if scene != '':
-            self.obs.change_scene(scene)
-        # 非表示の制御
-        for s in self.settings.obs_disable[name]:
-            tmps, tmpid = self.obs.search_itemid(scene, s)
-            self.obs.disable_source(tmps,tmpid)
-        # 表示の制御
-        for s in self.settings.obs_enable[name]:
-            tmps, tmpid = self.obs.search_itemid(scene, s)
-            #self.obs.refresh_source(s)
-            self.obs.enable_source(tmps,tmpid)
-        return True
-    
-    def connect_obs(self):
-        if self.obs != None:
-            self.obs.close()
-            self.obs = None
-        if not self.settings.enable_obs_control:
-            return False
-        try:
-            self.obs = OBSSocket(self.settings.host, self.settings.port, self.settings.passwd, self.settings.obs_source, self.imgpath)
-            if self.gui_mode == gui_mode.main:
-                self.update_text('obs_state', 'OK')
-                self.window['obs_state'].update(text_color='#0000ff')
-                logger.debug('OBSに接続しました')
+            # ロックファイルが既に存在するかチェック
+            if os.path.exists(self.lock_file_path):
+                # ファイル内のPIDを確認
+                try:
+                    with open(self.lock_file_path, 'r') as f:
+                        pid = int(f.read().strip())
+                    
+                    # プロセスが実際に動いているかチェック
+                    if self._is_process_running(pid):
+                        return False  # 別のインスタンスが動作中
+                    else:
+                        # プロセスが終了しているので古いロックファイルを削除
+                        os.remove(self.lock_file_path)
+                except (ValueError, IOError):
+                    # 不正なロックファイルは削除
+                    try:
+                        os.remove(self.lock_file_path)
+                    except:
+                        pass
+            
+            # 新しいロックファイルを作成
+            with open(self.lock_file_path, 'w') as f:
+                f.write(str(os.getpid()))
+            
             return True
-        except:
-            logger.debug(traceback.format_exc())
-            self.obs = None
-            logger.debug('obs websocket error!')
-            if self.gui_mode == gui_mode.main:
-                self.update_text('obs_state', '接続されていません')
-                self.window['obs_state'].update(text_color='#ff0000')
+            
+        except Exception as e:
+            print(f"ロック取得エラー: {e}")
+            return False
+    
+    def release_lock(self):
+        """ロックを解放"""
+        try:
+            if os.path.exists(self.lock_file_path):
+                os.remove(self.lock_file_path)
+        except Exception as e:
+            print(f"ロック解放エラー: {e}")
+    
+    def _is_process_running(self, pid: int) -> bool:
+        """指定されたPIDのプロセスが動作中かチェック"""
+        try:
+            if sys.platform == "win32":
+                import subprocess
+                result = subprocess.run(['tasklist', '/FI', f'PID eq {pid}'], 
+                                       capture_output=True, text=True)
+                return str(pid) in result.stdout
+            else:
+                # Unix系システム
+                os.kill(pid, 0)
+                return True
+        except (OSError, subprocess.SubprocessError):
             return False
 
+class MainWindow:
+    def __init__(self):
+        # 二重起動チェック
+        self.app_lock = ApplicationLock("db_monitor_app")
+        if not self.app_lock.acquire_lock():
+            messagebox.showerror(
+                "起動エラー", 
+                "アプリケーションは既に起動しています。\n"
+                "複数のインスタンスを同時に実行することはできません。"
+            )
+            logger.error('duplication check failed')
+            sys.exit(1)
+
+        logger.info('started')
+        
+        self.root = tk.Tk()
+        self.config = Config()
+        self.convert_old_settings()
+        self.config.save_config()
+        self.start_time = datetime.datetime.now()
+        self.play_st    = None
+        
+        # スレッド管理
+        self.is_running = True
+        self.db_monitoring_thread = None
+        self.screen_monitoring_thread = None
+        
+        # 監視データ
+        self.file_exists = False
+        self.current_game_state = None  # None, "select", "play", "result"
+        
+        # OBS WebSocket管理クラス初期化
+        self.obs_manager = OBSWebSocketManager(status_callback=self.on_obs_status_changed)
+        self.obs_manager.set_config(self.config)
+
+        # データアクセス用クラス初期化
+        self.database_accessor = DataBaseAccessor()
+        self.database_accessor.set_config(self.config)
+        # self.database_accessor.read_old_results()
+        self.database_accessor.manage_results.write_history_xml()
+        self.database_accessor.manage_results.write_updates_xml()
+        
+        self.setup_ui()
+        self.set_embedded_icon()
+        self.restore_window_position()
+        self.start_all_threads()
+        self.update_display()
+        self.check_updates()
+        self.update_db_status()
+        
+        # WebSocket自動接続開始
+        if self.config.enable_websocket:
+            self.obs_manager.start_auto_reconnect()
+            for i in range(20):
+                if self.obs_manager.is_connected:
+                    self.execute_obs_trigger("app_start")
+                    break
+                time.sleep(0.5)
+        
     def get_latest_version(self):
         """GitHubから最新版のバージョンを取得する。
 
@@ -207,851 +192,717 @@ class Misc:
                 break # 1番上が最新なので即break
         return ret
 
-    def update_text(self, src, txt):
-        """sg.Textの更新用
-
-        Args:
-            src (str): ソース名
-            txt (str): 変更後の文字列
-        """
-        ret = False
-        try:
-            if src in self.window.key_dict.keys():
-                self.window[src].update(txt)
-                ret = True
-        except Exception:
-            logger.debug(traceback.format_exc())
-            logger.debug(f'ops...src:{src}, txt:{txt}')
-        return ret
-    
-    def reload_score(self):
-        """プレーヤーのdbを一通りリロード
-        """
-        conn = sqlite3.connect(self.settings.db_scorelog)
-        self.df_log =pd.read_sql('SELECT * FROM scorelog', conn)
-        conn = sqlite3.connect(self.settings.db_score)
-        self.df_sc =pd.read_sql('SELECT * FROM score', conn)
-        conn = sqlite3.connect(self.settings.db_scoredatalog)
-        self.df_data =pd.read_sql('SELECT * FROM scoredatalog', conn)
-
-    def load(self):
-        """DB(スコア、曲情報)及び難易度表を読み込む
-        """
-        if os.path.exists('difftable.pkl'):
-            with open('difftable.pkl', 'rb') as f:
-                self.difftable = pickle.load(f)
-        if self.settings.is_valid():
-            conn = sqlite3.connect(self.settings.db_songdata)
-            self.df_song =pd.read_sql('SELECT * FROM song', conn)
-            self.df_folder =pd.read_sql('SELECT * FROM folder', conn)
-
-            conn = sqlite3.connect(self.settings.db_songinfo)
-            self.df_info =pd.read_sql('SELECT * FROM information', conn)
-
-            self.reload_score()
-
-    def check_url(self, url):
-        flag = True
-        try:
-            f = urllib.request.urlopen(url)
-            f.close()
-        except urllib.error.URLError:
-            print('Not found:', url)
-            flag = False
-        except urllib.request.HTTPError:
-            print('Not found:', url)
-            flag = False
-        except ValueError:
-            print('Not found:', url)
-            flag = False
-
-        return flag
-
-    def get_header_filename(self, url):
-        ret = False
-        if self.check_url(url):
-            tmp = urllib.request.urlopen(url).read()
-            soup = BeautifulSoup(tmp, 'html.parser')
-            metas = soup.find_all('meta')
-            for m in metas:
-                if 'name' in m.attrs.keys():
-                    if m.attrs['name'] == 'bmstable':
-                        ret = m.attrs['content']
-        return ret
-
-    def read_table_json(self, url):
-        ret = False
-        #print(url, 'check_url:',self.check_url(url))
-        if self.check_url(url):
-            tmp = urllib.request.urlopen(url).read()
-            ret = json.loads(tmp)
-        return ret
-
-    # 1曲分のjsonデータを受け取ってdownload
-    def get_onesong(self, js):
-        #print(js)
-        print(f"{self.symbol}{js['level']} {js['sha256']}")
-        print(js['title'], js['artist'])
-        if js['url']:
-            print(js['url'], end='')
-        if js['url_diff']:
-            print(f"\njs['url_diff']")
-        else:
-            print(f" (同梱譜面)")
-
-    def update_table(self):
-        difftable = []
-        for url in self.settings.table_url:
-            logger.debug(f'getting: {url}')
-            try:
-                header_filename = self.get_header_filename(url)
-                if ('http://' in header_filename) or ('https://' in header_filename):
-                    url_header = header_filename
+    def check_updates(self, always_disp_dialog=False):
+        ver = self.get_latest_version()
+        if (ver != SWVER) and (ver is not None):
+            logger.info(f'現在のバージョン: {SWVER}, 最新版:{ver}')
+            ans = tk.messagebox.askquestion('バージョン更新',f'アップデートが見つかりました。\n\n{SWVER} -> {ver}\n\nアプリを終了して更新します。', icon='warning')
+            if ans == "yes":
+                if os.path.exists('update.exe'):
+                    logger.info('アップデート確認のため終了します')
+                    res = subprocess.Popen('update.exe')
+                    self.on_close()
                 else:
-                    if url[-1] == '/': # 乱打難易度表など
-                        url_header = url + header_filename
-                    else:
-                        url_header = re.sub(url.split('/')[-1], header_filename, url)
-                ### header情報から難易度名などを取得
-                info = self.read_table_json(url_header)
-                logger.debug(info)
-                if ('http://' in info['data_url']) or ('https://' in info['data_url']):
-                    url_dst = info['data_url']
-                else:
-                    url_dst = re.sub(url.split('/')[-1], info['data_url'], url)
-                self.songs = self.read_table_json(url_dst)
-                logger.debug(f'url_header = {url_header}')
-                logger.debug(f'url_dst = {url_dst}')
-
-                self.name = info['name']
-                self.symbol = info['symbol']
-                if self.symbol == ' ':
-                    self.symbol = ''
-                logger.debug(f"name:{self.name}, symbol:{self.symbol}")
-
-                for s in self.songs:
-                    has_sabun = ''
-                    if 'url_diff' in s.keys() and s['url_diff'] != "":
-                        has_sabun = '○'
-                    if 'proposer' in s.keys():
-                        proposer = s['proposer']
-                    else:
-                        proposer = ''
-                    if 'sha256' in s.keys():
-                        hashval = s['sha256']
-                    elif 'md5' in s.keys():
-                        hashval = s['md5']
-                    else:
-                        hashval = ''
-                    onesong = [self.symbol+s['level'], s['title'], s['artist'], has_sabun, proposer, hashval]
-                    difftable.append(onesong)
-                #self.window['table'].update(data)
-                logger.debug(f'難易度表読み込み完了。({self.name})')
-            except: # URLがおかしい
-                traceback.print_exc()
-                logger.debug('存在しないURLが入力されました。ご確認をお願いします。')
-        self.difftable = difftable
-        logger.debug('end')
-        with open('difftable.pkl', 'wb') as f:
-            pickle.dump(difftable, f)
-        return difftable
-
-    def parse(self, tmpdat) -> OneResult:
-        """df_dataの1エントリを受けてOneResultに格納して返す
-
-        Args:
-            tmpdat (DataFrame): 1プレイ分のデータ。判定はepg,lpgなどに入っている。
-
-        Returns:
-            OneResult: parseの結果
-        """
-        if type(tmpdat['sha256']) == str:
-            hsh = tmpdat['sha256']
+                    raise ValueError("update.exeがありません")
         else:
-            hsh=tmpdat['sha256'].iloc[0]
-        tmpsc = self.df_sc[self.df_sc['sha256'] == hsh].tail(1)
-        tmp = self.df_log[self.df_log['sha256'] == hsh].tail(1)
-        #pre_score = tmp.oldscore.iloc[0]
-        notes = tmpsc.notes.iloc[0]
-        logger.debug(f'hsh:{hsh}\n')
-        info = self.df_song[self.df_song['sha256'] == hsh].tail(1)
-        logger.debug(f'type(info):{type(info)}')
-        if type(info) == pd.DataFrame:
-            logger.debug(f'info.shape:{info.shape}')
-        if info.shape[0] > 0:
-            title = info.title.iloc[0]
-        else:
-            title = info.title
-            logger.debug(f'shape[0]==0!!!, title={title}')
-        lampid = tmpdat.clear#.iloc[0]
-        judge = [
-            tmpdat.epg+tmpdat.lpg,
-            tmpdat.egr+tmpdat.lgr,
-            tmpdat.egd+tmpdat.lgd,
-            tmpdat.ebd+tmpdat.lbd,
-            tmpdat.epr+tmpdat.lpr,
-            tmpdat.ems+tmpdat.lms,
-        ]
-        score = judge[0]*2+judge[1]
-        bp    = judge[3]+judge[4]+judge[5]
-        bp   += (notes-judge[0]-judge[1]-judge[2]-judge[3]-judge[4]) # 完走していない場合は引く
-        score_rate = f"{score/notes*100/2:.2f}"
-        ret = OneResult(title=title, lamp=lampid, score=score, score_rate=score_rate, judge=judge, bp=bp)
-        ret.date = tmpdat.date
-        ret.sha256 = hsh
-        if tmpdat['playcount'] > 1:
-            ret.pre_score = tmp.oldscore.max()
-            ret.pre_bp = tmp.oldminbp.min()
-            ret.pre_lamp = tmp.oldclear.max()
-        return ret
-        #return title, lampid, score, pre_score, score_rate, tmpdat.date, judge
+            logger.info(f'お使いのバージョンは最新です({SWVER})')
+            if always_disp_dialog:
+                messagebox.showinfo("oraja_helper", f'お使いのバージョンは最新です({SWVER})')
 
-    def get_new_update(self, num):
-        """df_dataから指定された個数の最新リザルトをreadして返す
-
-        Args:
-            num (int): いくつ読み込むか
-
-        Returns:
-            list: 1エントリが[難易度,タイトル,ランプ,スコア,スコア更新分,スコアレート,日付,判定内訳]のリスト
-        """
-        ret = []
-        for i in range(num):
-            try:
-                idx = len(self.df_data) - num + i
-                tmp = self.df_data.loc[idx, :]
-                ret_one = self.parse(tmp)
-                d,t = self.get_difficulty(tmp.sha256, ret_one.title)
-                if d == None:
-                    d = ''
-                ret_one.one_difficulty = d
-                ret.append(ret_one)
-            except Exception:
-                logger.debug(traceback.format_exc())
-        return ret
-
-    def get_difficulty(self, sha256, title):
-        """self.df_logのidxを受けて、その譜面の難易度を返す
-
-        Args:
-            idx (int): インデックス
-        Returns:
-            difficulty (str): 難易度(sl1とか)
-            title (str): 曲名
-        """
-        ans = None
-        md5 = '' # 初期化しておく
+        # アプリ起動時のOBS制御実行
+    def get_resource_path(self, relative_path):
+        """埋め込みリソースのパスを取得"""
         try:
-            for s in self.difftable:
-                md5 = self.df_song[self.df_song['sha256']==sha256].tail(1).md5.iloc[0]
-                if s[-1] in (sha256, md5):
-                    ans = s[0]
-                    break
-        except Exception: # 新たに入れた曲の対策
-            logger.debug(traceback.format_exc())
-            if type(title) != str:
-                title = '???'
-        logger.debug(f'sha256={sha256}, md5={md5}, ans={ans}, title={title}')
-        return (ans, title)
-    
-    def write_xml(self):
-        sum_judge = [0, 0, 0, 0, 0, 0]
-        for t in self.result_log:
-            judge = t.judge
-            for i in range(6):
-                sum_judge[i] += judge[i]
-        score_rate = 0 # total
-        if (sum_judge[0]+sum_judge[1]+sum_judge[2]+sum_judge[3]+sum_judge[4]) > 0:
-            score_rate = 100*(sum_judge[0]*2+sum_judge[1]) / (sum_judge[0]+sum_judge[1]+sum_judge[2]+sum_judge[3]+sum_judge[4]) / 2
-        if self.gui_mode == gui_mode.main:
-            self.update_text('notes', self.notes)
-            self.update_text('score_rate', f"{score_rate:.2f}")
-        if self.settings.is_valid():
-            with open('history.xml', 'w', encoding='utf-8') as f:
-                f.write(f'<?xml version="1.0" encoding="utf-8"?>\n')
-                f.write("<Items>\n")
-                f.write(f"    <date>{self.start_time.year}/{self.start_time.month:02d}/{self.start_time.day:02d}</date>\n")
-                f.write(f'    <notes>{self.notes}</notes>\n')
-                f.write(f'    <total_score_rate>{score_rate:.2f}</total_score_rate>\n')
-                f.write(f'    <playcount>{len(self.result_log)}</playcount>\n')
-                f.write(f'    <last_notes>{self.last_notes}</last_notes>\n')
-                if self.playtime.seconds == 0:
-                    f.write(f'    <playtime>0</playtime>\n') # HTML側で処理しやすくしている
-                    f.write(f'    <pace>0</pace>\n')
-                else:
-                    f.write(f'    <playtime>{str(self.playtime).split(".")[0]}</playtime>\n')
-                    f.write(f'    <pace>{int(3600*self.notes/self.playtime.seconds)}</pace>\n')
+            # PyInstaller実行時
+            base_path = sys._MEIPASS
+        except AttributeError:
+            # 開発時
+            base_path = os.path.dirname(os.path.abspath(__file__))
 
-                for r in self.result_log:
-                    title_esc = r.title.replace('&', '&amp;').replace('<','&lt;').replace('>','&gt;').replace('"','&quot;').replace("'",'&apos;')
-                    f.write(f'    <Result>\n')
-                    f.write(f'        <lv>{r.one_difficulty}</lv>\n')
-                    f.write(f'        <title>{title_esc}</title>\n')
-                    f.write(f'        <lamp>{r.lamp}</lamp>\n')
-                    f.write(f'        <pre_lamp>{r.pre_lamp}</pre_lamp>\n')
-                    f.write(f'        <score>{r.score}</score>\n')
-                    f.write(f'        <pre_score>{r.pre_score}</pre_score>\n')
-                    f.write(f'        <bp>{r.bp}</bp>\n')
-                    f.write(f'        <pre_bp>{r.pre_bp}</pre_bp>\n')
-                    if r.pre_score > 0:
-                        f.write(f'        <diff_score>{r.score-r.pre_score:+}</diff_score>\n')
-                    else: # 初プレイ時は空白
-                        f.write(f'        <diff_score></diff_score>\n')
-                    if r.pre_bp < 100000:
-                        f.write(f'        <diff_bp>{r.bp-r.pre_bp:+}</diff_bp>\n')
-                    else: # 初プレイ時は空白
-                        f.write(f'        <diff_bp></diff_bp>\n')
-                    f.write(f'        <score_rate>{float(r.score_rate):.2f}</score_rate>\n')
-                    f.write('    </Result>\n')
-                f.write("</Items>\n")
+        return os.path.join(base_path, relative_path)
 
-    def check_db(self):
-        if not self.settings.is_valid():
-            logger.debug('設定ファイルが読み込めません')
-            if self.update_text('db_state', '見つかりません。beatoraja設定を確認してください。'):
-                self.window['db_state'].update(text_color='#ff0000')
-        update_time = os.path.getmtime(self.settings.db_score)
-        if update_time > self.last: # 1曲プレーした時に通る
-            # プレイ中にF2キーで曲を追加した場合への対処
-            if self.settings.is_valid():
-                conn = sqlite3.connect(self.settings.db_songdata)
-                self.df_song =pd.read_sql('SELECT * FROM song', conn)
-            logger.debug('dbfile updated')
-            self.reload_score()
-            self.last = update_time
-            tmp = self.get_new_update(1)
-            for t in tmp:
-                if t not in self.result_log:
-                    logger.debug(f'added: {t}')
-                    self.result_log.append(t)
-                    judge = t.judge
-                    self.notes += judge[0] + judge[1] + judge[2] + judge[3] + judge[4]
-                    self.last_notes = judge[0] + judge[1] + judge[2] + judge[3] + judge[4]
-                    self.write_xml()
-
-    def update_settings(self, ev, val):
-        """GUIから値を取得し、設定の更新を行う。
-
-        Args:
-            ev (str): sgのイベント
-            val (dict): sgの各GUIの値
-        """
-        self.settings.lx = self.window.current_location()[0]
-        self.settings.ly = self.window.current_location()[1]
-        if self.gui_mode == gui_mode.main:
-            pass
-        elif self.gui_mode == gui_mode.settings:
-            #self.settings.log_offset = val['log_offset']
-            self.settings.tweet_on_exit = val['tweet_on_exit']
-            self.settings.enable_obs_control = val['enable_obs_control']
-            self.settings.save_on_capture = val['save_on_capture']
-            self.settings.host = val['obs_host']
-            self.settings.port = val['obs_port']
-            self.settings.passwd = val['obs_passwd']
-            #self.settings['on_memory'] = val['on_memory']
-
-    def update_db_settings(self):
-        """orajaとplayerのフォルダ情報を元に各dbファイルのパスを決定
-        """
-        if (self.settings.dir_oraja != '') and (self.settings.dir_player != ''):
-            #self.settings.db_songdata = os.path.join(self.settings.dir_oraja, 'songdata.db')
-            self.settings.db_songdata = self.settings.dir_oraja + '/songdata.db'
-            self.settings.db_songinfo = os.path.join(self.settings.dir_oraja, 'songinfo.db')
-            self.settings.db_score = os.path.join(self.settings.dir_player, 'score.db')
-            self.settings.db_scorelog = os.path.join(self.settings.dir_player, 'scorelog.db')
-            self.settings.db_scoredatalog = os.path.join(self.settings.dir_player, 'scoredatalog.db')
-            print(self.settings.dir_oraja, self.settings.dir_player)
-        if self.settings.is_valid():
-            print('dbファイル登録成功')
-            logger.debug('dbファイル登録成功')
-        else:
-            print('Error! dbファイル登録失敗')
-
-    def tweet(self):
-        sum_judge = [0, 0, 0, 0, 0, 0]
-        for t in self.result_log:
-            judge = t.judge
-            for i in range(6):
-                sum_judge[i] += judge[i]
-        today_notes = sum_judge[0]+sum_judge[1]+sum_judge[2]+sum_judge[3]+sum_judge[4]
-        score_rate = 0
-        if (sum_judge[0]+sum_judge[1]+sum_judge[2]+sum_judge[3]+sum_judge[4]) > 0:
-            score_rate = 100*(sum_judge[0]*2+sum_judge[1]) / (sum_judge[0]+sum_judge[1]+sum_judge[2]+sum_judge[3]+sum_judge[4]) / 2
-        if self.playtime.seconds == 0:
-            pace = 0
-        else:
-            pace = int(3600*self.notes/self.playtime.seconds)
-        msg = f"今日は{today_notes:,}ノーツ叩きました。スコアレート: {score_rate:.2f}%\n"
-        msg += f"(PG: {sum_judge[0]:,}, GR: {sum_judge[1]:,}, GD: {sum_judge[2]:,}, BD: {sum_judge[3]:,}, PR: {sum_judge[4]:,}, MISS: {sum_judge[5]:,})\n"
-        if self.obs != None:
-            msg += f"uptime: {str(self.ontime).split('.')[0]}, playtime: {str(self.playtime).split('.')[0]}, pace: {pace:,}notes/h\n"
-        else:
-            msg += f"uptime: {str(self.ontime).split('.')[0]}\n"
-        msg += '#oraja_helper\n'
-        encoded_msg = urllib.parse.quote(msg)
-        webbrowser.open(f"https://twitter.com/intent/tweet?text={encoded_msg}")
-
-    def load_old_results(self):
-        """過去のリザルト(指定オフセット時刻まで)を本日のリザルトとして登録
-        """
-        date_target = self.start_time - datetime.timedelta(hours=float(self.settings.log_offset))
-        for _,row in self.df_data.iterrows():
-            if datetime.datetime.fromtimestamp(row['date']) >= date_target:
-                #title, lampid, score, pre_score, score_rate, date, judge = self.parse(row)
-                out = self.parse(row)
-                d,t = self.get_difficulty(row['sha256'], out.title)
-                if d == None:
-                    d = ''
-                out.one_difficulty = d
-                self.result_log.append(out)
-        sum_judge = [0, 0, 0, 0, 0, 0]
-        for t in self.result_log:
-            judge = t.judge
-            for i in range(6):
-                sum_judge[i] += judge[i]
-        self.notes = sum_judge[0]+sum_judge[1]+sum_judge[2]+sum_judge[3]+sum_judge[4]
-        self.update_text('notes', self.notes)
-        self.write_xml()
-
-    def gui_settings(self):
-        self.gui_mode = gui_mode.settings
-        if self.window:
-            self.window.close()
-        layout_obs = [
-            [sg.Checkbox('OBS連携機能を利用する', key='enable_obs_control', default=self.settings.enable_obs_control, enable_events=True)],
-            [par_text('OBS host: '), sg.Input(self.settings.host, font=FONT, key='obs_host', size=(20,20))],
-            [par_text('OBS websocket port: '), sg.Input(self.settings.port, font=FONT, key='obs_port', size=(10,20))],
-            [par_text('OBS websocket password'), sg.Input(self.settings.passwd, font=FONT, key='obs_passwd', size=(20,20), password_char='*')],
-            [sg.Checkbox('キャプチャ画像をファイルに保存する', key='save_on_capture', default=self.settings.save_on_capture, enable_events=True, tooltip=f'オンメモリ処理のAPIが何故か遅いため、デフォルトはファイル出力のAPIを使っています。\nHDDの寿命が気になる方は外してください。\n割と動かない環境があります。')],
-        ]
-        layout = [
-            [par_text('beatorajaインストール先'), sg.Button('変更', key='btn_dir_oraja')],
-            [sg.Text(self.settings.dir_oraja, key='txt_dir_oraja')],
-            [par_text('playerフォルダ'), sg.Button('変更', key='btn_dir_player')],
-            [sg.Text(self.settings.dir_player, key='txt_dir_player')],
-            #[par_text('起動時刻より前のリザルトも含める'), sg.Spin([i for i in range(25)],readonly=True, default_value=self.settings.log_offset,key='log_offset', enable_events=True, size=(4,1))],
-            [sg.Checkbox('終了時にツイート画面を開く', key='tweet_on_exit', default=self.settings.tweet_on_exit, enable_events=True)],
-            [par_text('難易度表URL'), sg.Input('', key='input_url', size=(50,1))],
-            [sg.Listbox(self.settings.table_url, key='list_url', size=(50,4)), sg.Column([[par_btn('add', key='add_url'), par_btn('del', key='del_url'), par_btn('reload', key='reload_table')]])],
-            [sg.Frame('OBS設定', layout=layout_obs, title_color='#000044')],
-        ]
-        self.window = sg.Window('oraja_helper', layout, grab_anywhere=True,return_keyboard_events=True,resizable=False,finalize=True,enable_close_attempted_event=True,icon=self.ico,location=(self.settings.lx, self.settings.ly))
-
-    def build_layout_one_scene(self, name, LR=None):
-        """OBS制御設定画面におけるシーン1つ分のGUIを出力する。
-
-        Args:
-            name (str): シーン名
-            LR (bool, optional): 開始、終了があるシーンかどうかを指定。 Defaults to None.
-
-        Returns:
-            list: pysimpleguiで使うレイアウトを格納した配列。
-        """
-        if LR == None:
-            sc = [
-                    sg.Column([[par_text('表示する')],[sg.Listbox(self.settings.obs_enable[name], key=f'obs_enable_{name}', size=(20,4))], [par_btn('add', key=f'add_enable_{name}'),par_btn('del', key=f'del_enable_{name}')]]),
-                    sg.Column([[par_text('消す')],[sg.Listbox(self.settings.obs_disable[name], key=f'obs_disable_{name}', size=(20,4))], [par_btn('add', key=f'add_disable_{name}'),par_btn('del', key=f'del_disable_{name}')]]),
-                ]
-        else:
-            scL = [[
-                    sg.Column([[par_text('表示する')],[sg.Listbox(self.settings.obs_enable[f'{name}0'], key=f'obs_enable_{name}0', size=(20,4))], [par_btn('add', key=f'add_enable_{name}0'),par_btn('del', key=f'del_enable_{name}0')]]),
-                    sg.Column([[par_text('消す')],[sg.Listbox(self.settings.obs_disable[f'{name}0'], key=f'obs_disable_{name}0', size=(20,4))], [par_btn('add', key=f'add_disable_{name}0'),par_btn('del', key=f'del_disable_{name}0')]]),
-                ]]
-            scR = [[
-                    sg.Column([[par_text('表示する')],[sg.Listbox(self.settings.obs_enable[f'{name}1'], key=f'obs_enable_{name}1', size=(20,4))], [par_btn('add', key=f'add_enable_{name}1'),par_btn('del', key=f'del_enable_{name}1')]]),
-                    sg.Column([[par_text('消す')],[sg.Listbox(self.settings.obs_disable[f'{name}1'], key=f'obs_disable_{name}1', size=(20,4))], [par_btn('add', key=f'add_disable_{name}1'),par_btn('del', key=f'del_disable_{name}1')]]),
-                ]]
-            sc = [
-                sg.Frame('開始時', scL, title_color='#440000'),sg.Frame('終了時', scR, title_color='#440000')
-            ]
-        layout_main = [
-                par_text('シーン:')
-                ,par_text(self.settings.obs_scene[name], size=(20, 1), key=f'obs_scene_{name}')
-                ,par_btn('set', key=f'set_scene_{name}')
-        ]
-        if LR != None:
-            layout_main.append(par_btn('シーン判定用画像登録', key=f'register_scene_{name}'))
-        ret = [
-            layout_main,
-            sc
-        ]
-        return ret
-
-    def gui_obs_control(self):
-        """OBS制御設定画面のGUIを起動する。
-        """
-        if self.obs == None:
-            sg.popup_error('OBSwebsocketの設定がされていません。\n設定画面を確認してください。')
-            return -1
-        self.gui_mode = gui_mode.init
-        if self.window:
-            self.window.close()
-        obs_scenes = []
-        obs_sources = []
-        if self.obs != None:
-            tmp = self.obs.get_scenes()
-            tmp.reverse()
-            for s in tmp:
-                obs_scenes.append(s['sceneName'])
-        layout_select = self.build_layout_one_scene('select', 0)
-        layout_play = self.build_layout_one_scene('play', 0)
-        layout_result = self.build_layout_one_scene('result', 0)
-        layout_boot = self.build_layout_one_scene('boot')
-        layout_quit = self.build_layout_one_scene('quit')
-        layout_obs2 = [
-            [par_text('シーンコレクション(起動時に切り替え):'), sg.Combo(self.obs.get_scene_collection_list(), key='scene_collection', size=(40,1), enable_events=True)],
-            [par_text('シーン:'), sg.Combo(obs_scenes, key='combo_scene', size=(40,1), enable_events=True)],
-            [par_text('ソース:'),sg.Combo(obs_sources, key='combo_source', size=(40,1))],
-            [par_text('ゲーム画面:'), par_text(self.settings.obs_source, size=(20,1), key='obs_source'), par_btn('set', key='set_obs_source')],
-            [sg.Frame('選曲画面',layout=layout_select, title_color='#000044')],
-            [sg.Frame('プレー中',layout=layout_play, title_color='#000044')],
-            [sg.Frame('リザルト画面',layout=layout_result, title_color='#000044')],
-        ]
-        layout_r = [
-            [sg.Frame('oraja_helper起動時', layout=layout_boot, title_color='#000044')],
-            [sg.Frame('oraja_helper終了時', layout=layout_quit, title_color='#000044')],
-        ]
-
-        col_l = sg.Column(layout_r)
-        col_r = sg.Column(layout_obs2)
-
-        layout = [
-            [col_l, col_r],
-            [sg.Text('', key='info', font=(None,9))]
-        ]
-        self.gui_mode = gui_mode.obs_control
-        self.window = sg.Window(f"oraja_helper - OBS制御設定", layout, grab_anywhere=True,return_keyboard_events=True,resizable=False,finalize=True,enable_close_attempted_event=True,icon=self.ico,location=(self.settings.lx, self.settings.ly))
-        if self.settings.obs_scene_collection != '':
-            self.window['scene_collection'].update(value=self.settings.obs_scene_collection)
-
-    def update_preview(self):
-        """シーン登録画面のプレビュー表示を更新する
-        """
-        self.preview = copy.copy(self.img_org)
-        self.trimmed = None
-        # 矩形を書き込む
+    def set_embedded_icon(self):
+        """埋め込まれたアイコンを設定"""
         try:
-            sx = int(self.window['sx'].get())
-            sy = int(self.window['sy'].get())
-            ex = int(self.window['ex'].get())
-            ey = int(self.window['ey'].get())
-            self.trimmed = self.img_org.crop((sx,sy,ex,ey))
-            hash = str(imagehash.average_hash(self.trimmed))
-            self.update_text('target_hash', hash)
-            print(f"{self.register_scene_name}: {hash}")
-            draw = ImageDraw.Draw(self.preview)
-            draw.rectangle([(sx,sy),(ex,ey)], outline=(255,0,0),width=4)
-        except Exception:
-            print('矩形描画時にエラー。スキップします。')
-
-        # 縮小処理
-        w,h=self.preview.size
-        maxw=1200;maxh=900
-        if w > maxw:
-            h = int(maxw*h/w)
-            w = maxw
-        if h > maxh:
-            w = int(maxh*w/h)
-            h = maxh
-        self.preview = self.preview.resize((w,h))
-        # 出力
-        bio = io.BytesIO()
-        self.preview.save(bio, format='PNG')
-        self.window['image_register'].update(bio.getvalue())
-
-    def gui_register_scene(self, name):
-        self.gui_mode = gui_mode.init
-        self.register_scene_name = name # 記憶しておく
-        if self.window:
-            self.window.close()
-        layout_trim = [
-            [
-                par_text('sx'), sg.Input(self.settings.obs_trim[name][0], size=(5,1), key='sx', enable_events=True),
-                par_text('sy'), sg.Input(self.settings.obs_trim[name][1], size=(5,1), key='sy', enable_events=True),
-                par_text('ex'), sg.Input(self.settings.obs_trim[name][2], size=(5,1), key='ex', enable_events=True),
-                par_text('ey'), sg.Input(self.settings.obs_trim[name][3], size=(5,1), key='ey', enable_events=True),
-            ]
-        ]
-        layout = [
-            [
-                par_btn('保存', key='save_scene'),
-                par_btn('画像読み込み', key='read_image'),
-                sg.Frame('トリミング範囲', layout=layout_trim, title_color='#000044'),
-                par_text('hash:'),
-                par_text(self.settings.obs_target_hash[name], key='target_hash'),
-                par_text('判定しきい値'),
-                sg.Combo([i for i in range(33)], default_value=self.settings.obs_hash_threshold[name], key='hash_threshold')
-            ],
-            [sg.Image(None, key='image_register')]
-        ]
-        self.gui_mode = gui_mode.register_scene
-        self.window = sg.Window(f"oraja_helper - 判定用画像登録 (シーン:{name})", layout, grab_anywhere=True,return_keyboard_events=True,resizable=False,finalize=True,enable_close_attempted_event=True,icon=self.ico,location=(self.settings.lx, self.settings.ly), modal=True)
-
-    def gui_main(self):
-        self.gui_mode = gui_mode.main
-        if self.window:
-            self.window.close()
-        menuitems = [
-            ['File',['settings', 'OBS制御設定', 'exit']],
-            ['Tool',['ノーツ数をTweet', 'アップデートを確認']]
-        ]
-        layout = [
-            [sg.Menubar(menuitems, key='menu')],
-            [par_text('playdata:'), par_text('OOO', key='db_state')],
-            [par_text('OBS連携:'), par_text('接続されていません', key='obs_state')],
-            [par_text('難易度表: '), par_text(str(len(self.settings.table_url))), par_text(f'({len(self.difftable):,}譜面)')],
-            [par_text('date:'), par_text(f"{self.start_time.year}/{self.start_time.month:02d}/{self.start_time.day:02d}"), par_text('(00:00:00)', key='ontime')],
-            [par_text('notes:'), par_text(self.notes, key='notes')],
-            [par_text('score_rate:'), par_text('0.00', key='score_rate'), par_text('%')],
-            [par_text('playtime:'), par_text('-', key='playtime')],
-        ]
-        self.window = sg.Window(f'oraja_helper {SWVER}', layout, grab_anywhere=True,return_keyboard_events=True,resizable=False,finalize=True,enable_close_attempted_event=True,icon=self.ico,location=(self.settings.lx, self.settings.ly))
-        if self.settings.is_valid():
-            self.update_text('db_state', 'OK')
-            self.window['db_state'].update(text_color='#0000ff')
-        else:
-            self.update_text('db_state', '見つかりません。beatoraja設定を確認してください。')
-            self.window['db_state'].update(text_color='#ff0000')
-
-    def main(self):
-        self.gui_main()
-        self.connect_obs()
-        if type(self.obs) == OBSSocket:
-            self.obs.set_scene_collection(self.settings.obs_scene_collection)
-        self.control_obs_sources('boot')
-        self.th = threading.Thread(target=self.check, daemon=True)
-        self.th.start()
-        self.th_obs = threading.Thread(target=self.detect, daemon=True)
-        self.th_obs.start()
-        self.window.write_event_value('アップデートを確認', " ")
-        while True:
-            ev,val = self.window.read()
-            self.update_settings(ev, val)
-            self.settings.save()
-            if ev in (sg.WIN_CLOSED, 'Escape:27', '-WINDOW CLOSE ATTEMPTED-', 'exit'):
-                # 終了
-                if self.gui_mode == gui_mode.main:
-                    print('quit!')
-                    if self.settings.tweet_on_exit:
-                        self.tweet()
-                    #self.save_settings()
-                    break
-                elif self.gui_mode == gui_mode.register_scene:
-                    self.img_org = None
-                    self.trimmed = None
-                    self.gui_obs_control()
-                else:
-                    self.update_db_settings()
-                    self.gui_main()
-                    self.connect_obs()
-            elif ev == 'settings':
-                self.gui_settings()
-            elif ev == 'OBS制御設定':
-                self.gui_obs_control()
-            elif ev == 'btn_dir_oraja':
-                tmp = filedialog.askdirectory()
-                if tmp != '':
-                    self.settings.dir_oraja = tmp
-                    self.window['txt_dir_oraja'].update(tmp)
-            elif ev == 'btn_dir_player':
-                tmp = filedialog.askdirectory()
-                if tmp != '':
-                    self.settings.dir_player = tmp
-                    self.window['txt_dir_player'].update(tmp)
+            # 埋め込まれたアイコンのパスを取得
+            icon_path = self.get_resource_path("assets/icon.ico")
             
-            elif ev == 'add_url': # 難易度表追加
-                self.settings.table_url.append(val['input_url'])
-                #self.settings.table_url = list(set(self.settings.table_url))
-                self.window['list_url'].update(self.settings.table_url)
-            elif ev == 'del_url': # 難易度表削除
-                idx = self.settings.table_url.index(val['list_url'][0])
-                self.settings.table_url.pop(idx)
-                self.window['list_url'].update(self.settings.table_url)
-            elif ev == 'reload_table':
-                self.update_table()
-
-            elif ev.startswith('register_scene_'):
-                key = ev.split('register_scene_')[-1]
-                self.gui_register_scene(key)
-            elif ev == 'read_image':
-                tmp = filedialog.askopenfilename(filetypes=[(f'{self.register_scene_name}画面の判定用画像ファイル', "*.png;*.jpg;*.bmp")])
-                if tmp != '':
-                    self.img_org = Image.open(tmp)
-                    self.update_preview()
-            elif ev in ('sx', 'sy', 'ex', 'ey'):
-                self.update_preview()
-            elif ev == 'save_scene':
-                sx = self.window['sx'].get()
-                sy = self.window['sy'].get()
-                ex = self.window['ex'].get()
-                ey = self.window['ey'].get()
-                if sx.strip() != '':
-                    self.settings.obs_trim[self.register_scene_name][0] = sx
-                if sy.strip() != '':
-                    self.settings.obs_trim[self.register_scene_name][1] = sy
-                if ex.strip() != '':
-                    self.settings.obs_trim[self.register_scene_name][2] = ex
-                if ey.strip() != '':
-                    self.settings.obs_trim[self.register_scene_name][3] = ey
-                hash = self.window['target_hash'].get()
-                if hash != '':
-                    self.settings.obs_target_hash[self.register_scene_name] = hash
-                threshold = self.window['hash_threshold'].get()
-                if threshold != '':
-                    self.settings.obs_hash_threshold[self.register_scene_name] = threshold
-            elif ev == 'combo_scene': # シーン選択時にソース一覧を更新
-                if self.obs != None:
-                    sources = self.obs.get_sources(val['combo_scene'])
-                    self.window['combo_source'].update(values=sources)
-            elif ev == 'set_obs_source':
-                tmp = val['combo_source'].strip()
-                if tmp != "":
-                    self.settings.obs_source = tmp
-                    self.window['obs_source'].update(tmp)
-            elif ev.startswith('set_scene_'): # 各画面のシーンsetボタン押下時
-                tmp = val['combo_scene'].strip()
-                self.settings.obs_scene[ev.split('_')[-1]] = tmp
-                self.window[ev.replace('set_scene', 'obs_scene')].update(tmp)
-            elif ev.startswith('add_enable_') or ev.startswith('add_disable_'):
-                table_key = ev.replace('add', 'obs') # GUI上の要素名
-                tmp = val['combo_source'].strip() # play1みたいな識別子
-                key = ev.split('_')[-1]
-                if tmp != "":
-                    if 'enable' in ev:
-                        if tmp not in self.settings.obs_enable[key]:
-                            self.settings.obs_enable[key].append(tmp)
-                            self.window[table_key].update(self.settings.obs_enable[key])
-                    else:
-                        if tmp not in self.settings.obs_disable[key]:
-                            self.settings.obs_disable[key].append(tmp)
-                            self.window[table_key].update(self.settings.obs_disable[key])
-            elif ev.startswith('del_enable_') or ev.startswith('del_disable_'):
-                table_key = ev.replace('del', 'obs') # GUI上の要素名
-                key = ev.split('_')[-1] # play1みたいな識別子
-                if len(val[table_key]) > 0:
-                    tmp = val[table_key][0]
-                    if tmp != "":
-                        if 'enable' in ev:
-                            if tmp in self.settings.obs_enable[key]:
-                                self.settings.obs_enable[key].pop(self.settings.obs_enable[key].index(tmp))
-                                self.window[table_key].update(self.settings.obs_enable[key])
-                        else:
-                            if tmp in self.settings.obs_disable[key]:
-                                self.settings.obs_disable[key].pop(self.settings.obs_disable[key].index(tmp))
-                                self.window[table_key].update(self.settings.obs_disable[key])
-            elif ev == 'set_obs_source':
-                tmp = val['combo_source'].strip()
-                if tmp != "":
-                    self.settings.obs_source = tmp
-                    self.window['obs_source'].update(tmp)
-            elif ev == '-ONTIME-':
-                self.update_text('ontime', f'({val[ev]})')
-            elif ev == '-PLAYTIME-':
-                self.update_text('playtime', f'{val[ev]}')
-            elif ev == 'scene_collection': # シーンコレクションを選択
-                self.settings.obs_scene_collection = val[ev]
-                self.obs.set_scene_collection(val[ev]) # そのシーンコレクションに切り替え
-                obs_scenes = []
-                tmp = self.obs.get_scenes()
-                tmp.reverse()
-                for s in tmp:
-                    obs_scenes.append(s['sceneName'])
-                self.window['combo_scene'].update(values=obs_scenes) # シーン一覧を更新
-
-            elif ev == 'アップデートを確認':
-                ver = self.get_latest_version()
-                if ver != SWVER:
-                    print(f'現在のバージョン: {SWVER}, 最新版:{ver}')
-                    ans = sg.popup_yes_no(f'アップデートが見つかりました。\n\n{SWVER} -> {ver}\n\nアプリを終了して更新します。', icon=self.ico)
-                    if ans == "Yes":
-                        #self.control_obs_sources('quit')
-                        if os.path.exists('update.exe'):
-                            logger.info('アップデート確認のため終了します')
-                            res = subprocess.Popen('update.exe')
-                            break
-                        else:
-                            sg.popup_error('update.exeがありません', icon=self.ico)
-                else:
-                    print(f'お使いのバージョンは最新です({SWVER})')
-            elif ev == 'ノーツ数をTweet':
-                self.tweet()
-        # 終了時処理
-        self.control_obs_sources('quit')
-
-    def check(self):
-        while True:
-            self.check_db()
-            self.ontime = datetime.datetime.now() - self.start_time
-            self.window.write_event_value('-ONTIME-', str(self.ontime).split('.')[0])
-            time.sleep(1)
-
-    def read_source(self):
-        self.img = None
-        try:
-            if self.settings.save_on_capture:
-                self.obs.save_screenshot()
-                self.img = Image.open(self.imgpath)
+            if os.path.exists(icon_path):
+                self.root.iconbitmap(default=icon_path)
+                print(f"埋め込みアイコンを設定: {icon_path}")
             else:
-                self.img = self.obs.get_screenshot()
-            return True
-        except Exception:
-            return False
+                # フォールバック
+                self.try_alternative_icons()
+        except Exception as e:
+            print(f"アイコン設定エラー: {e}")    
 
-    def detect(self):
-        print('detectスレッド開始')
-        #self.obs.change_text('oraja_helper_playtime', "00:00:00")
-        #self.obs.change_text('oraja_helper_pace', f"0notes/h")
-        while True:
-            if not self.read_source():
-                time.sleep(0.1)
-                continue # エラー時はスキップ
-            if self.stop_thread:
-                logger.debug('break')
-                break
+    def convert_old_settings(self):
+        """1.16以前のpkl形式の設定がある場合はconvert
+        """
+        data = convert_with_dummy_class('settings.pkl')
+        if data:
+            ret = messagebox.askyesno('確認', '前のバージョンの設定(settings.pkl)を変換しますか？\n変換後に元の設定ファイルは削除されます。\n\n※注意:OBS制御設定は引き継げません。お手数ですが再設定をお願いします。')
+            if ret:
+                self.config.main_window_x = data.get('lx', self.config.main_window_x)
+                self.config.main_window_y = data.get('ly', self.config.main_window_y)
+                self.config.oraja_path = data.get('dir_oraja', self.config.oraja_path)
+                self.config.player_path = data.get('dir_player', self.config.player_path)
+                self.config.enable_autotweet = data.get('tweet_on_exit', self.config.enable_autotweet)
+                self.config.monitor_source_name = data.get('obs_source', self.config.monitor_source_name)
+                self.config.websocket_host = data.get('host', self.config.websocket_host)
+                self.config.websocket_port = data.get('port', self.config.websocket_port)
+                self.config.websocket_password = data.get('passwd', self.config.websocket_password)
+
+                # pkl削除
+                os.remove('settings.pkl')
+                logger.info('convert succeeded. settings.pkl was removed.')
+
+    def setup_ui(self):
+        """UIの初期設定"""
+        self.root.title(f"oraja_helper")
+        self.root.geometry("550x350")
+        self.root.minsize(550,350)    # 最小サイズも調整
+        
+        # メニューバー
+        menubar = tk.Menu(self.root)
+        self.root.config(menu=menubar)
+        
+        # 設定メニュー
+        settings_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="File", menu=settings_menu)
+        settings_menu.add_command(label="settings", command=self.open_settings)
+        settings_menu.add_command(label="OBS制御設定", command=self.open_obs_control)
+        settings_menu.add_command(label="アップデートを確認", command=self.check_updates)
+        tweet_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label='Tweet', menu=tweet_menu)
+        tweet_menu.add_command(label='daily', command=self.database_accessor.manage_results.tweet_summary)
+        tweet_menu.add_command(label='history', command=self.database_accessor.manage_results.tweet_history)
+        
+        # メインフレーム
+        main_frame = ttk.Frame(self.root, padding="10")
+        main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        
+        # 経過時間表示
+        ttk.Label(main_frame, text="uptime:").grid(row=0, column=0, sticky=tk.W, pady=5)
+        self.elapsed_time_var = tk.StringVar(value="00:00:00")
+        ttk.Label(main_frame, textvariable=self.elapsed_time_var, font=("Arial", 12, "bold")).grid(row=0, column=1, sticky=tk.W, padx=(10, 0), pady=5)
+        
+        # 監視対象フォルダ表示
+        ttk.Label(main_frame, text="beatoraja path:").grid(row=1, column=0, sticky=tk.W, pady=5)
+        self.oraja_path_var = tk.StringVar()
+        ttk.Label(main_frame, textvariable=self.oraja_path_var, wraplength=300).grid(row=1, column=1, sticky=tk.W, padx=(10, 0), pady=5)
+        
+        # ファイル存在状況表示
+        ttk.Label(main_frame, text="db state:").grid(row=2, column=0, sticky=tk.W, pady=5)
+        self.file_status_var = tk.StringVar(value="確認中...")
+        self.file_status_label = ttk.Label(main_frame, textvariable=self.file_status_var)
+        self.file_status_label.grid(row=2, column=1, sticky=tk.W, padx=(10, 0), pady=5)
+        
+        # ゲーム状態表示
+        ttk.Label(main_frame, text="oraja state:").grid(row=3, column=0, sticky=tk.W, pady=5)
+        self.game_state_var = tk.StringVar(value="未判定")
+        self.game_state_label = ttk.Label(main_frame, textvariable=self.game_state_var, font=("Arial", 12, "bold"))
+        self.game_state_label.grid(row=3, column=1, sticky=tk.W, padx=(10, 0), pady=5)
+        
+        # OBS WebSocket連携状況表示
+        ttk.Label(main_frame, text="OBS WebSocket:").grid(row=4, column=0, sticky=tk.W, pady=5)
+        self.obs_status_var = tk.StringVar()
+        self.obs_status_label = ttk.Label(main_frame, textvariable=self.obs_status_var, wraplength=300)
+        self.obs_status_label.grid(row=4, column=1, sticky=tk.W, padx=(10, 0), pady=5)
+        
+        # プレイ曲数
+        ttk.Label(main_frame, text="playcount:").grid(row=5, column=0, sticky=tk.W, pady=5)
+        self.playcount_var = tk.StringVar(value='0')
+        self.playcount_label = ttk.Label(main_frame, textvariable=self.playcount_var, font=("Arial", 12, "bold"))
+        self.playcount_label.grid(row=5, column=1, sticky=tk.W, padx=(10, 0), pady=5)
+        
+        # ノーツ数
+        ttk.Label(main_frame, text="notes:").grid(row=6, column=0, sticky=tk.W, pady=5)
+        self.notes_var = tk.StringVar(value='0')
+        self.notes_label = ttk.Label(main_frame, textvariable=self.notes_var, font=("Arial", 12, "bold"))
+        self.notes_label.grid(row=6, column=1, sticky=tk.W, padx=(10, 0), pady=5)
+        
+        # スコアレート
+        ttk.Label(main_frame, text="score rate:").grid(row=7, column=0, sticky=tk.W, pady=5)
+        self.score_rate_var = tk.StringVar(value='0.00%')
+        self.score_rate_label = ttk.Label(main_frame, textvariable=self.score_rate_var, font=("Arial", 12, "bold"))
+        self.score_rate_label.grid(row=7, column=1, sticky=tk.W, padx=(10, 0), pady=5)
+        
+        # ステータスバー
+        status_frame = ttk.Frame(self.root)
+        status_frame.grid(row=1, column=0, sticky=(tk.W, tk.E))
+        self.status_var = tk.StringVar(value="準備完了")
+        ttk.Label(status_frame, textvariable=self.status_var, relief=tk.SUNKEN).pack(fill=tk.X, padx=5, pady=2)
+        
+        # グリッドの重み設定
+        self.root.columnconfigure(0, weight=1)
+        self.root.rowconfigure(0, weight=1)
+        main_frame.columnconfigure(1, weight=1)
+        
+        self.update_config_display()
+    
+    def start_all_threads(self):
+        """全スレッドを開始"""
+        self.start_db_monitoring()
+        self.start_screen_monitoring()
+    
+    def start_db_monitoring(self):
+        """ファイル監視スレッドを開始"""
+        if self.db_monitoring_thread is None or not self.db_monitoring_thread.is_alive():
+            self.db_monitoring_thread = threading.Thread(target=self.db_monitoring_worker, daemon=True)
+            self.db_monitoring_thread.start()
+            print("ファイル監視スレッドを開始しました")
+    
+    def start_screen_monitoring(self):
+        """画面監視スレッドを開始"""
+        if self.screen_monitoring_thread is None or not self.screen_monitoring_thread.is_alive():
+            self.screen_monitoring_thread = threading.Thread(target=self.screen_monitoring_worker, daemon=True)
+            self.screen_monitoring_thread.start()
+            print("画面監視スレッドを開始しました")
+    
+    def db_monitoring_worker(self):
+        """dbfile監視専用ワーカースレッド"""
+        print("dbfile監視スレッド開始")
+        while self.is_running:
             try:
-                if self.detect_mode == detect_mode.init:
-                    for mode in ['select', 'play', 'result']:
-                        if self.settings.obs_target_hash[mode] == None:
-                            continue
-                        tmp = self.img.crop(list(map(int, self.settings.obs_trim[mode])))
-                        hash = imagehash.average_hash(tmp)
-                        diff = abs(hash - imagehash.hex_to_hash(self.settings.obs_target_hash[mode])) 
-                        if diff <= self.settings.obs_hash_threshold[mode]:
-                            if mode == 'select':
-                                self.detect_mode = detect_mode.select
-                            elif mode == 'play':
-                                self.detect_mode = detect_mode.play
-                                self.play_st = datetime.datetime.now()
-                            elif mode == 'result':
-                                self.detect_mode = detect_mode.result
-                            print(f"mode:{mode}, hash:{hash}, diff:{diff}")
-                            print(f'init -> {self.detect_mode.name}')
-                            self.control_obs_sources(f'{mode}0')
-                            break
+                if self.database_accessor.is_valid():
+                    if self.database_accessor.reload_db():
+                        self.update_db_status()
+                        self.database_accessor.read_one_result()
+                        self.database_accessor.manage_results.update_stats()
+                        self.database_accessor.manage_results.save()
+                        self.database_accessor.manage_results.write_history_xml()
+                        self.database_accessor.manage_results.write_updates_xml()
+                        logger.info(f"added! len(all_results):{len(self.database_accessor.manage_results.all_results)}, len(today_results):{len(self.database_accessor.manage_results.today_results)}")
+                        self.update_stats_gui()
+                        logger.info(f"added! len(all_results):{len(self.database_accessor.manage_results.all_results)}, len(today_results):{len(self.database_accessor.manage_results.today_results)}")
+                    
                 else:
-                    for mode in ['select', 'play', 'result']:
-                        if self.detect_mode.name == mode:
-                            tmp = self.img.crop(list(map(int, self.settings.obs_trim[mode])))
-                            hash = imagehash.average_hash(tmp)
-                            diff = abs(hash - imagehash.hex_to_hash(self.settings.obs_target_hash[mode])) 
-                            if diff > self.settings.obs_hash_threshold[mode]:
-                                print(f"mode:{mode}, hash:{hash}, diff:{diff}")
-                                print(f'{mode} -> init')
-                                self.control_obs_sources(f'{mode}1')
-                                self.detect_mode = detect_mode.init
-                                if mode == 'play':
-                                    self.playtime += datetime.datetime.now() - self.play_st
-                                break
-            except Exception:
-                continue
-            if self.detect_mode == detect_mode.play:
-                ret_playtime = str(self.playtime + datetime.datetime.now() - self.play_st).split('.')[0]
-                self.window.write_event_value('-PLAYTIME-', ret_playtime)
-                #self.obs.change_text('oraja_helper_playtime', ret_playtime)
-                #if (self.playtime + datetime.datetime.now() - self.play_st).seconds > 0:
-                #    self.obs.change_text('oraja_helper_pace', f"pace: {int(3600*self.notes/(self.playtime + datetime.datetime.now() - self.play_st).seconds)}notes/h")
-            time.sleep(0.1)
-        logger.debug('end')
+                    self.file_exists = False
+                
+            except Exception as e:
+                print(f"ファイル監視エラー: {e}")
+                # self.root.after(0, lambda: self.status_var.set(f"ファイル監視エラー: {e}"))
+            # 
+            time.sleep(1)
+        
+        print("ファイル監視スレッド終了")
+    
+    def screen_monitoring_worker(self):
+        """画面監視専用ワーカースレッド"""
+        print("画面監視スレッド開始")
+        while self.is_running:
+            try:
+                # OBSWebSocket設定がされている場合のみ実行
+                if (self.config.enable_websocket and 
+                    self.obs_manager.is_connected):
+                    
+                    # 画像認識が有効な場合：OBSスクリーンショットによる判定
+                    if self.config.enable_register_conditions:
+                        screenshot_data = self.get_obs_screenshot()
+                        if screenshot_data:
+                            self.detect_game_state_from_screenshot(screenshot_data)
+                    
+                    # 画像認識が無効な場合：ファイルベースの判定
+                    else:
+                        self.detect_game_state_from_file()
+                
+                # 1秒間隔で実行
+                time.sleep(1)
+                
+            except Exception as e:
+                print(f"画面監視エラー: {e}")
+                # エラー時は少し長めに待機
+                time.sleep(5)
+        
+        print("画面監視スレッド終了")
+    
+    def get_obs_screenshot(self):
+        """OBSからスクリーンショットを取得"""
+        if not PIL_AVAILABLE:
+            return None
+            
+        try:
+            # OBSの現在のプログラム出力のスクリーンショットを取得
+            result = self.obs_manager.get_screenshot()
+            
+            if result and hasattr(result, 'image_data'):
+                # Base64デコードして画像データを返す
+                image_data_str = result.image_data
+                if image_data_str.startswith('data:image/'):
+                    image_data_str = image_data_str.split(',')[1]
+                
+                image_data = base64.b64decode(image_data_str)
+                image = Image.open(io.BytesIO(image_data))
+                return image
+            
+        except Exception as e:
+            print(f"OBSスクリーンショット取得エラー: {e}")
+            
+        return None
 
-a = Misc()
-a.main()
+    def update_playtime(self, old_state, new_state):
+        """プレイ時間を更新する共通メソッド"""
+        current_time = datetime.datetime.now()
+        
+        if new_state == 'play':
+            self.play_st = current_time
+        elif old_state == 'play' and self.play_st is not None:
+            # プレイ終了時に時間を加算
+            play_duration = current_time - self.play_st
+            self.database_accessor.manage_results.playtime += play_duration
+            print(f"プレイ時間を追加: {play_duration}, 累計: {self.database_accessor.manage_results.playtime}")
+            self.play_st = None
+
+    def detect_game_state_from_screenshot(self, screenshot_image):
+        """スクリーンショットからゲーム状態を判定"""
+        if not IMAGEHASH_AVAILABLE:
+            return
+            
+        try:
+            # 画像認識データを読み込み
+            recognition_data = ImageRecognitionData()
+            
+            new_state = None
+            detected_states = []
+            
+            # 各画面タイプの判定を実行
+            for screen_type in ["select", "play", "result"]:
+                condition = recognition_data.get_condition(screen_type)
+                if condition and self.check_screen_match(screenshot_image, condition):
+                    detected_states.append(screen_type)
+            
+            # 複数の状態が検出された場合は優先度で決定（プレー > リザルト > 選曲）
+            if "play" in detected_states:
+                new_state = "play"
+            elif "result" in detected_states:
+                new_state = "result"
+            elif "select" in detected_states:
+                new_state = "select"
+            
+            # 状態が変化した場合のみ処理
+            if new_state != self.current_game_state:
+
+                # 前の状態の終了処理
+                if self.current_game_state:
+                    self.execute_obs_trigger(f"{self.current_game_state}_end")
+                
+                # プレイ時間の更新
+                self.update_playtime(self.current_game_state, new_state)
+
+                # 新しい状態の開始処理
+                if new_state:
+                    self.execute_obs_trigger(f"{new_state}_start")
+
+                self.current_game_state = new_state
+                
+                # UI更新
+                self.root.after(0, self.update_game_state_display)
+                
+                print(f"ゲーム状態変化（画像認識）: {self.current_game_state}")
+                
+        except Exception as e:
+            print(f"ゲーム状態判定エラー: {e}")
+    
+    def check_screen_match(self, screenshot_image, condition):
+        """スクリーンショットが指定された画面条件にマッチするかチェック"""
+        try:
+            # 座標情報を取得
+            coords = condition.get("coordinates", {})
+            x1, y1 = coords.get("x1", 0), coords.get("y1", 0)
+            x2, y2 = coords.get("x2", 100), coords.get("y2", 100)
+            
+            # 座標を正規化
+            left, top = min(x1, x2), min(y1, y2)
+            right, bottom = max(x1, x2), max(y1, y2)
+            
+            # スクリーンショットのサイズチェック
+            img_width, img_height = screenshot_image.size
+            if right > img_width or bottom > img_height:
+                return False
+            
+            # スクリーンショットから該当範囲を切り出し
+            cropped = screenshot_image.crop((left, top, right, bottom))
+            
+            # ハッシュを計算
+            current_hash = imagehash.average_hash(cropped)
+            
+            # 設定されたハッシュと比較
+            reference_hash = imagehash.hex_to_hash(condition.get("hash", ""))
+            threshold = condition.get("threshold", 10)
+            
+            # ハッシュの差分を計算
+            hash_diff = current_hash - reference_hash
+            
+            # しきい値以下なら一致とみなす
+            return hash_diff <= threshold
+            
+        except Exception as e:
+            print(f"画面マッチング判定エラー: {e}")
+            return False
+    
+    def detect_game_state_from_file(self):
+        """ファイルベースのゲーム状態判定"""
+        try:
+            target_file = self.config.get_target_file_path()
+            
+            # ファイルが存在する場合のみ判定
+            if target_file and self.file_exists:
+                # ファイル名や内容から状態を判定
+                if "select" in target_file.lower():
+                    new_state = "select"
+                elif "play" in target_file.lower():
+                    new_state = "play"  
+                elif "result" in target_file.lower():
+                    new_state = "result"
+                else:
+                    new_state = None
+                
+                # 状態が変化した場合
+                if new_state != self.current_game_state:
+
+                    # 前の状態の終了処理
+                    if self.current_game_state:
+                        self.execute_obs_trigger(f"{self.current_game_state}_end")
+
+                    # プレイ時間の更新
+                    self.update_playtime(self.current_game_state, new_state)
+
+                    # 新しい状態の開始処理
+                    if new_state:
+                        self.execute_obs_trigger(f"{new_state}_start")
+                    
+                    self.current_game_state = new_state
+                    
+                    # UI更新
+                    self.root.after(0, self.update_game_state_display)
+                    
+                    print(f"ゲーム状態変化（ファイルベース）: {self.current_game_state}")
+                    
+        except Exception as e:
+            print(f"ファイルベースゲーム状態判定エラー: {e}")
+    
+    def update_stats_gui(self):
+        """db監視スレッドから呼び出す最低限のGUI更新メソッド
+        """
+        self.oraja_path_var.set(self.config.oraja_path or "未設定")
+        self.playcount_var.set(str(self.database_accessor.manage_results.playcount))
+        self.notes_var.set(str(self.database_accessor.manage_results.notes))
+        self.score_rate_var.set(f"{self.database_accessor.manage_results.score_rate:.2f}%")
+
+    def update_config_display(self):
+        """設定情報の表示を更新"""
+        self.oraja_path_var.set(self.config.oraja_path or "未設定")
+        
+        # 設定の更新
+        self.config.load_config()
+        self.obs_manager.set_config(self.config)
+        logger.info(f"added! len(all_results):{len(self.database_accessor.manage_results.all_results)}, len(today_results):{len(self.database_accessor.manage_results.today_results)}")
+        self.database_accessor.set_config(self.config)
+        logger.info(f"added! len(all_results):{len(self.database_accessor.manage_results.all_results)}, len(today_results):{len(self.database_accessor.manage_results.today_results)}")
+        self.update_db_status()
+
+        # 設定画面で更新される可能性があるため、DataBaseAccessorをリロードしておく
+        self.database_accessor.manage_results.load()
+        self.database_accessor.manage_results.write_history_xml()
+        self.database_accessor.manage_results.write_updates_xml()
+
+        self.playcount_var.set(str(self.database_accessor.manage_results.playcount))
+        self.notes_var.set(str(self.database_accessor.manage_results.notes))
+        self.score_rate_var.set(f"{self.database_accessor.manage_results.score_rate:.2f}%")
+        
+        # 現在のOBSステータスを取得して表示
+        status_message, is_connected = self.obs_manager.get_status()
+        self.obs_status_var.set(status_message)
+        
+        # 接続状態に応じて色を変更
+        if is_connected:
+            self.obs_status_label.config(foreground="green")
+        elif "無効" in status_message or "インストール" in status_message:
+            self.obs_status_label.config(foreground="gray")
+        else:
+            self.obs_status_label.config(foreground="red")
+        
+        # WebSocket連携が有効になった場合は自動接続を開始
+        if self.config.enable_websocket and not self.obs_manager.should_reconnect:
+            self.obs_manager.start_auto_reconnect()
+        elif not self.config.enable_websocket:
+            self.obs_manager.stop_auto_reconnect()
+            self.obs_manager.disconnect()
+    
+    def update_db_status(self):
+        """dbfile状態の表示を更新"""
+        if self.database_accessor.is_valid():
+            self.file_status_var.set("OK")
+            self.file_status_label.config(foreground="blue")
+        else:
+            self.file_status_var.set("NG")
+            self.file_status_label.config(foreground="red")
+    
+    def update_game_state_display(self):
+        """ゲーム状態表示を更新"""
+        state_names = {
+            "select": "選曲画面",
+            "play": "プレー画面",
+            "result": "リザルト画面",
+            None: "未判定"
+        }
+        
+        state_text = state_names.get(self.current_game_state, "未判定")
+        self.game_state_var.set(state_text)
+        
+        # 状態に応じて色を変更
+        if self.current_game_state == "play":
+            self.game_state_label.config(foreground="pink")
+        elif self.current_game_state == "result":
+            self.game_state_label.config(foreground="purple")
+        elif self.current_game_state == "select":
+            self.game_state_label.config(foreground="green")
+        else:
+            self.game_state_label.config(foreground="gray")
+    
+    def on_obs_status_changed(self, status_message: str, is_connected: bool):
+        """OBS WebSocket接続状態変更時のコールバック"""
+        def update_ui():
+            self.obs_status_var.set(status_message)
+            
+            # 接続状態に応じて色を変更
+            if is_connected:
+                self.obs_status_label.config(foreground="green")
+                self.status_var.set("OBS WebSocket接続完了")
+            else:
+                # 詳細な状態による色分け
+                if "無効" in status_message or "インストール" in status_message:
+                    self.obs_status_label.config(foreground="gray")
+                    self.status_var.set("OBS WebSocket機能無効")
+                elif "接続中" in status_message:
+                    self.obs_status_label.config(foreground="orange")
+                    self.status_var.set("OBS WebSocket接続試行中...")
+                elif "タイムアウト" in status_message:
+                    self.obs_status_label.config(foreground="red")
+                    self.status_var.set("OBS WebSocket接続タイムアウト")
+                elif "接続拒否" in status_message:
+                    self.obs_status_label.config(foreground="red")
+                    self.status_var.set("OBS WebSocket接続拒否 (OBS未起動?)")
+                elif "失われました" in status_message:
+                    self.obs_status_label.config(foreground="red")
+                    self.status_var.set("OBS WebSocket接続が失われました")
+                elif "エラー" in status_message:
+                    self.obs_status_label.config(foreground="red")
+                    self.status_var.set("OBS WebSocket接続エラー")
+                else:
+                    self.obs_status_label.config(foreground="red")
+                    self.status_var.set("OBS WebSocket切断")
+        
+        # メインスレッドでUI更新を実行
+        self.root.after(0, update_ui)
+    
+    def restore_window_position(self):
+        """ウィンドウ位置を復元"""
+        try:
+            # 設定されたウィンドウ位置を取得
+            x = self.config.main_window_x
+            y = self.config.main_window_y
+            width = self.config.main_window_width
+            height = self.config.main_window_height
+            
+            # ウィンドウサイズと位置を設定
+            self.root.geometry(f"{width}x{height}+{x}+{y}")
+            
+        except Exception as e:
+            print(f"ウィンドウ位置復元エラー: {e}")
+            # エラーの場合はデフォルト位置
+            self.root.geometry("550x350+100+100")
+    
+    def save_window_position(self):
+        """現在のウィンドウ位置を保存"""
+        try:
+            # ウィンドウが最小化されている場合は保存しない
+            if self.root.state() == 'iconic':
+                return
+            
+            # 現在の位置とサイズを取得
+            geometry = self.root.geometry()
+            # 形式: "widthxheight+x+y"
+            size_pos = geometry.split('+')
+            width_height = size_pos[0].split('x')
+            
+            width = int(width_height[0])
+            height = int(width_height[1])
+            x = int(size_pos[1])
+            y = int(size_pos[2])
+            
+            # 設定に保存
+            self.config.save_window_position(x, y, width, height)
+            
+        except Exception as e:
+            print(f"ウィンドウ位置保存エラー: {e}")
+    
+    def update_display(self):
+        """表示の定期更新"""
+        # 経過時間の更新
+        elapsed = datetime.datetime.now() - self.start_time
+        hours, remainder = divmod(int(elapsed.total_seconds()), 3600)
+        minutes, seconds = divmod(remainder, 60)
+        self.elapsed_time_var.set(f"{hours:02d}:{minutes:02d}:{seconds:02d}")
+        
+        # 1秒後に再実行
+        self.root.after(1000, self.update_display)
+
+    def execute_obs_trigger(self, trigger: str):
+        """OBS制御トリガーを実行"""
+        try:
+            # OBS制御ウィンドウが作成されていなくても設定は実行できるよう、
+            # 直接設定データを読み込んで実行
+            from obs_control import OBSControlData
+            
+            control_data = OBSControlData()
+            control_data.set_config(self.config)
+            settings = control_data.get_settings_by_trigger(trigger)
+            
+            if not settings:
+                return  # 該当する設定がない場合は何もしない
+            
+            if not self.obs_manager.is_connected:
+                print(f"OBS未接続のため、トリガー '{trigger}' をスキップ")
+                return
+            
+            for setting in settings:
+                try:
+                    action = setting["action"]
+                    
+                    if action == "switch_scene":
+                        target_scene = setting.get("target_scene")
+                        if target_scene:
+                            self.obs_manager.change_scene(target_scene)
+                            print(f"シーンを切り替え: {target_scene}")
+                    
+                    elif action == "show_source":
+                        scene_name = setting.get("scene_name")
+                        source_name = setting.get("source_name")
+                        if scene_name and source_name:
+                            scene_item_id = self._get_scene_item_id(scene_name, source_name)
+                            if scene_item_id:
+                                self.obs_manager.enable_source(scene_name, scene_item_id)
+                                print(f"ソースを表示: {scene_name}/{source_name} (id:{scene_item_id})")
+                    
+                    elif action == "hide_source":
+                        scene_name = setting.get("scene_name")
+                        source_name = setting.get("source_name")
+                        if scene_name and source_name:
+                            scene_item_id = self._get_scene_item_id(scene_name, source_name)
+                            if scene_item_id:
+                                self.obs_manager.send_command("set_scene_item_enabled",
+                                                            scene_name=scene_name,
+                                                            scene_item_id=scene_item_id,
+                                                            scene_item_enabled=False)
+                                self.obs_manager.disable_source(scene_name, scene_item_id)
+                                print(f"ソースを非表示: {scene_name}/{source_name} (id:{scene_item_id})")
+                                
+                except Exception as e:
+                    print(f"制御実行エラー (trigger: {trigger}, setting: {setting}): {e}")
+                    
+        except Exception as e:
+            print(traceback.format_exc())
+            print(f"トリガー実行エラー ({trigger}): {e}")
+    
+    def _get_scene_item_id(self, scene_name: str, source_name: str) -> int:
+        """シーンアイテムIDを取得"""
+        try:
+            result = self.obs_manager.send_command("get_scene_item_id", 
+                                                 scene_name=scene_name, 
+                                                 source_name=source_name)
+            return result.scene_item_id if result else 0
+        except Exception as e:
+            print(f"シーンアイテムID取得エラー: {e}")
+            return 0
+    
+    def open_settings(self):
+        """設定ダイアログを開く"""
+        self.database_accessor.manage_results.save()
+        settings_window = SettingsWindow(self.root, self.config, self.update_config_display)
+    
+    def open_obs_control(self):
+        """OBS制御設定ダイアログを開く"""
+        if not self.obs_manager.is_connected:
+            messagebox.showwarning("OBS未接続", 
+                                 "OBS制御設定を開くには、まずOBSに接続してください。\n"
+                                 "「設定」→「基本設定」からWebSocket接続を有効にしてください。")
+            return
+        
+        try:
+            self.database_accessor.manage_results.save()
+            obs_control = OBSControlWindow(self.root, self.obs_manager, self.config, self.update_config_display)
+        except Exception as e:
+            messagebox.showerror("エラー", f"OBS制御設定ウィンドウの起動に失敗しました。\n{str(e)}")
+    
+    def on_closing(self):
+        """アプリケーション終了時の処理"""
+        print("アプリケーション終了処理開始")
+
+        # xml出力
+        self.database_accessor.manage_results.save()
+        self.database_accessor.manage_results.write_history_xml()
+        self.database_accessor.manage_results.write_updates_xml()
+
+        # tweet
+        if self.config.enable_autotweet:
+            self.database_accessor.manage_results.tweet_summary()
+        
+        # ウィンドウ位置を保存
+        self.save_window_position()
+        
+        # アプリ終了時のOBS制御実行
+        self.execute_obs_trigger("app_end")
+        
+        # スレッド停止フラグを設定
+        self.is_running = False
+        
+        # OBS WebSocket接続を停止
+        if hasattr(self, 'obs_manager'):
+            self.obs_manager.stop_auto_reconnect()
+            self.obs_manager.disconnect()
+        
+        # スレッドの終了を待機
+        if self.db_monitoring_thread and self.db_monitoring_thread.is_alive():
+            print("ファイル監視スレッドの終了を待機中...")
+            self.db_monitoring_thread.join(timeout=2)
+        
+        if self.screen_monitoring_thread and self.screen_monitoring_thread.is_alive():
+            print("画面監視スレッドの終了を待機中...")
+            self.screen_monitoring_thread.join(timeout=2)
+        
+        # アプリケーションロックを解放
+        if hasattr(self, 'app_lock'):
+            self.app_lock.release_lock()
+        
+        print("アプリケーション終了処理完了")
+        self.root.destroy()
+        logger.info('closed')
+    
+    def run(self):
+        """アプリケーションを実行"""
+        try:
+            self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+            self.root.mainloop()
+        except Exception as e:
+            print(f"アプリケーション実行エラー: {e}")
+        finally:
+            # 確実にロックを解放
+            if hasattr(self, 'app_lock'):
+                self.app_lock.release_lock()
+
+if __name__ == "__main__":
+    # app = MainWindow() # debug
+    # app.run()
+    try:
+        app = MainWindow()
+        app.run()
+    except SystemExit:
+        # 二重起動による正常終了
+        pass
+    except Exception as e:
+        print(f"アプリケーション起動エラー: {e}")
+        print(traceback.format_exc())
+        logger.error(traceback.format_exc())
+        messagebox.showerror("エラー", f"アプリケーションの起動に失敗しました。\n{str(e)}")
