@@ -270,7 +270,7 @@ class MainWindow:
         # 設定メニュー
         settings_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="File", menu=settings_menu)
-        settings_menu.add_command(label="基本設定", command=self.open_settings)
+        settings_menu.add_command(label="settings", command=self.open_settings)
         settings_menu.add_command(label="OBS制御設定", command=self.open_obs_control)
         settings_menu.add_command(label="アップデートを確認", command=self.check_updates)
         tweet_menu = tk.Menu(menubar, tearoff=0)
