@@ -30,6 +30,12 @@
             --bA: #1111ff;
             --bB: #aaaaff;
             --color-bg: #000;
+            --effect: glitch;
+            --primary-color: #00ffff;
+            --secondary-color: #ff00ff;
+            --tertiary-color: #00ff00;
+            --animation-speed: 3s;
+            --glow-intensity: 20px;
         }
 
         * {
@@ -106,6 +112,58 @@
             }
         }
 
+        /* ネオングロー効果 */
+        .game-inner[data-effect="neon-glow"] {
+            animation: neonGlow var(--animation-speed) ease-in-out infinite alternate;
+        }
+
+        @keyframes neonGlow {
+            0% {
+                border-color: var(--primary-color);
+                box-shadow: 
+                    0 0 var(--glow-intensity) var(--primary-color), 
+                    inset 0 0 calc(var(--glow-intensity) / 2) var(--primary-color);
+            }
+            100% {
+                border-color: var(--secondary-color);
+                box-shadow: 
+                    0 0 calc(var(--glow-intensity) * 1.5) var(--secondary-color), 
+                    inset 0 0 var(--glow-intensity) var(--secondary-color);
+            }
+        }
+
+        /* グリッチ効果 */
+        .game-inner[data-effect="glitch"] {
+            animation: glitchBorder var(--animation-speed) steps(5) infinite;
+        }
+
+        @keyframes glitchBorder {
+            0% { 
+                border-color: var(--primary-color);
+                box-shadow: 0 0 10px var(--primary-color);
+            }
+            20% { 
+                border-color: var(--secondary-color);
+                box-shadow: 0 0 10px var(--secondary-color);
+            }
+            40% { 
+                border-color: var(--tertiary-color);
+                box-shadow: 0 0 10px var(--tertiary-color);
+            }
+            60% { 
+                border-color: #ffff00;
+                box-shadow: 0 0 10px #ffff00;
+            }
+            80% { 
+                border-color: #ff0000;
+                box-shadow: 0 0 10px #ff0000;
+            }
+            100% { 
+                border-color: var(--primary-color);
+                box-shadow: 0 0 10px var(--primary-color);
+            }
+        }
+
         .info-area {
             flex: var(--info-area-ratio);
             display: flex;
@@ -123,7 +181,7 @@
             overflow: visible;
             position: relative;
             padding-bottom: 2px;
-            margin-right: 21px;
+            /* margin-right: 21px; */
         }
 
         .comment-area {
@@ -369,7 +427,7 @@
         <div class="top-section">
             <!-- 左上：ゲーム画面エリア（完全透明） -->
             <div class="game-area">
-                <div class="game-inner"></div>
+                <div class="game-inner" data-effect="glitch"></div>
             </div>
             
             <!-- 右上：時計・コメントエリア -->
