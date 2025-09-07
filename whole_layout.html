@@ -14,7 +14,7 @@
             --game-area-ratio: 5;
             --info-area-ratio: 1;
             --clock-ratio: 1;
-            --comment-ratio: 5;
+            --comment-ratio: 6;
             --bottom-left-ratio: 5;
             --bottom-right-ratio: 5.7;
             
@@ -29,13 +29,7 @@
 
             --bA: #1111ff;
             --bB: #aaaaff;
-            --bC: #eeeeff;
-            --bD: #aaaaff;
-            --A: #7f7fff;
-            --B: #7fff7f;
-            --C: #ffff7f;
-            --D: #ff7f7f;
-            --E: #ff7fff;
+            --color-bg: #000;
         }
 
         * {
@@ -71,34 +65,45 @@
         .game-area {
             flex: var(--game-area-ratio);
             background-color: transparent;
-            border-width: 10px;
-            border-style: solid;
-            border-image-source: linear-gradient(20deg, #003, #055);
-            border-image-slice: 1;
-            animation: color-change 4s linear infinite;
+            border: 10px solid var(--color-bg);
             margin-right: 5px;
             position: relative;
-            overflow: hidden;
+            /* overflow: hidden; */
             aspect-ratio: 16/9;
         }
-
-        @keyframes color-change{
-            0%,100%{
-                border-image: conic-gradient(var(--bA), var(--bB), var(--bC), var(--bD), var(--bA)) 1;
-            }
-            25%{
-                border-image: conic-gradient(var(--bD), var(--bA), var(--bB), var(--bC), var(--bD)) 1;
-            }
-            50%{
-                border-image: conic-gradient(var(--bC), var(--bD), var(--bA), var(--bB), var(--bC)) 1;
-            }
-            75%{
-                border-image: conic-gradient(var(--bB), var(--bC), var(--bD), var(--bA), var(--bB)) 1;
-            }
+        .game-inner {
+            /* border: 2px solid #00ffff; */
+            height: 100%;
+            width: 100%;
+            animation: rgb-split 3s ease-in-out infinite;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            box-sizing: border-box;
         }
 
-        .game-placeholder {
-            display: none;
+        @keyframes rgb-split {
+            0%, 100% {
+                box-shadow: 
+                    2px 0 0 var(--bA),
+                    -2px 0 0 var(--bB);
+            }
+            25% {
+                box-shadow: 
+                    0 2px 0 var(--bA),
+                    0 -2px 0 var(--bB);
+            }
+            50% {
+                box-shadow: 
+                    -2px 0 0 var(--bA),
+                    2px 0 0 var(--bB);
+            }
+            75% {
+                box-shadow: 
+                    0 -2px 0 var(--bA),
+                    0 2px 0 var(--bB);
+            }
         }
 
         .info-area {
@@ -113,20 +118,20 @@
 
         .clock-area {
             flex: var(--clock-ratio);
-            background-color: #1e1e1e;
-            border: 10px solid black;
-            overflow: hidden;
+            background-color: var(--color-bg);
+            border: 10px solid var(--color-bg);
+            overflow: visible;
             position: relative;
+            padding-bottom: 2px;
+            margin-right: 21px;
         }
 
         .comment-area {
             flex: var(--comment-ratio);
             background-color: transparent;
-            border: 10px solid black;
+            border: 10px solid var(--color-bg);
             display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #666;
+            color: none;
             font-size: 18px;
         }
         .comment-inner {
@@ -139,7 +144,8 @@
         /* 区切り線 - #003背景 */
         .section-divider {
             height: 2px;
-            background-color: #003;
+            background-color: transparent;
+            border: none;
             margin: 0;
         }
 
@@ -147,7 +153,7 @@
         .bottom-section {
             flex: 1;
             display: flex;
-            background-color: #000;
+            background-color: var(--color-bg);
             padding: 10px;
             gap: 10px;
         }
@@ -363,13 +369,21 @@
         <div class="top-section">
             <!-- 左上：ゲーム画面エリア（完全透明） -->
             <div class="game-area">
+                <div class="game-inner"></div>
             </div>
             
             <!-- 右上：時計・コメントエリア -->
             <div class="info-area">
-                <div class="clock-area">
-                    <!-- 外部サイト（通常サイズ） -->
+                <!-- <div class="clock-area">
                     <iframe class="normal-iframe" src="https://dj-kata.github.io/obs_misc/2356_clock/cyber_banner_clock.html"></iframe>
+                </div> -->
+
+                <div class="clock-area" id="scaled-container-clock">
+                    <iframe class="scaled-iframe" id="scaled-iframe-clock" src="https://dj-kata.github.io/obs_misc/2356_clock/cyber_banner_clock.html"></iframe>
+                    <div class="placeholder" id="placeholder-clock" style="display: none;">
+                        <div>時計読み込み中...</div>
+                        <small>Clock Loading...</small>
+                    </div>
                 </div>
                 <div class="comment-area">
                     <div class="comment-inner"></div>
@@ -378,7 +392,7 @@
         </div>
         
         <!-- 区切り線 -->
-        <div class="section-divider"></div>
+        <!-- <div class="section-divider"></div> -->
         
         <!-- 下段 -->
         <div class="bottom-section">
@@ -557,6 +571,7 @@
         $(function(){
             // スケーリング対応iframeの設定（左下のみ）
             setupScaledIframe('scaled-iframe-1', 'scaled-container-1', 2800, 510, 'fit');
+            setupScaledIframe('scaled-iframe-clock', 'scaled-container-clock', 380, 220, 'fit');
 
             // CSS制御
             $('#scaled-iframe-1').on('load', function(){
@@ -568,6 +583,16 @@
                     console.log('CSS制御成功: scaled-iframe-1');
                 } catch(e) {
                     console.warn('CSS制御失敗（同一オリジン制約）: scaled-iframe-1');
+                }
+            });
+
+            $('#scaled-iframe-clock').on('load', function(){
+                try {
+                    $(this).contents().find('body').css('background','transparent');
+                    // 時計ページ用のCSS調整があれば追加
+                    console.log('CSS制御成功: scaled-iframe-clock');
+                } catch(e) {
+                    console.warn('CSS制御失敗（同一オリジン制約）: scaled-iframe-clock');
                 }
             });
 
