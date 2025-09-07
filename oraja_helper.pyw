@@ -632,12 +632,15 @@ class MainWindow:
     
     def update_db_status(self):
         """dbfile状態の表示を更新"""
-        if self.database_accessor.is_valid():
-            self.file_status_var.set("OK")
-            self.file_status_label.config(foreground="blue")
-        else:
-            self.file_status_var.set("NG")
-            self.file_status_label.config(foreground="red")
+        try:
+            if self.database_accessor.is_valid():
+                self.file_status_var.set("OK")
+                self.file_status_label.config(foreground="blue")
+            else:
+                self.file_status_var.set("NG")
+                self.file_status_label.config(foreground="red")
+        except Exception:
+            pass
     
     def update_game_state_display(self):
         """ゲーム状態表示を更新"""
