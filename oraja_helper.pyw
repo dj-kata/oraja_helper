@@ -201,7 +201,7 @@ class MainWindow:
                 if os.path.exists('update.exe'):
                     logger.info('アップデート確認のため終了します')
                     res = subprocess.Popen('update.exe')
-                    self.on_close()
+                    self.on_closing()
                 else:
                     raise ValueError("update.exeがありません")
         else:
