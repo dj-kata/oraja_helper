@@ -536,7 +536,7 @@ class ManageResults:
             for d in sorted(list(folder_updates.keys())):
                 msg += f"{d.strip()}: "
                 for i,u in enumerate(folder_updates[d]):
-                    if u > 0:
+                    if (i >= 4) and (u > 0):
                         msg += f"{lamps[i]}+{u},"
                 msg += '\n'
 
