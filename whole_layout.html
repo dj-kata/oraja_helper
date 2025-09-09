@@ -721,11 +721,22 @@
                 if (hour2El) hour2El.classList.add('flash');
                 if (min1El) min1El.classList.add('flash');
                 if (min2El) min2El.classList.add('flash');
+                if (sec1El) sec1El.classList.remove('flash');
+                if (sec2El) sec2El.classList.remove('flash');
             } else if (enableFlash === '1' && minutes === flashHH && seconds === flashMM) {
+                if (hour1El) hour1El.classList.remove('flash');
+                if (hour2El) hour2El.classList.remove('flash');
                 if (min1El) min1El.classList.add('flash');
                 if (min2El) min2El.classList.add('flash');
                 if (sec1El) sec1El.classList.add('flash');
                 if (sec2El) sec2El.classList.add('flash');
+            }else{
+                if (hour1El) hour1El.classList.remove('flash');
+                if (hour2El) hour2El.classList.remove('flash');
+                if (min1El) min1El.classList.remove('flash');
+                if (min2El) min2El.classList.remove('flash');
+                if (sec1El) sec1El.classList.remove('flash');
+                if (sec2El) sec2El.classList.remove('flash');
             }
             
             // 日付表示を更新
