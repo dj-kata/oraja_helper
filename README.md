@@ -44,14 +44,20 @@ playerフォルダはdbファイルが入っているフォルダを指定して
 
 # 各HTMLファイルについて
 仕様上、OBSのブラウザソース以外では表示できないので注意。
-各ファイルのサンプルを以下に示す。推奨サイズを記載するが、配信画面のレイアウトに合わせて変えるとよい。
+各ファイルのサンプルを以下に示す。推奨サイズを記載するが、配信画面のレイアウトに合わせて変えるとよいです。
+
+各HTMLファイルではカスタムCSS経由でカスタマイズすることができます。  
+対応するソースをダブルクリックしてプロパティを開き、カスタムCSSの欄に記載してください。  
+(1行目の```body{ background-color: rgba(0, 0, 0, 0); margin: 0px auto; overflow: hidden; }```は自動で挿入されています。)
+<img width="1060" height="916" alt="image" src="https://github.com/user-attachments/assets/7534d532-dc6a-4867-b631-7ccf9b044a48" />
 
 ## today_result.html (プレーログ)
 幅2000，高さ1500
 <img width="557" alt="Image" src="https://github.com/user-attachments/assets/a917bad9-dfe5-4f7c-b410-3fa817184ab9" />
 
-OBSでtoday_result.htmlのカスタムCSSに以下のプロパティを設定することで、表示する曲数を変更できます。  
-ランプ、スコア、BPが一切更新されなかったプレイを非表示にするための設定も可能です。
+以下のプロパティを設定することで、表示する曲数を変更できます。  
+ランプ、スコア、BPが一切更新されなかったプレイを非表示にするための設定も可能です。  
+ヘッダ部分(青い部分)の非表示設定も可能です。
 
 ```css
 :root{
@@ -61,7 +67,7 @@ OBSでtoday_result.htmlのカスタムCSSに以下のプロパティを設定す
     /*   更新のないログを表示しない   */
     --skip-no-update: 1;
 
-    /* 1なら日付、ノーツ数などのヘッダ部を表示*/
+    /* 1なら日付、ノーツ数などのヘッダ部を表示、0なら表示しない */
     --enable-header: 1;
 }
 ```
@@ -70,12 +76,31 @@ OBSでtoday_result.htmlのカスタムCSSに以下のプロパティを設定す
 幅2400，高さ3000
 <img width="613" alt="Image" src="https://github.com/user-attachments/assets/6b122384-c17b-4aeb-86b4-d93493ddc6fd" />
 
+以下のプロパティを設定することで、ヘッダ部分(青い部分)の非表示設定が可能です。
+```css
+:root{
+    /* 1なら日付、ノーツ数などのヘッダ部を表示、0なら表示しない */
+    --enable-header: 1;
+}
+```
+
 ## whole_layout.html (配信画面風レイアウト)
 幅1920，高さ1080
 <img width="1590" alt="Image" src="https://github.com/user-attachments/assets/01e3111f-3d40-4ae5-a5a7-1b0ae185768a" />
 
 注意:OBS制御設定からプレー画面の登録をしないとplaytime及びpaceが0のままになります。
 (0のときはgridを消すように変更する予定)
+
+以下のプロパティを設定することで、右上の時計が指定時刻に光る機能を利用できます。  
+```css
+:root{
+  --enable-flash:1; /* 1なら指定時刻に光る機能を有効にする、0なら無効 */
+
+  /* デフォルトでは23時56分に光るように設定されている。変更したい場合は変更する */
+  --flash-hh: 23;
+  --flash-mm: 56;
+}
+```
 
 ## info_grid.html (情報ビュー、サイバー調)
 幅1920，高さ200(横6列時)
@@ -84,6 +109,14 @@ OBSでtoday_result.htmlのカスタムCSSに以下のプロパティを設定す
 ## info_detailed.html (情報ビュー、シンプルな見た目)
 幅1920，高さ160
 <img width="1356" alt="Image" src="https://github.com/user-attachments/assets/2add8d33-1227-4192-8e22-08f4e97e0aeb" />
+
+以下のプロパティを設定することで、1行に表示するパネルの数を変更できます。  
+```css
+:root{
+  /* デフォルトでは1行に6列分表示 */
+  --grid-columns: 6;
+}
+```
 
 # その他
 今後追加するかもしれない機能
