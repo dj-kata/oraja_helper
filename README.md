@@ -52,7 +52,7 @@ playerフォルダはdbファイルが入っているフォルダを指定して
 <img width="1060" height="916" alt="image" src="https://github.com/user-attachments/assets/7534d532-dc6a-4867-b631-7ccf9b044a48" />
 
 ## today_result.html (プレーログ)
-幅2000，高さ1500
+幅2000，高さ1500  
 <img width="557" alt="Image" src="https://github.com/user-attachments/assets/a917bad9-dfe5-4f7c-b410-3fa817184ab9" />
 
 以下のプロパティを設定することで、表示する曲数を変更できます。  
@@ -73,7 +73,7 @@ playerフォルダはdbファイルが入っているフォルダを指定して
 ```
 
 ## receipt.html (成果まとめ)
-幅2400，高さ3000
+幅2400，高さ3000  
 <img width="613" alt="Image" src="https://github.com/user-attachments/assets/6b122384-c17b-4aeb-86b4-d93493ddc6fd" />
 
 以下のプロパティを設定することで、ヘッダ部分(青い部分)の非表示設定が可能です。
@@ -85,7 +85,7 @@ playerフォルダはdbファイルが入っているフォルダを指定して
 ```
 
 ## whole_layout.html (配信画面風レイアウト)
-幅1920，高さ1080
+幅1920，高さ1080  
 <img width="1590" alt="Image" src="https://github.com/user-attachments/assets/01e3111f-3d40-4ae5-a5a7-1b0ae185768a" />
 
 注意:OBS制御設定からプレー画面の登録をしないとplaytime及びpaceが0のままになります。
@@ -103,11 +103,11 @@ playerフォルダはdbファイルが入っているフォルダを指定して
 ```
 
 ## info_grid.html (情報ビュー、サイバー調)
-幅1920，高さ200(横6列時)
+幅1920，高さ200(横6列時)  
 <img width="1308" alt="Image" src="https://github.com/user-attachments/assets/0a6be005-80be-4000-bc6a-ad0e98750c23" />
 
 ## info_detailed.html (情報ビュー、シンプルな見た目)
-幅1920，高さ160
+幅1920，高さ160  
 <img width="1356" alt="Image" src="https://github.com/user-attachments/assets/2add8d33-1227-4192-8e22-08f4e97e0aeb" />
 
 以下のプロパティを設定することで、1行に表示するパネルの数を変更できます。  
