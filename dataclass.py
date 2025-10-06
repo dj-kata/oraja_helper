@@ -6,6 +6,7 @@ import bz2
 import glob
 import datetime
 import os
+import re
 import sqlite3
 import pandas as pd
 import copy
@@ -533,7 +534,15 @@ class ManageResults:
                             folder_updates[d] = [0]*11
                         folder_updates[d][r.lamp] += 1
 
-            for d in sorted(list(folder_updates.keys())):
+            def sort_key(s):
+                # 文字列を英字部分と数字部分に分割
+                match = re.match(r'([a-zA-Z]+)(\d+)', s)
+                if match:
+                    prefix, num = match.groups()
+                    return (prefix, int(num))  # 数値として比較
+                return (s, 0)
+
+            for d in sorted(list(folder_updates.keys()), key=sort_key):
                 msg += f"{d.strip()}: "
                 for i,u in enumerate(folder_updates[d]):
                     if (i >= 4) and (u > 0):
