@@ -425,6 +425,14 @@
             margin-bottom: 3px;
             line-height: 1;
         }
+        /* 数値が大きい場合の自動調整 */
+        .info-stat-value.large-number {
+            font-size: 1.5rem;
+        }
+
+        .info-stat-value.very-large-number {
+            font-size: 1.4rem;
+        }
 
         .info-stat-unit {
             font-size: 0.6rem;
@@ -539,6 +547,7 @@
             text-align: center;
             line-height: 1.2;
         }
+
     </style>
 </head>
 <body>
@@ -844,7 +853,8 @@
             getxml.done(function(xml){
                 // xmlデータからほしいデータをfindで探し処理
                 var notes = Number($(xml).find('Items notes').text()).toLocaleString();
-                var notes_month = Number($(xml).find('Items notes_month').text()).toLocaleString();
+                var notes_month_int = Number($(xml).find('Items notes_month').text())
+                var notes_month = notes_month_int.toLocaleString()
                 var sr = $(xml).find('Items total_score_rate').text();
                 var plays = $(xml).find('Items playcount').text();
                 var playtime = $(xml).find('Items playtime').text();
@@ -856,6 +866,16 @@
                 $('score_rate').html(sr);
                 $('playtime').html(playtime);
                 $('pace').html(pace);
+
+                // MONTHLYの数値サイズに応じてクラスを調整
+                var monthlyValueElement = $('.info-monthly-panel .info-stat-value');
+                monthlyValueElement.removeClass('large-number very-large-number');
+        
+                if (notes_month_int >= 1000000) {
+                    monthlyValueElement.addClass('very-large-number');
+                } else if (notes_month_int >= 100000) {
+                    monthlyValueElement.addClass('large-number');
+                }
 
                 // playtimeとpaceの表示/非表示を制御
                 var hidePlaytime = playtime === '0:00:00';
