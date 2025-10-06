@@ -528,7 +528,7 @@ class ManageResults:
             folder_updates = {}
             for k in self.today_updates.keys():
                 r = self.today_updates[k]
-                if r.lamp > r.pre_lamp: # 更新した曲
+                if r.lamp >= 4 and r.lamp > r.pre_lamp: # 更新した曲
                     for d in r.difficulties:
                         if d not in folder_updates.keys():
                             folder_updates[d] = [0]*11
