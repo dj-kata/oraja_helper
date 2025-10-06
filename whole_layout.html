@@ -856,6 +856,20 @@
                 $('score_rate').html(sr);
                 $('playtime').html(playtime);
                 $('pace').html(pace);
+
+                // playtimeとpaceの表示/非表示を制御
+                var hidePlaytime = playtime === '0:00:00';
+                var hidePace = pace === '0';
+
+                $('.info-playtime-panel').toggle(!hidePlaytime);
+                $('.info-pace-panel').toggle(!hidePace);
+
+                // グリッドのカラム数を調整
+                var visiblePanels = 6;
+                if (hidePlaytime) visiblePanels--;
+                if (hidePace) visiblePanels--;
+
+                $('.info-stats-grid').css('grid-template-columns', `repeat(${visiblePanels}, 1fr)`);
             });
             getxml.fail(function(err) {
                 // データ読み込み失敗時の処理
