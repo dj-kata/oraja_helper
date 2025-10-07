@@ -878,7 +878,7 @@
                 }
 
                 // playtimeとpaceの表示/非表示を制御
-                var hidePlaytime = playtime === '0:00:00';
+                var hidePlaytime = (playtime === '0:00:00')||(playtime === '0');
                 var hidePace = pace === '0';
 
                 $('.info-playtime-panel').toggle(!hidePlaytime);
