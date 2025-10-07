@@ -535,11 +535,11 @@ class ManageResults:
                         folder_updates[d][r.lamp] += 1
 
             def sort_key(s):
-                # 文字列を英字部分と数字部分に分割
-                match = re.match(r'([a-zA-Z]+)(\d+)', s)
+                # 数字以外の文字(英字・日本語など)と数字部分に分割
+                match = re.match(r'([^\d]+)(\d+)', s)
                 if match:
                     prefix, num = match.groups()
-                    return (prefix, int(num))  # 数値として比較
+                    return (prefix, int(num))
                 return (s, 0)
 
             for d in sorted(list(folder_updates.keys()), key=sort_key):
