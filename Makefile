@@ -7,17 +7,17 @@ srcs=$(subst update.py,,$(wildcard *.py)) $(wildcard *.pyw)
 html_files=$(wildcard *.html)
 
 all: $(target_zip)
-$(target_zip): $(target) $(project_name)/update.exe $(html_files) version.txt
+$(target_zip): $(target) $(html_files) version.txt
 	@cp version.txt $(project_name)
 	@cp -a $(html_files) $(project_name)
 	@rm -rf $(project_name)/log
-	@zip $(target_zip) $(project_name)/*
+	@rm -rf $(project_name)/tmp
+	@rm -rf $(project_name)/*.orh
+	@zip -r $(target_zip) $(project_name)
 
 $(target): $(srcs)
 # 	@$(wuv) run pyinstaller $(project_name).pyw --distpath="./$(project_name)" --clean --windowed --onefile --icon="assets/icon.ico" --add-data "assets/icon.ico;assets"
 	@$(wuv) run setup.py build
-$(project_name)/update.exe: update.py
-	@$(wuv) run pyinstaller $< --distpath="./$(project_name)" --clean --windowed --onefile --icon="assets/icon.ico" --add-data "assets/icon.ico;assets"
 
 dist: 
 	@cp -a html to_bin/

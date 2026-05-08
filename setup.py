@@ -127,11 +127,17 @@ executables = [
     Executable(
         script="oraja_helper.pyw",
         base=base,
-        target_name="oraja_helper.exe" if sys.platform == "win32" else "IIDXHelper",
+        target_name="oraja_helper.exe" if sys.platform == "win32" else "oraja_helper",
         icon='src/icon.ico',  # アイコンファイルがあれば指定: "resources/icon.ico"
         shortcut_name="oraja_helper",
         shortcut_dir="DesktopFolder",
-    )
+    ),
+    Executable(
+        script="update.py",
+        base=base,
+        target_name="update.exe" if sys.platform == "win32" else "update",
+        icon='src/icon.ico',
+    ),
 ]
 
 # セットアップ

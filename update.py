@@ -194,36 +194,42 @@ class GitHubUpdater:
                 shutil.copy2(item, self.backup_dir)
     
     def replace_files2(self):
-        target_dir = '.'
+        target_dir = self.base_dir
         logger.debug(f'now moving..., repo:{self.github_repo}')
-        p = Path(f'tmp/{self.github_repo}')
+        p = self.temp_dir / self.github_repo
         failed_list = []
-        logger.debug('now moving...')
-        for f in p.iterdir():
-            logger.debug(f"f:{f}, is_dir:{f.is_dir()}")
-            if f.is_dir():
-                subdir=f.relative_to(f'tmp/{self.github_repo}')
-                logger.debug(f"mkdir {subdir}")
-                os.makedirs(subdir, exist_ok=True)
-        for f in p.glob('**/*.*'):
+        logger.debug(f'now moving... from={p}, to={target_dir}')
+
+        if not p.exists():
+            raise FileNotFoundError(f"更新ファイルの展開先が見つかりません: {p}")
+
+        for f in p.rglob('*'):
+            if not f.is_file():
+                continue
+
             try:
-                base = str(f.relative_to(f'tmp/{self.github_repo}'))
-                if self.updator_exe_name in str(f):
-                    shutil.copy2(str(f), target_dir+'/new_'+base)
-                    logger.debug(f"from={str(f)}, to={target_dir+'/new_'+base}")
+                relative_path = f.relative_to(p)
+                target_path = target_dir / relative_path
+
+                if relative_path.name == self.updator_exe_name:
+                    target_path = target_dir / f"new_{self.updator_exe_name}"
+                    shutil.copy2(f, target_path)
+                    logger.debug(f"copy updater from={f}, to={target_path}")
                 else:
-                    shutil.move(str(f), target_dir+'/'+base)
-                    logger.debug(f"from={str(f)}, to={target_dir+'/'+base}")
+                    target_path.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.move(f, target_path)
+                    logger.debug(f"move from={f}, to={target_path}")
             except Exception:
-                if self.updator_exe_name not in str(f):
-                    failed_list.append(f)
+                if f.name != self.updator_exe_name:
+                    failed_list.append(str(f.relative_to(p)))
                 logger.debug(f"error! ({f})")
                 logger.debug(traceback.format_exc())
-        shutil.rmtree(f'tmp/{self.github_repo}')
-        out = ''
+
+        shutil.rmtree(p)
         if len(failed_list) > 0:
             out = '更新に失敗したファイル(tmp/tmp.zipから手動展開してください): '
             out += '\n'.join(failed_list)
+            raise RuntimeError(out)
 
     def create_restart_script(self, new_exe_path):
         logger.info('')
@@ -233,7 +239,7 @@ class GitHubUpdater:
             script_content = f"""@echo off
 timeout /t 2 /nobreak >nul
 move "{new_exe_path}" "{self.base_dir / self.updator_exe_name}"
-start "" "{self.main_exe_name}"
+start "" "{self.base_dir / self.main_exe_name}"
 del "%~f0"
 """
             with open(script_path, 'w', encoding='shift_jis') as f:
@@ -315,7 +321,7 @@ del "%~f0"
         Args:
             zip_path (str): path of zipfile
         """
-        shutil.unpack_archive(zip_path, 'tmp')
+        shutil.unpack_archive(zip_path, self.temp_dir)
 
     def check_and_update(self):
         """
@@ -358,7 +364,7 @@ del "%~f0"
                             logger.info('replace')
                             self.replace_files2()
                             
-                            new_exe_path = Path('.') / f"new_{self.updator_exe_name}"
+                            new_exe_path = self.base_dir / f"new_{self.updator_exe_name}"
                             # 更新完了後にメインプログラムを再起動するためのバッチファイルを作成
                             self.create_restart_script(new_exe_path)
 
