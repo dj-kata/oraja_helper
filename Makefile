@@ -14,7 +14,8 @@ $(target_zip): $(target) $(project_name)/update.exe $(html_files) version.txt
 	@zip $(target_zip) $(project_name)/*
 
 $(target): $(srcs)
-	@$(wuv) run pyinstaller $(project_name).pyw --distpath="./$(project_name)" --clean --windowed --onefile --icon="assets/icon.ico" --add-data "assets/icon.ico;assets"
+# 	@$(wuv) run pyinstaller $(project_name).pyw --distpath="./$(project_name)" --clean --windowed --onefile --icon="assets/icon.ico" --add-data "assets/icon.ico;assets"
+	@$(wuv) run setup.py build
 $(project_name)/update.exe: update.py
 	@$(wuv) run pyinstaller $< --distpath="./$(project_name)" --clean --windowed --onefile --icon="assets/icon.ico" --add-data "assets/icon.ico;assets"
 
