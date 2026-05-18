@@ -5,6 +5,7 @@ target_zip=$(project_name).zip
 srcs=$(subst update.py,,$(wildcard *.py)) $(wildcard *.pyw)
 #html_files=$(wildcard html/*.*)
 html_files=$(wildcard *.html)
+ZIP ?= 7z a -tzip -mx=1 -mmt=on
 
 all: $(target_zip)
 $(target_zip): $(target) $(html_files) version.txt
@@ -13,7 +14,7 @@ $(target_zip): $(target) $(html_files) version.txt
 	@rm -rf $(project_name)/log
 	@rm -rf $(project_name)/tmp
 	@rm -rf $(project_name)/*.orh
-	@zip -r $(target_zip) $(project_name)
+	$(ZIP) $(target_zip) $(project_name)
 
 $(target): $(srcs)
 # 	@$(wuv) run pyinstaller $(project_name).pyw --distpath="./$(project_name)" --clean --windowed --onefile --icon="assets/icon.ico" --add-data "assets/icon.ico;assets"
