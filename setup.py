@@ -8,7 +8,18 @@ import os
 from pathlib import Path
 
 include_files = []
-    
+
+# OBSブラウザソース用HTML
+for html_file in Path(".").glob("*.html"):
+    include_files.append((str(html_file), str(html_file)))
+
+# HTMLから参照する静的素材
+for asset_file in [
+    Path("src/random_pattern.png"),
+]:
+    if asset_file.exists():
+        include_files.append((str(asset_file), str(asset_file)))
+
 # アイコンファイル
 if os.path.exists('src/icon.ico'):
     include_files.append(('src/icon.ico', 'src/icon.ico'))

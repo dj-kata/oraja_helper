@@ -525,6 +525,12 @@ class MainWindow:
             "difficulty": ", ".join(difficulties),
             "difficulties": difficulties,
             "option": self.format_option(data) if data.get("scene") in ("play", "result") else "",
+            "optionRaw": data.get("option") or "",
+            "optionId": data.get("optionId", ""),
+            "randomPlacement": data.get("randomPlacement") or "",
+            "option2PRaw": data.get("option2P") or "",
+            "option2PId": data.get("option2PId", ""),
+            "randomPlacement2P": data.get("randomPlacement2P") or "",
             "history": history,
         }
         with open(outfile, 'w', encoding='utf-8') as f:

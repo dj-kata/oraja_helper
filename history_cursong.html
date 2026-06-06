@@ -86,6 +86,48 @@
             min-height: 30px;
         }
 
+        .option-line {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 0;
+        }
+
+        .option-label {
+            flex: 0 0 auto;
+        }
+
+        .random-pattern {
+            display: inline-flex;
+            align-items: center;
+            gap: 2px;
+            line-height: 0;
+            vertical-align: middle;
+        }
+
+        .random-pattern + .option-text,
+        .option-text + .random-pattern {
+            margin-left: 8px;
+        }
+
+        .random-digit {
+            display: inline-block;
+            flex: 0 0 auto;
+            width: 30px;
+            height: 49px;
+            background-image: url("./src/random_pattern.png");
+            background-repeat: no-repeat;
+            background-size: 239.0px 49px;
+            background-position: calc(var(--digit-index) * -29.875px) 0;
+        }
+
+        .random-pattern-small .random-digit {
+            width: 20px;
+            height: 33px;
+            background-size: 160.7px 33px;
+            background-position: calc(var(--digit-index) * -20.0875px) 0;
+        }
+
         .history {
             margin-top: 12px;
             border: 2px solid rgba(148, 163, 184, 0.3);
@@ -216,12 +258,66 @@
             });
         }
 
+        function randomPatternFromText(optionText) {
+            const text = String(optionText || "").trim();
+            const upper = text.toUpperCase();
+            if (!text || text === "?") {
+                return "";
+            }
+
+            const explicit = text.match(/[1-7]{7}/);
+            if (explicit) {
+                return explicit[0];
+            }
+            if (upper.includes("MIRROR")) {
+                return "7654321";
+            }
+            if (
+                upper.includes("NORMAL") ||
+                upper.includes("REGULAR") ||
+                upper.includes("OFF") ||
+                text.includes("正規")
+            ) {
+                return "1234567";
+            }
+            return "";
+        }
+
+        function randomPatternHtml(pattern, small) {
+            if (!/^[1-7]{7}$/.test(pattern || "")) {
+                return "";
+            }
+            const sizeClass = small ? " random-pattern-small" : "";
+            return '<span class="random-pattern' + sizeClass + '" aria-label="' + pattern + '">' +
+                pattern.split("").map(function (digit) {
+                    return '<span class="random-digit" style="--digit-index:' + (Number(digit) - 1) + '"></span>';
+                }).join("") +
+                '</span>';
+        }
+
+        function optionHtml(optionText, small) {
+            const text = String(optionText || "").trim();
+            const parts = text.split("/").map(function (part) {
+                const trimmed = part.trim();
+                const pattern = randomPatternFromText(trimmed);
+                const patternMarkup = randomPatternHtml(pattern, small);
+                const label = trimmed.replace(/[1-7]{7}/, "").trim();
+                const labelMarkup = label ? '<span class="option-text">' + escapeHtml(label) + '</span>' : "";
+                return patternMarkup
+                    ? '<span class="option-line">' + labelMarkup + patternMarkup + '</span>'
+                    : '<span class="option-line"><span class="option-text">' + escapeHtml(trimmed || "?") + '</span></span>';
+            });
+            return parts.join('<span class="option-text"> / </span>');
+        }
+
         function update(data) {
             document.getElementById("title").textContent = data.title || "No song";
             document.getElementById("artist").textContent = data.artist || "";
             document.getElementById("difficulty").textContent = data.difficulty || "-";
             document.getElementById("scene").textContent = sceneNames[data.scene] || "waiting";
-            document.getElementById("option").textContent = data.option ? "OPTION: " + data.option : "";
+            document.getElementById("option").innerHTML = data.option
+                ? '<span class="option-line"><span class="option-label">OPTION:</span>' + optionHtml(data.option, false) + '</span>'
+                : "";
 
             const body = document.getElementById("history-body");
             const history = Array.isArray(data.history) ? data.history : [];
@@ -239,7 +335,7 @@
                     '<div class="score">' + escapeHtml(r.score || 0) + '</div>',
                     '<div class="rate">' + Number(r.scoreRate || 0).toFixed(2) + '%</div>',
                     '<div class="bp">' + escapeHtml(r.bp || 0) + '</div>',
-                    '<div class="history-option">' + escapeHtml(r.option || "?") + '</div>',
+                    '<div class="history-option">' + optionHtml(r.option || "?", true) + '</div>',
                     '</div>'
                 ].join("");
             }).join("");

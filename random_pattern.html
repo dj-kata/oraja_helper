@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="ja">
+<head>
+    <meta charset="utf-8">
+    <title>Random Pattern</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: transparent;
+        }
+
+        #pattern {
+            display: none;
+            align-items: center;
+            gap: 2px;
+            width: max-content;
+            height: 100px;
+            line-height: 0;
+        }
+
+        .random-digit {
+            display: inline-block;
+            flex: 0 0 auto;
+            width: 60.875px;
+            height: 100px;
+            background-image: url("./src/random_pattern.png");
+            background-repeat: no-repeat;
+            background-size: 487px 100px;
+            background-position: calc(var(--digit-index) * -60.875px) 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="pattern" aria-label=""></div>
+
+    <script>
+        function patternFromText(optionText) {
+            const text = String(optionText || "").trim();
+            const upper = text.toUpperCase();
+            const explicit = text.match(/[1-7]{7}/);
+            if (explicit) {
+                return explicit[0];
+            }
+            if (upper.includes("MIRROR")) {
+                return "7654321";
+            }
+            if (upper.includes("S-RANDOM") || upper.includes("S RANDOM") || upper.includes("SUPER RANDOM")) {
+                return "";
+            }
+            if (!text || upper.includes("NORMAL") || upper.includes("REGULAR") || upper.includes("OFF") || text.includes("正規")) {
+                return "1234567";
+            }
+            return "";
+        }
+
+        function patternFromData(data) {
+            if (!data || data.scene !== "play") {
+                return "";
+            }
+            const explicit = String(data.randomPlacement || "").match(/^[1-7]{7}$/);
+            if (explicit) {
+                return explicit[0];
+            }
+            return patternFromText(data.optionRaw || data.option || "");
+        }
+
+        function render(pattern) {
+            const root = document.getElementById("pattern");
+            if (!/^[1-7]{7}$/.test(pattern || "")) {
+                root.style.display = "none";
+                root.innerHTML = "";
+                root.setAttribute("aria-label", "");
+                return;
+            }
+
+            root.innerHTML = pattern.split("").map(function (digit) {
+                return '<span class="random-digit" style="--digit-index:' + (Number(digit) - 1) + '"></span>';
+            }).join("");
+            root.setAttribute("aria-label", pattern);
+            root.style.display = "flex";
+        }
+
+        function load() {
+            const oldScript = document.getElementById("history-cursong-data");
+            if (oldScript) {
+                oldScript.remove();
+            }
+
+            const script = document.createElement("script");
+            script.id = "history-cursong-data";
+            script.src = "./history_cursong_data.js?ts=" + Date.now();
+            script.onload = function () {
+                render(patternFromData(window.__ORAJA_HELPER_CURRENT_SONG__));
+            };
+            script.onerror = function () {
+                render("");
+            };
+            document.body.appendChild(script);
+        }
+
+        load();
+        setInterval(load, 500);
+    </script>
+</body>
+</html>
