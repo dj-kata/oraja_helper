@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="ja">
+
+<head>
+    <meta charset="utf-8">
+    <title>Playing Song</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        :root {
+            --font-size: 34px;
+            --stroke-width: 3px;
+            --scroll-speed: 60;
+        }
+
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: transparent;
+        }
+
+        body {
+            display: flex;
+            align-items: center;
+            font-family: "Meiryo", "Yu Gothic", sans-serif;
+        }
+
+        #song {
+            display: none;
+            width: 100vw;
+            overflow: hidden;
+            color: #ffffff;
+            font-size: var(--font-size);
+            font-weight: 800;
+            line-height: 1.18;
+            white-space: nowrap;
+            -webkit-text-stroke: var(--stroke-width) #000000;
+            paint-order: stroke fill;
+            text-shadow:
+                3px 3px 0 #000000,
+                -1px -1px 0 #000000,
+                1px -1px 0 #000000,
+                -1px 1px 0 #000000,
+                1px 1px 0 #000000;
+        }
+
+        #song.visible {
+            display: block;
+        }
+
+        #track {
+            display: inline-flex;
+            align-items: center;
+            width: max-content;
+            will-change: transform;
+        }
+
+        #song.scrolling #track {
+            animation-name: slide-song;
+            animation-duration: var(--duration);
+            animation-timing-function: linear;
+            animation-iteration-count: infinite;
+        }
+
+        .song-text {
+            flex: 0 0 auto;
+        }
+
+        .song-spacer {
+            display: none;
+            flex: 0 0 auto;
+            width: 50vw;
+            height: 1px;
+        }
+
+        #song.scrolling .song-spacer,
+        #song.scrolling .song-clone {
+            display: inline-block;
+        }
+
+        .song-clone {
+            display: none;
+            flex: 0 0 auto;
+        }
+
+        @keyframes slide-song {
+            from {
+                transform: translateX(0);
+            }
+
+            to {
+                transform: translateX(calc(-1 * var(--scroll-distance)));
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="song" aria-label="">
+        <div id="track">
+            <span id="main-text" class="song-text"></span>
+            <span class="song-spacer" aria-hidden="true"></span>
+            <span id="clone-text" class="song-clone" aria-hidden="true"></span>
+        </div>
+    </div>
+
+    <script>
+        const POLL_INTERVAL_MS = 500;
+        const MIN_DURATION_SECONDS = 8;
+        let lastText = "";
+
+        function displayText(data) {
+            if (!data || data.scene !== "play") {
+                return "";
+            }
+
+            const artist = String(data.artist || "").trim();
+            const title = String(data.title || "").trim();
+            if (artist && title) {
+                return artist + " / " + title;
+            }
+            return artist || title;
+        }
+
+        function applyScrollState() {
+            const song = document.getElementById("song");
+            const mainText = document.getElementById("main-text");
+            const track = document.getElementById("track");
+            const textWidth = mainText.getBoundingClientRect().width;
+            const windowWidth = song.clientWidth || window.innerWidth;
+
+            song.classList.remove("scrolling");
+            track.style.removeProperty("--scroll-distance");
+            track.style.removeProperty("--duration");
+
+            if (textWidth <= windowWidth) {
+                return;
+            }
+
+            const spacerWidth = windowWidth / 2;
+            const distance = textWidth + spacerWidth;
+            const speed = Number(getComputedStyle(document.documentElement).getPropertyValue("--scroll-speed")) || 90;
+            const duration = Math.max(MIN_DURATION_SECONDS, distance / speed);
+
+            track.style.setProperty("--scroll-distance", distance + "px");
+            track.style.setProperty("--duration", duration + "s");
+            song.classList.add("scrolling");
+        }
+
+        function render(text) {
+            if (text === lastText) {
+                return;
+            }
+            lastText = text;
+
+            const song = document.getElementById("song");
+            const mainText = document.getElementById("main-text");
+            const cloneText = document.getElementById("clone-text");
+            const track = document.getElementById("track");
+
+            song.classList.remove("visible", "scrolling");
+            track.style.removeProperty("--scroll-distance");
+            track.style.removeProperty("--duration");
+            mainText.textContent = text;
+            cloneText.textContent = text;
+            song.setAttribute("aria-label", text);
+
+            if (!text) {
+                return;
+            }
+
+            song.classList.add("visible");
+            requestAnimationFrame(applyScrollState);
+        }
+
+        function load() {
+            const oldScript = document.getElementById("history-cursong-data");
+            if (oldScript) {
+                oldScript.remove();
+            }
+
+            const script = document.createElement("script");
+            script.id = "history-cursong-data";
+            script.src = "./history_cursong_data.js?ts=" + Date.now();
+            script.onload = function () {
+                render(displayText(window.__ORAJA_HELPER_CURRENT_SONG__));
+            };
+            script.onerror = function () {
+                render("");
+            };
+            document.body.appendChild(script);
+        }
+
+        window.addEventListener("resize", function () {
+            if (lastText) {
+                applyScrollState();
+            }
+        });
+
+        load();
+        setInterval(load, POLL_INTERVAL_MS);
+    </script>
+</body>
+
+</html>
