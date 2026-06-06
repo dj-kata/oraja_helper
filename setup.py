@@ -51,6 +51,7 @@ build_exe_options = {
         "icon",
         "config",
         "dataclass",
+        "named_pipe_receiver",
         "obs_control",
         "pickle_converter",
         "tooltip",

@@ -192,6 +192,7 @@ class OneResult:
                  ,bp=None, pre_bp=999999
                  ,lamp=None, pre_lamp = 0
                  ,score_rate=None, date=None, judge=None, sha256=None, length=None, notes=None
+                 ,option='?'
                 ):
         self.title = title
         self.difficulties = difficulties
@@ -206,6 +207,7 @@ class OneResult:
         self.date = date
         self.judge = judge
         self.sha256 = sha256
+        self.option = option or '?'
         try:
             self.length = float(length/1000)
         except Exception:
@@ -242,6 +244,7 @@ class OneResult:
         ret.one_difficulty = self.one_difficulty
         ret.date = self.date
         ret.notes = self.notes
+        ret.option = getattr(other, 'option', '?') if other.score > self.score else getattr(self, 'option', '?')
         ret.length = self.length
         ret.density = self.density
         return ret
@@ -254,6 +257,7 @@ class OneResult:
         print(f"lamp:{self.lamp}, score:{self.score} ({self.score_rate}%)", end=',')
         print(f"bp:{self.bp}", end=',')
         print(f"notes:{self.notes}, density={self.density:.2f}, ", end=',')
+        print(f"option:{getattr(self, 'option', '?')}", end=',')
         print(f"judge:{list(map(int, self.judge))}", end=',')
         print(f"date:{datetime.datetime.fromtimestamp(self.date)}, ", end=',')
         print(f"sha256:{self.sha256[:10]}")
@@ -599,11 +603,12 @@ class DataBaseAccessor:
         ret &= os.path.exists(self.db_songinfo)
         return ret
 
-    def set_config(self, config:Config):
+    def set_config(self, config:Config, reload_db: bool = True):
         """設定ファイルを読み込み、各dbfileのパスを更新する。
 
         Args:
             config (Config, optional): config情報。 Defaults to Config().
+            reload_db (bool, optional): dbfileを即時リロードするか。 Defaults to True.
         """
         logger.info('config updated')
         self.config = config
@@ -616,8 +621,11 @@ class DataBaseAccessor:
         self.db_scoredatalog = os.path.join(self.config.player_path, 'scoredatalog.db')
 
         # configが確定した時点でdbをリロード
-        reload = self.reload_db()
-        print(f"reloaded: {reload}")
+        if reload_db:
+            reload = self.reload_db()
+            print(f"reloaded: {reload}")
+        else:
+            logger.info("db reload skipped")
         self.manage_results.set_config(config)
 
     def load_one_dbfile(self, dbpath:str, dbname:str) -> pd.DataFrame:

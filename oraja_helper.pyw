@@ -9,11 +9,14 @@ import sys
 import base64
 import io
 import datetime
+import json
+import traceback
 from config import Config
 from settings import SettingsWindow
 from obs_control import OBSControlWindow, ImageRecognitionData, OBSWebSocketManager
 from dataclass import *
 from pickle_converter import *
+from named_pipe_receiver import NamedPipeLineReceiver
 import requests
 from bs4 import BeautifulSoup
 
@@ -142,7 +145,10 @@ class MainWindow:
         # スレッド管理
         self.is_running = True
         self.db_monitoring_thread = None
+        self.named_pipe_thread = None
         self.screen_monitoring_thread = None
+        self.named_pipe_receiver = None
+        self.use_named_pipe = False
         
         # 監視データ
         self.file_exists = False
@@ -154,10 +160,12 @@ class MainWindow:
 
         # データアクセス用クラス初期化
         self.database_accessor = DataBaseAccessor()
-        self.database_accessor.set_config(self.config)
+        self.init_named_pipe_receiver()
+        self.database_accessor.set_config(self.config, reload_db=not self.use_named_pipe)
         # self.database_accessor.read_old_results()
         self.database_accessor.manage_results.write_history_xml()
         self.database_accessor.manage_results.write_updates_xml()
+        self.write_current_song_history({})
         
         self.setup_ui()
         self.set_embedded_icon()
@@ -343,8 +351,204 @@ class MainWindow:
     
     def start_all_threads(self):
         """全スレッドを開始"""
-        self.start_db_monitoring()
+        if self.use_named_pipe:
+            self.start_named_pipe_monitoring()
+        else:
+            self.start_db_monitoring()
         self.start_screen_monitoring()
+
+    def init_named_pipe_receiver(self):
+        """lr2orajaからのnamed pipe受信が使えるか確認"""
+        try:
+            self.named_pipe_receiver = NamedPipeLineReceiver("oraja_helper")
+            self.use_named_pipe = self.named_pipe_receiver.is_available()
+            if self.use_named_pipe:
+                logger.info("named pipe受信を使用します")
+        except Exception as e:
+            self.named_pipe_receiver = None
+            self.use_named_pipe = False
+            logger.warning(f"named pipe受信初期化失敗。DB監視にフォールバックします: {e}")
+
+    def start_named_pipe_monitoring(self):
+        """named pipe受信スレッドを開始"""
+        if self.named_pipe_thread is None or not self.named_pipe_thread.is_alive():
+            self.named_pipe_thread = threading.Thread(target=self.named_pipe_worker, daemon=True)
+            self.named_pipe_thread.start()
+            print("named pipe受信スレッドを開始しました")
+
+    def named_pipe_worker(self):
+        """lr2orajaからのJSON Linesを受信するワーカースレッド"""
+        print("named pipe受信スレッド開始")
+        while self.is_running:
+            try:
+                line = self.named_pipe_receiver.read_line()
+                if line:
+                    self.dump_named_pipe_receive(line)
+                    logger.info(f"named pipe受信: {line}")
+                    self.handle_oraja_helper_event(self.normalize_pipe_data(json.loads(line)))
+            except Exception as e:
+                logger.error(traceback.format_exc())
+                print(f"named pipe受信エラー: {e}")
+                time.sleep(1)
+        print("named pipe受信スレッド終了")
+
+    def dump_named_pipe_receive(self, line):
+        """named pipeで受けた生データを切り分け用に保存"""
+        try:
+            os.makedirs("log", exist_ok=True)
+            payload = {
+                "time": datetime.datetime.now().isoformat(),
+                "line": line,
+            }
+            with open(os.path.join("log", "oraja_helper_pipe_receive.jsonl"), "a", encoding="utf-8") as f:
+                f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+        except Exception:
+            logger.error(traceback.format_exc())
+
+    def handle_oraja_helper_event(self, data):
+        """lr2orajaから受け取ったイベントを処理"""
+        event = data.get("event")
+        scene = data.get("scene")
+        if scene in ("select", "play", "result"):
+            self.apply_game_state(scene, "named pipe")
+
+        if event == "song_result":
+            result = self.create_result_from_pipe_event(data)
+            if result and result.is_valid():
+                self.database_accessor.manage_results.add_result(result)
+                self.database_accessor.manage_results.update_stats()
+                self.database_accessor.manage_results.save()
+                self.database_accessor.manage_results.write_history_xml()
+                self.database_accessor.manage_results.write_updates_xml()
+                self.root.after(0, self.update_stats_gui)
+
+        if scene in ("select", "play", "result"):
+            self.write_current_song_history(data)
+
+    def normalize_pipe_data(self, value):
+        """libGDX Jsonのclass/value形式を通常のJSON値へ戻す"""
+        if isinstance(value, dict):
+            if set(value.keys()) == {"class", "value"}:
+                return self.normalize_pipe_data(value.get("value"))
+            return {k: self.normalize_pipe_data(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [self.normalize_pipe_data(v) for v in value]
+        return value
+
+    def create_result_from_pipe_event(self, data):
+        """named pipeのsong_resultイベントをOneResultへ変換"""
+        judges = data.get("judges", {})
+        judge = [
+            int(judges.get("epg", 0)) + int(judges.get("lpg", 0)),
+            int(judges.get("egr", 0)) + int(judges.get("lgr", 0)),
+            int(judges.get("egd", 0)) + int(judges.get("lgd", 0)),
+            int(judges.get("ebd", 0)) + int(judges.get("lbd", 0)),
+            int(judges.get("epr", 0)) + int(judges.get("lpr", 0)),
+            int(judges.get("ems", 0)) + int(judges.get("lms", 0)),
+        ]
+        sha256 = data.get("sha256") or ""
+        md5 = data.get("md5") or ""
+        notes = sum(judge[:5])
+        difficulties = (
+            self.database_accessor.difftable.search_from_hash(sha256)
+            or self.database_accessor.difftable.search_from_hash(md5)
+            or [""]
+        )
+        return OneResult(
+            title=data.get("title") or "",
+            difficulties=difficulties,
+            score=int(data.get("score", 0)),
+            score_rate=f"{float(data.get('scoreRate', 0.0)):.2f}",
+            lamp=int(data.get("clearLampId", 0)),
+            bp=int(data.get("missCount", 0)),
+            judge=judge,
+            sha256=sha256,
+            date=int(datetime.datetime.now().timestamp()),
+            notes=notes,
+            option=self.format_option(data),
+        )
+
+    def format_option(self, data):
+        """表示・保存用のオプション文字列を作る"""
+        option = data.get("option") or "?"
+        placement = data.get("randomPlacement") or ""
+        if placement:
+            option = f"{option} {placement}"
+
+        option2p = data.get("option2P") or ""
+        placement2p = data.get("randomPlacement2P") or ""
+        if option2p:
+            if placement2p:
+                option2p = f"{option2p} {placement2p}"
+            option = f"{option} / {option2p}"
+
+        return option
+
+    def write_current_song_history(self, data, outfile='history_cursong.json'):
+        """現在曲と、その曲のoraja_helper内プレーログ履歴を書き出す"""
+        sha256 = data.get("sha256") or ""
+        md5 = data.get("md5") or ""
+        difficulties = (
+            self.database_accessor.difftable.search_from_hash(sha256)
+            or self.database_accessor.difftable.search_from_hash(md5)
+            or []
+        )
+        results = [
+            r for r in self.database_accessor.manage_results.all_results
+            if r.is_valid() and r.sha256 == sha256
+        ]
+        results.sort(reverse=True)
+
+        lamps = ['', '', '', '', 'E', 'C', 'H', 'EXH', 'FC', 'P', 'MAX']
+        history = []
+        for r in results[:20]:
+            lamp = int(r.lamp) if r.lamp is not None else 0
+            history.append({
+                "title": r.title or "",
+                "difficulty": ", ".join(r.difficulties or []),
+                "score": int(r.score or 0),
+                "scoreRate": float(r.score_rate or 0),
+                "lamp": lamps[lamp] if 0 <= lamp < len(lamps) else str(lamp),
+                "lampId": lamp,
+                "bp": int(r.bp or 0),
+                "option": getattr(r, "option", "?") or "?",
+                "timestamp": datetime.datetime.fromtimestamp(r.date).strftime("%Y/%m/%d %H:%M:%S") if r.date else "",
+            })
+
+        output = {
+            "scene": data.get("scene") or "",
+            "event": data.get("event") or "",
+            "title": data.get("title") or "",
+            "artist": data.get("artist") or "",
+            "sha256": sha256,
+            "md5": md5,
+            "difficulty": ", ".join(difficulties),
+            "difficulties": difficulties,
+            "option": self.format_option(data) if data.get("scene") in ("play", "result") else "",
+            "history": history,
+        }
+        with open(outfile, 'w', encoding='utf-8') as f:
+            json.dump(output, f, ensure_ascii=False, indent=2)
+        js = "window.__ORAJA_HELPER_CURRENT_SONG__ = " + json.dumps(output, ensure_ascii=False) + ";\n"
+        with open(os.path.splitext(outfile)[0] + "_data.js", 'w', encoding='utf-8') as f:
+            f.write(js.replace("</script", "<\\/script"))
+
+    def apply_game_state(self, new_state, source):
+        """ゲーム状態変更時の共通処理"""
+        if new_state == self.current_game_state:
+            return
+
+        if self.current_game_state:
+            self.execute_obs_trigger(f"{self.current_game_state}_end")
+
+        self.update_playtime(self.current_game_state, new_state)
+
+        if new_state:
+            self.execute_obs_trigger(f"{new_state}_start")
+
+        self.current_game_state = new_state
+        self.root.after(0, self.update_game_state_display)
+        print(f"ゲーム状態変化（{source}）: {self.current_game_state}")
     
     def start_db_monitoring(self):
         """ファイル監視スレッドを開始"""
@@ -480,26 +684,7 @@ class MainWindow:
             elif "select" in detected_states:
                 new_state = "select"
             
-            # 状態が変化した場合のみ処理
-            if new_state != self.current_game_state:
-
-                # 前の状態の終了処理
-                if self.current_game_state:
-                    self.execute_obs_trigger(f"{self.current_game_state}_end")
-                
-                # プレイ時間の更新
-                self.update_playtime(self.current_game_state, new_state)
-
-                # 新しい状態の開始処理
-                if new_state:
-                    self.execute_obs_trigger(f"{new_state}_start")
-
-                self.current_game_state = new_state
-                
-                # UI更新
-                self.root.after(0, self.update_game_state_display)
-                
-                print(f"ゲーム状態変化（画像認識）: {self.current_game_state}")
+            self.apply_game_state(new_state, "画像認識")
                 
         except Exception as e:
             print(f"ゲーム状態判定エラー: {e}")
@@ -558,26 +743,7 @@ class MainWindow:
                 else:
                     new_state = None
                 
-                # 状態が変化した場合
-                if new_state != self.current_game_state:
-
-                    # 前の状態の終了処理
-                    if self.current_game_state:
-                        self.execute_obs_trigger(f"{self.current_game_state}_end")
-
-                    # プレイ時間の更新
-                    self.update_playtime(self.current_game_state, new_state)
-
-                    # 新しい状態の開始処理
-                    if new_state:
-                        self.execute_obs_trigger(f"{new_state}_start")
-                    
-                    self.current_game_state = new_state
-                    
-                    # UI更新
-                    self.root.after(0, self.update_game_state_display)
-                    
-                    print(f"ゲーム状態変化（ファイルベース）: {self.current_game_state}")
+                self.apply_game_state(new_state, "ファイルベース")
                     
         except Exception as e:
             print(f"ファイルベースゲーム状態判定エラー: {e}")
@@ -598,7 +764,7 @@ class MainWindow:
         self.config.load_config()
         self.obs_manager.set_config(self.config)
         logger.info(f"added! len(all_results):{len(self.database_accessor.manage_results.all_results)}, len(today_results):{len(self.database_accessor.manage_results.today_results)}")
-        self.database_accessor.set_config(self.config)
+        self.database_accessor.set_config(self.config, reload_db=not self.use_named_pipe)
         logger.info(f"added! len(all_results):{len(self.database_accessor.manage_results.all_results)}, len(today_results):{len(self.database_accessor.manage_results.today_results)}")
         self.update_db_status()
 
@@ -633,6 +799,11 @@ class MainWindow:
     def update_db_status(self):
         """dbfile状態の表示を更新"""
         try:
+            if self.use_named_pipe:
+                self.file_status_var.set("PIPE")
+                self.file_status_label.config(foreground="green")
+                return
+
             if self.database_accessor.is_valid():
                 self.file_status_var.set("OK")
                 self.file_status_label.config(foreground="blue")
@@ -870,6 +1041,10 @@ class MainWindow:
         if self.db_monitoring_thread and self.db_monitoring_thread.is_alive():
             print("ファイル監視スレッドの終了を待機中...")
             self.db_monitoring_thread.join(timeout=2)
+
+        if self.named_pipe_thread and self.named_pipe_thread.is_alive():
+            print("named pipe受信スレッドの終了を待機中...")
+            self.named_pipe_thread.join(timeout=1)
         
         if self.screen_monitoring_thread and self.screen_monitoring_thread.is_alive():
             print("画面監視スレッドの終了を待機中...")

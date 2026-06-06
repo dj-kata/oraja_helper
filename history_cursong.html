@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="ja">
+<head>
+    <meta charset="utf-8">
+    <title>Current Song History</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 12px;
+            overflow: hidden;
+            font-family: "Meiryo", "Yu Gothic", sans-serif;
+            color: #f8fbff;
+            background: linear-gradient(135deg, #08111f 0%, #102133 54%, #111827 100%);
+        }
+
+        #all {
+            width: 100%;
+            max-width: 1920px;
+            margin: 0 auto;
+        }
+
+        .current {
+            padding: 14px 18px;
+            border: 2px solid rgba(125, 211, 252, 0.45);
+            background: rgba(8, 20, 34, 0.92);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+        }
+
+        .topline {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 18px;
+        }
+
+        .song-title {
+            min-width: 0;
+            font-size: 44px;
+            font-weight: 800;
+            line-height: 1.12;
+            text-shadow: 3px 3px 0 #000;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .song-meta {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 6px;
+            flex: 0 0 auto;
+            min-width: 260px;
+        }
+
+        .difficulty {
+            font-size: 38px;
+            font-weight: 800;
+            color: #facc15;
+            text-shadow: 2px 2px 0 #000;
+            white-space: nowrap;
+        }
+
+        .scene {
+            font-size: 20px;
+            color: #93c5fd;
+        }
+
+        .artist {
+            margin-top: 8px;
+            font-size: 24px;
+            color: #cbd5e1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .option {
+            margin-top: 8px;
+            font-size: 22px;
+            color: #86efac;
+            min-height: 30px;
+        }
+
+        .history {
+            margin-top: 12px;
+            border: 2px solid rgba(148, 163, 184, 0.3);
+            background: rgba(15, 23, 42, 0.82);
+        }
+
+        .history-header,
+        .row {
+            display: grid;
+            grid-template-columns: 180px 120px 140px 130px 100px 1fr;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .history-header {
+            padding: 8px 14px;
+            font-size: 18px;
+            color: #bae6fd;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.35);
+        }
+
+        .row {
+            padding: 8px 14px;
+            font-size: 22px;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+        }
+
+        .row:last-child {
+            border-bottom: none;
+        }
+
+        .row:nth-child(even) {
+            background: rgba(255, 255, 255, 0.035);
+        }
+
+        .score {
+            font-weight: 800;
+            color: #ffffff;
+        }
+
+        .rate {
+            color: #a7f3d0;
+        }
+
+        .bp {
+            color: #fca5a5;
+        }
+
+        .lamp {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 86px;
+            min-height: 34px;
+            font-weight: 800;
+            color: #020617;
+            background: #94a3b8;
+        }
+
+        .lamp-4 { background: #94a3b8; }
+        .lamp-5 { background: #22c55e; }
+        .lamp-6 { background: #38bdf8; }
+        .lamp-7 { background: #f8fafc; }
+        .lamp-8 { background: #f97316; }
+        .lamp-9 { background: #f0abfc; }
+        .lamp-10 { background: #facc15; }
+
+        .history-option {
+            color: #86efac;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .empty {
+            padding: 26px 14px;
+            font-size: 26px;
+            color: #94a3b8;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div id="all">
+        <section class="current">
+            <div class="topline">
+                <div class="song-title" id="title">No song</div>
+                <div class="song-meta">
+                    <div class="difficulty" id="difficulty">-</div>
+                    <div class="scene" id="scene">waiting</div>
+                </div>
+            </div>
+            <div class="artist" id="artist"></div>
+            <div class="option" id="option"></div>
+        </section>
+
+        <section class="history">
+            <div class="history-header">
+                <div>Time</div>
+                <div>Lamp</div>
+                <div>Score</div>
+                <div>Rate</div>
+                <div>BP</div>
+                <div>Option</div>
+            </div>
+            <div id="history-body">
+                <div class="empty">Waiting for current song...</div>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        const sceneNames = {
+            select: "選曲",
+            play: "プレー",
+            result: "リザルト"
+        };
+
+        function escapeHtml(value) {
+            return String(value ?? "").replace(/[&<>"']/g, function (c) {
+                return {
+                    "&": "&amp;",
+                    "<": "&lt;",
+                    ">": "&gt;",
+                    "\"": "&quot;",
+                    "'": "&#39;"
+                }[c];
+            });
+        }
+
+        function update(data) {
+            document.getElementById("title").textContent = data.title || "No song";
+            document.getElementById("artist").textContent = data.artist || "";
+            document.getElementById("difficulty").textContent = data.difficulty || "-";
+            document.getElementById("scene").textContent = sceneNames[data.scene] || "waiting";
+            document.getElementById("option").textContent = data.option ? "OPTION: " + data.option : "";
+
+            const body = document.getElementById("history-body");
+            const history = Array.isArray(data.history) ? data.history : [];
+            if (history.length === 0) {
+                body.innerHTML = '<div class="empty">No play history for this chart</div>';
+                return;
+            }
+
+            body.innerHTML = history.map(function (r) {
+                const lampId = Number(r.lampId) || 0;
+                return [
+                    '<div class="row">',
+                    '<div>' + escapeHtml(r.timestamp || "") + '</div>',
+                    '<div><span class="lamp lamp-' + lampId + '">' + escapeHtml(r.lamp || "") + '</span></div>',
+                    '<div class="score">' + escapeHtml(r.score || 0) + '</div>',
+                    '<div class="rate">' + Number(r.scoreRate || 0).toFixed(2) + '%</div>',
+                    '<div class="bp">' + escapeHtml(r.bp || 0) + '</div>',
+                    '<div class="history-option">' + escapeHtml(r.option || "?") + '</div>',
+                    '</div>'
+                ].join("");
+            }).join("");
+        }
+
+        function load() {
+            const oldScript = document.getElementById("history-cursong-data");
+            if (oldScript) {
+                oldScript.remove();
+            }
+
+            const script = document.createElement("script");
+            script.id = "history-cursong-data";
+            script.src = "./history_cursong_data.js?ts=" + Date.now();
+            script.onload = function () {
+                if (window.__ORAJA_HELPER_CURRENT_SONG__) {
+                    update(window.__ORAJA_HELPER_CURRENT_SONG__);
+                }
+            };
+            script.onerror = function () {
+                console.log("history_cursong_data.js load failed");
+            };
+            document.body.appendChild(script);
+        }
+
+        load();
+        setInterval(load, 1000);
+    </script>
+</body>
+</html>
