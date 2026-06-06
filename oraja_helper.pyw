@@ -449,11 +449,7 @@ class MainWindow:
         sha256 = data.get("sha256") or ""
         md5 = data.get("md5") or ""
         notes = sum(judge[:5])
-        difficulties = (
-            self.database_accessor.difftable.search_from_hash(sha256)
-            or self.database_accessor.difftable.search_from_hash(md5)
-            or [""]
-        )
+        difficulties = self.search_difficulties_from_hashes(sha256, md5) or [""]
         return OneResult(
             title=data.get("title") or "",
             difficulties=difficulties,
@@ -467,6 +463,16 @@ class MainWindow:
             notes=notes,
             option=self.format_option(data),
         )
+
+    def search_difficulties_from_hashes(self, *hashes):
+        difficulties = []
+        seen = set()
+        for hash_value in hashes:
+            for difficulty in self.database_accessor.difftable.search_from_hash(hash_value):
+                if difficulty not in seen:
+                    difficulties.append(difficulty)
+                    seen.add(difficulty)
+        return difficulties
 
     def format_option(self, data):
         """表示・保存用のオプション文字列を作る"""
@@ -488,11 +494,7 @@ class MainWindow:
         """現在曲と、その曲のoraja_helper内プレーログ履歴を書き出す"""
         sha256 = data.get("sha256") or ""
         md5 = data.get("md5") or ""
-        difficulties = (
-            self.database_accessor.difftable.search_from_hash(sha256)
-            or self.database_accessor.difftable.search_from_hash(md5)
-            or []
-        )
+        difficulties = self.search_difficulties_from_hashes(sha256, md5)
         results = [
             r for r in self.database_accessor.manage_results.all_results
             if r.is_valid() and r.sha256 == sha256

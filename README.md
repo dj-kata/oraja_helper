@@ -102,6 +102,20 @@ playerフォルダはdbファイルが入っているフォルダを指定して
 }
 ```
 
+## now_playing.html (プレー中曲表示)
+幅は配信画面のレイアウトに合わせて調整してください。プレー画面のときだけ、現在プレイ中の曲を `難易度 曲名` 形式で表示します。  
+背景は透明で、文字列が表示幅に収まらない場合は自動で横スクロールします。
+
+以下のプロパティを設定することで、文字サイズ、縁取り、スクロール速度、難易度の色を変更できます。
+```css
+:root{
+  --font-size: 34px;
+  --stroke-width: 3px;
+  --scroll-speed: 60;
+  --difficulty-color: #ffd84d;
+}
+```
+
 ## info_grid.html (情報ビュー、サイバー調)
 幅1920，高さ200(横6列時)  
 <img width="1308" alt="Image" src="https://github.com/user-attachments/assets/0a6be005-80be-4000-bc6a-ad0e98750c23" />

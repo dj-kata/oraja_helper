@@ -398,10 +398,19 @@
             return '<span class="lamp ' + lampClass + '" aria-label="' + escapeHtml(lampName || "") + '"></span>';
         }
 
+        function difficultyText(data) {
+            if (Array.isArray(data.difficulties) && data.difficulties.length > 0) {
+                return data.difficulties.map(function (difficulty) {
+                    return String(difficulty || "").trim();
+                }).filter(Boolean).join(", ");
+            }
+            return String(data.difficulty || "").trim();
+        }
+
         function update(data) {
             document.getElementById("title").textContent = data.title || "No song";
             document.getElementById("artist").textContent = data.artist || "";
-            document.getElementById("difficulty").textContent = data.difficulty || "-";
+            document.getElementById("difficulty").textContent = difficultyText(data) || "-";
             document.getElementById("scene").textContent = sceneNames[data.scene] || "waiting";
             document.getElementById("option").innerHTML = data.option
                 ? '<span class="option-line"><span class="option-label">OPTION:</span>' + optionHtml(data.option, false) + '</span>'

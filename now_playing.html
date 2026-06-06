@@ -13,6 +13,7 @@
             --font-size: 34px;
             --stroke-width: 3px;
             --scroll-speed: 60;
+            --difficulty-color: #ffd84d;
         }
 
         html,
@@ -69,7 +70,18 @@
         }
 
         .song-text {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35em;
             flex: 0 0 auto;
+        }
+
+        .difficulty {
+            color: var(--difficulty-color);
+        }
+
+        .title {
+            color: #ffffff;
         }
 
         .song-spacer {
@@ -79,9 +91,12 @@
             height: 1px;
         }
 
-        #song.scrolling .song-spacer,
-        #song.scrolling .song-clone {
+        #song.scrolling .song-spacer {
             display: inline-block;
+        }
+
+        #song.scrolling .song-clone {
+            display: inline-flex;
         }
 
         .song-clone {
@@ -106,26 +121,33 @@
         <div id="track">
             <span id="main-text" class="song-text"></span>
             <span class="song-spacer" aria-hidden="true"></span>
-            <span id="clone-text" class="song-clone" aria-hidden="true"></span>
+            <span id="clone-text" class="song-text song-clone" aria-hidden="true"></span>
         </div>
     </div>
 
     <script>
         const POLL_INTERVAL_MS = 500;
         const MIN_DURATION_SECONDS = 8;
-        let lastText = "";
+        let lastLabel = "";
 
-        function displayText(data) {
+        function difficultyText(data) {
+            if (Array.isArray(data.difficulties) && data.difficulties.length > 0) {
+                return data.difficulties.map(function (difficulty) {
+                    return String(difficulty || "").trim();
+                }).filter(Boolean).join(", ");
+            }
+            return String(data.difficulty || "").trim();
+        }
+
+        function displayData(data) {
             if (!data || data.scene !== "play") {
-                return "";
+                return { difficulty: "", title: "", label: "" };
             }
 
-            const artist = String(data.artist || "").trim();
+            const difficulty = difficultyText(data);
             const title = String(data.title || "").trim();
-            if (artist && title) {
-                return artist + " / " + title;
-            }
-            return artist || title;
+            const label = [difficulty, title].filter(Boolean).join(" ");
+            return { difficulty: difficulty, title: title, label: label };
         }
 
         function applyScrollState() {
@@ -153,11 +175,29 @@
             song.classList.add("scrolling");
         }
 
-        function render(text) {
-            if (text === lastText) {
+        function setSongText(root, data) {
+            root.innerHTML = "";
+
+            if (data.difficulty) {
+                const difficulty = document.createElement("span");
+                difficulty.className = "difficulty";
+                difficulty.textContent = data.difficulty;
+                root.appendChild(difficulty);
+            }
+
+            if (data.title) {
+                const title = document.createElement("span");
+                title.className = "title";
+                title.textContent = data.title;
+                root.appendChild(title);
+            }
+        }
+
+        function render(data) {
+            if (data.label === lastLabel) {
                 return;
             }
-            lastText = text;
+            lastLabel = data.label;
 
             const song = document.getElementById("song");
             const mainText = document.getElementById("main-text");
@@ -167,11 +207,11 @@
             song.classList.remove("visible", "scrolling");
             track.style.removeProperty("--scroll-distance");
             track.style.removeProperty("--duration");
-            mainText.textContent = text;
-            cloneText.textContent = text;
-            song.setAttribute("aria-label", text);
+            setSongText(mainText, data);
+            setSongText(cloneText, data);
+            song.setAttribute("aria-label", data.label);
 
-            if (!text) {
+            if (!data.label) {
                 return;
             }
 
@@ -189,16 +229,16 @@
             script.id = "history-cursong-data";
             script.src = "./history_cursong_data.js?ts=" + Date.now();
             script.onload = function () {
-                render(displayText(window.__ORAJA_HELPER_CURRENT_SONG__));
+                render(displayData(window.__ORAJA_HELPER_CURRENT_SONG__));
             };
             script.onerror = function () {
-                render("");
+                render({ difficulty: "", title: "", label: "" });
             };
             document.body.appendChild(script);
         }
 
         window.addEventListener("resize", function () {
-            if (lastText) {
+            if (lastLabel) {
                 applyScrollState();
             }
         });
