@@ -177,23 +177,90 @@
         }
 
         .lamp {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            width: 86px;
-            min-height: 34px;
-            font-weight: 800;
-            color: #020617;
-            background: #94a3b8;
+            display: inline-block;
+            width: 40px;
+            height: 42px;
+            vertical-align: middle;
+            box-shadow: 3px 3px 0 #000;
         }
 
-        .lamp-4 { background: #94a3b8; }
-        .lamp-5 { background: #22c55e; }
-        .lamp-6 { background: #38bdf8; }
-        .lamp-7 { background: #f8fafc; }
-        .lamp-8 { background: #f97316; }
-        .lamp-9 { background: #f0abfc; }
-        .lamp-10 { background: #facc15; }
+        .lamp-empty {
+            display: inline-block;
+            width: 40px;
+            height: 42px;
+        }
+
+        .failed {
+            animation-name: flashfailed;
+            animation-duration: 0.08s;
+            animation-iteration-count: infinite;
+        }
+
+        @keyframes flashfailed {
+            0% { background-color: #ff2828; }
+            50% { background-color: #282828; }
+            100% { background-color: #ff2828; }
+        }
+
+        .ac { background-color: #ff66ff; }
+        .ec { background-color: #22ff22; }
+        .nc { background-color: #22ccff; }
+        .hc { background-color: #ffffff; }
+
+        .exh {
+            animation-name: flashexh;
+            animation-duration: 0.08s;
+            animation-iteration-count: infinite;
+        }
+
+        @keyframes flashexh {
+            0% { background-color: #ff2828; }
+            50% { background-color: #ffff28; }
+            100% { background-color: #ff2828; }
+        }
+
+        .fc {
+            animation-name: flashfc;
+            animation-duration: 0.2s;
+            animation-iteration-count: infinite;
+        }
+
+        @keyframes flashfc {
+            0% { background-color: #ff2828; }
+            20% { background-color: #d5ff28; }
+            40% { background-color: #28ff7e; }
+            60% { background-color: #2872ff; }
+            80% { background-color: #d528ff; }
+            100% { background-color: #ff2828; }
+        }
+
+        .perfect {
+            animation-name: flashperfect;
+            animation-duration: 0.2s;
+            animation-iteration-count: infinite;
+        }
+
+        @keyframes flashperfect {
+            0% { background-color: #ffff77; }
+            25% { background-color: #dddd33; }
+            50% { background-color: #aaaa00; }
+            75% { background-color: #dddd33; }
+            100% { background-color: #ffff77; }
+        }
+
+        .max {
+            animation-name: flashmax;
+            animation-duration: 0.2s;
+            animation-iteration-count: infinite;
+        }
+
+        @keyframes flashmax {
+            0% { background-color: #ffaaff; }
+            25% { background-color: #dd33dd; }
+            50% { background-color: #aa00aa; }
+            75% { background-color: #dd33dd; }
+            100% { background-color: #ffaaff; }
+        }
 
         .history-option {
             color: #86efac;
@@ -310,6 +377,27 @@
             return parts.join('<span class="option-text"> / </span>');
         }
 
+        function lampHtml(lampId, lampName) {
+            const classes = {
+                3: "ac",
+                4: "ec",
+                5: "nc",
+                6: "hc",
+                7: "exh",
+                8: "fc",
+                9: "perfect",
+                10: "max"
+            };
+            if (lampId <= 0) {
+                return '<span class="lamp-empty" aria-label="' + escapeHtml(lampName || "") + '"></span>';
+            }
+            const lampClass = lampId < 3 ? "failed" : classes[lampId];
+            if (!lampClass) {
+                return '<span class="lamp-empty" aria-label="' + escapeHtml(lampName || "") + '"></span>';
+            }
+            return '<span class="lamp ' + lampClass + '" aria-label="' + escapeHtml(lampName || "") + '"></span>';
+        }
+
         function update(data) {
             document.getElementById("title").textContent = data.title || "No song";
             document.getElementById("artist").textContent = data.artist || "";
@@ -331,7 +419,7 @@
                 return [
                     '<div class="row">',
                     '<div>' + escapeHtml(r.timestamp || "") + '</div>',
-                    '<div><span class="lamp lamp-' + lampId + '">' + escapeHtml(r.lamp || "") + '</span></div>',
+                    '<div>' + lampHtml(lampId, r.lamp || "") + '</div>',
                     '<div class="score">' + escapeHtml(r.score || 0) + '</div>',
                     '<div class="rate">' + Number(r.scoreRate || 0).toFixed(2) + '%</div>',
                     '<div class="bp">' + escapeHtml(r.bp || 0) + '</div>',
