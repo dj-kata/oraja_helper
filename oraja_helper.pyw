@@ -471,7 +471,7 @@ class MainWindow:
     def apply_play_end_metrics(self, data):
         """named pipeのプレー終了メトリクスを統計へ反映"""
         try:
-            played_notes = int(data.get("playedNotes", 0))
+            played_notes = self.play_end_notes_from_event(data)
             elapsed_seconds = int(data.get("elapsedSeconds", 0))
         except (TypeError, ValueError):
             logger.warning(f"invalid play end metrics: {data}")
@@ -491,6 +491,19 @@ class MainWindow:
             f"play end metrics applied: notes={played_notes}, elapsedSeconds={elapsed_seconds}, "
             f"quickRetry={data.get('quickRetry')}"
         )
+
+    def play_end_notes_from_event(self, data):
+        """song_play_endのノーツ数をリザルトと同じ判定内訳優先で求める"""
+        judges = data.get("judges")
+        if isinstance(judges, dict):
+            return (
+                int(judges.get("epg", 0)) + int(judges.get("lpg", 0)) +
+                int(judges.get("egr", 0)) + int(judges.get("lgr", 0)) +
+                int(judges.get("egd", 0)) + int(judges.get("lgd", 0)) +
+                int(judges.get("ebd", 0)) + int(judges.get("lbd", 0)) +
+                int(judges.get("epr", 0)) + int(judges.get("lpr", 0))
+            )
+        return int(data.get("playedNotes", 0))
 
     def search_difficulties_from_hashes(self, *hashes):
         difficulties = []
