@@ -299,6 +299,8 @@ class ManageResults:
         self.play_end_metrics_received = False
         self.play_end_notes = 0
         self.play_end_notes_month = 0
+        self.play_end_judge = [0, 0, 0, 0, 0, 0]
+        self.play_end_playcount = 0
         self.play_end_playtime = datetime.timedelta(seconds=0)
         self.notes = 0
         self.config = None
@@ -373,18 +375,29 @@ class ManageResults:
         if self.play_end_metrics_received:
             self.notes = self.play_end_notes
             self.notes_month = self.play_end_notes_month
+            if self.play_end_notes > 0:
+                self.score_rate = 100*(self.play_end_judge[0]*2+self.play_end_judge[1]) / self.play_end_notes / 2
+            else:
+                self.score_rate = 0
+            self.playcount = self.play_end_playcount
             self.playtime = self.play_end_playtime
-        self.playcount = len(self.today_results)
+        else:
+            self.playcount = len(self.today_results)
 
-    def add_play_end_metrics(self, notes:int, elapsed_seconds:int, date:int=None):
+    def add_play_end_metrics(self, notes:int, elapsed_seconds:int, date:int=None, judge:list=None):
         """named pipeで受けたプレー終了メトリクスを統計用に登録する"""
         result_date = datetime.datetime.fromtimestamp(date or int(datetime.datetime.now().timestamp()))
         if result_date <= datetime.datetime.fromtimestamp(int(self.start_time.timestamp()) - self.config.autoload_offset*3600):
             return
         self.play_end_metrics_received = True
-        self.play_end_notes += max(0, int(notes))
+        add_notes = max(0, int(notes))
+        self.play_end_notes += add_notes
+        self.play_end_playcount += 1
+        if judge is not None:
+            for i in range(min(6, len(judge))):
+                self.play_end_judge[i] += max(0, int(judge[i]))
         if (result_date.month == self.start_time.month) and (result_date.year == self.start_time.year):
-            self.play_end_notes_month += max(0, int(notes))
+            self.play_end_notes_month += add_notes
         self.play_end_playtime += datetime.timedelta(seconds=max(0, int(elapsed_seconds)))
         self.update_stats()
 
@@ -428,6 +441,19 @@ class ManageResults:
                 self.today_updates[result.sha256] = result
             else:
                 self.today_updates[result.sha256] += result
+
+    def remove_result(self, result:OneResult):
+        """指定したリザルトを管理対象から取り除く。"""
+        if result in self.all_results:
+            self.all_results.remove(result)
+        if result in self.today_results:
+            self.today_results.remove(result)
+            self.today_updates = {}
+            for today_result in self.today_results:
+                if today_result.sha256 not in self.today_updates:
+                    self.today_updates[today_result.sha256] = today_result
+                else:
+                    self.today_updates[today_result.sha256] += today_result
 
     def write_history_xml(self, outfile='history.xml'):
         with open(outfile, 'w', encoding='utf-8') as f:

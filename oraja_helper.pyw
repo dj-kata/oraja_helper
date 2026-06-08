@@ -154,6 +154,7 @@ class MainWindow:
         self.file_exists = False
         self.current_game_state = None  # None, "select", "play", "result"
         self.play_end_metrics_received_for_current_play = False
+        self.pending_play_end_results = {}
         
         # OBS WebSocket管理クラス初期化
         self.obs_manager = OBSWebSocketManager(status_callback=self.on_obs_status_changed)
@@ -414,6 +415,7 @@ class MainWindow:
             self.apply_game_state(scene, "named pipe")
 
         if event == "song_result":
+            self.remove_pending_play_end_result(data)
             result = self.create_result_from_pipe_event(data)
             if result and result.is_valid():
                 self.database_accessor.manage_results.add_result(result)
@@ -468,10 +470,36 @@ class MainWindow:
             option=self.format_option(data),
         )
 
+    def create_play_end_result_from_pipe_event(self, data, judge, played_notes):
+        """song_play_endイベントを履歴用のOneResultへ変換"""
+        sha256 = data.get("sha256") or ""
+        md5 = data.get("md5") or ""
+        if judge is None:
+            judge = [0, 0, 0, 0, max(0, played_notes), 0]
+
+        notes = max(0, int(played_notes))
+        score = judge[0] * 2 + judge[1]
+        score_rate = (100 * score / notes / 2) if notes > 0 else 0
+        difficulties = self.search_difficulties_from_hashes(sha256, md5) or [""]
+        return OneResult(
+            title=data.get("title") or "",
+            difficulties=difficulties,
+            score=score,
+            score_rate=f"{score_rate:.2f}",
+            lamp=int(data.get("clearLampId", 0)),
+            bp=judge[3] + judge[4] + judge[5],
+            judge=judge,
+            sha256=sha256,
+            date=int(datetime.datetime.now().timestamp()),
+            notes=notes,
+            option=self.format_option(data),
+        )
+
     def apply_play_end_metrics(self, data):
         """named pipeのプレー終了メトリクスを統計へ反映"""
         try:
-            played_notes = self.play_end_notes_from_event(data)
+            judge = self.play_end_judge_from_event(data)
+            played_notes = sum(judge[:5]) if judge is not None else int(data.get("playedNotes", 0))
             elapsed_seconds = int(data.get("elapsedSeconds", 0))
         except (TypeError, ValueError):
             logger.warning(f"invalid play end metrics: {data}")
@@ -483,7 +511,16 @@ class MainWindow:
             played_notes,
             elapsed_seconds,
             int(datetime.datetime.now().timestamp()),
+            judge,
         )
+        result = self.create_play_end_result_from_pipe_event(data, judge, played_notes)
+        if result and result.is_valid():
+            key = self.play_log_key_from_pipe_event(data)
+            self.remove_pending_play_end_result(data)
+            self.database_accessor.manage_results.add_result(result)
+            self.pending_play_end_results[key] = result
+            self.database_accessor.manage_results.update_stats()
+            self.database_accessor.manage_results.save()
         self.database_accessor.manage_results.write_history_xml()
         self.database_accessor.manage_results.write_updates_xml()
         self.root.after(0, self.update_stats_gui)
@@ -492,18 +529,34 @@ class MainWindow:
             f"quickRetry={data.get('quickRetry')}"
         )
 
-    def play_end_notes_from_event(self, data):
-        """song_play_endのノーツ数をリザルトと同じ判定内訳優先で求める"""
+    def play_log_key_from_pipe_event(self, data):
+        """play_end仮ログとsong_result正式ログを対応付けるキーを作る"""
+        return (
+            data.get("sha256") or "",
+            data.get("md5") or "",
+            self.format_option(data),
+        )
+
+    def remove_pending_play_end_result(self, data):
+        """同じプレーのplay_end仮ログがあれば取り除く"""
+        key = self.play_log_key_from_pipe_event(data)
+        result = self.pending_play_end_results.pop(key, None)
+        if result is not None:
+            self.database_accessor.manage_results.remove_result(result)
+
+    def play_end_judge_from_event(self, data):
+        """song_play_endの判定内訳をリザルトと同じ形式へ変換する"""
         judges = data.get("judges")
         if isinstance(judges, dict):
-            return (
-                int(judges.get("epg", 0)) + int(judges.get("lpg", 0)) +
-                int(judges.get("egr", 0)) + int(judges.get("lgr", 0)) +
-                int(judges.get("egd", 0)) + int(judges.get("lgd", 0)) +
-                int(judges.get("ebd", 0)) + int(judges.get("lbd", 0)) +
-                int(judges.get("epr", 0)) + int(judges.get("lpr", 0))
-            )
-        return int(data.get("playedNotes", 0))
+            return [
+                int(judges.get("epg", 0)) + int(judges.get("lpg", 0)),
+                int(judges.get("egr", 0)) + int(judges.get("lgr", 0)),
+                int(judges.get("egd", 0)) + int(judges.get("lgd", 0)),
+                int(judges.get("ebd", 0)) + int(judges.get("lbd", 0)),
+                int(judges.get("epr", 0)) + int(judges.get("lpr", 0)),
+                int(judges.get("ems", 0)) + int(judges.get("lms", 0)),
+            ]
+        return None
 
     def search_difficulties_from_hashes(self, *hashes):
         difficulties = []
