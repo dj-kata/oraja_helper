@@ -296,6 +296,10 @@ class ManageResults:
         self.today_updates = {} # resultsは全て記録するが、こちらは同じ曲ならマージする
         self.start_time = datetime.datetime.now()
         self.playtime = datetime.timedelta(seconds=0)
+        self.play_end_metrics_received = False
+        self.play_end_notes = 0
+        self.play_end_notes_month = 0
+        self.play_end_playtime = datetime.timedelta(seconds=0)
         self.notes = 0
         self.config = None
         self.load()
@@ -356,16 +360,33 @@ class ManageResults:
             for i in range(6):
                 sum_judge[i] += r.judge[i]
         self.score_rate = 0 # total
-        self.notes = sum_judge[0]+sum_judge[1]+sum_judge[2]+sum_judge[3]+sum_judge[4]
+        result_notes = sum_judge[0]+sum_judge[1]+sum_judge[2]+sum_judge[3]+sum_judge[4]
+        self.notes = result_notes
         self.notes_month = 0
         for r in reversed(self.all_results):
             result_date = datetime.datetime.fromtimestamp(r.date)
             if (result_date.month == self.start_time.month) and (result_date.year == self.start_time.year):
                 for i in range(5):
                     self.notes_month += r.judge[i]
-        if (self.notes) > 0:
-            self.score_rate = 100*(sum_judge[0]*2+sum_judge[1]) / (sum_judge[0]+sum_judge[1]+sum_judge[2]+sum_judge[3]+sum_judge[4]) / 2
+        if result_notes > 0:
+            self.score_rate = 100*(sum_judge[0]*2+sum_judge[1]) / result_notes / 2
+        if self.play_end_metrics_received:
+            self.notes = self.play_end_notes
+            self.notes_month = self.play_end_notes_month
+            self.playtime = self.play_end_playtime
         self.playcount = len(self.today_results)
+
+    def add_play_end_metrics(self, notes:int, elapsed_seconds:int, date:int=None):
+        """named pipeで受けたプレー終了メトリクスを統計用に登録する"""
+        result_date = datetime.datetime.fromtimestamp(date or int(datetime.datetime.now().timestamp()))
+        if result_date <= datetime.datetime.fromtimestamp(int(self.start_time.timestamp()) - self.config.autoload_offset*3600):
+            return
+        self.play_end_metrics_received = True
+        self.play_end_notes += max(0, int(notes))
+        if (result_date.month == self.start_time.month) and (result_date.year == self.start_time.year):
+            self.play_end_notes_month += max(0, int(notes))
+        self.play_end_playtime += datetime.timedelta(seconds=max(0, int(elapsed_seconds)))
+        self.update_stats()
 
     def merge_results(self, pre:OneResult, new:OneResult) -> OneResult:
         if (pre.sha256 != new.sha256):

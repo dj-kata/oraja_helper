@@ -153,6 +153,7 @@ class MainWindow:
         # 監視データ
         self.file_exists = False
         self.current_game_state = None  # None, "select", "play", "result"
+        self.play_end_metrics_received_for_current_play = False
         
         # OBS WebSocket管理クラス初期化
         self.obs_manager = OBSWebSocketManager(status_callback=self.on_obs_status_changed)
@@ -422,6 +423,9 @@ class MainWindow:
                 self.database_accessor.manage_results.write_updates_xml()
                 self.root.after(0, self.update_stats_gui)
 
+        if event == "song_play_end" and data.get("playEndMetrics"):
+            self.apply_play_end_metrics(data)
+
         if scene in ("select", "play", "result"):
             self.write_current_song_history(data)
 
@@ -462,6 +466,30 @@ class MainWindow:
             date=int(datetime.datetime.now().timestamp()),
             notes=notes,
             option=self.format_option(data),
+        )
+
+    def apply_play_end_metrics(self, data):
+        """named pipeのプレー終了メトリクスを統計へ反映"""
+        try:
+            played_notes = int(data.get("playedNotes", 0))
+            elapsed_seconds = int(data.get("elapsedSeconds", 0))
+        except (TypeError, ValueError):
+            logger.warning(f"invalid play end metrics: {data}")
+            return
+
+        self.play_end_metrics_received_for_current_play = True
+        self.play_st = None
+        self.database_accessor.manage_results.add_play_end_metrics(
+            played_notes,
+            elapsed_seconds,
+            int(datetime.datetime.now().timestamp()),
+        )
+        self.database_accessor.manage_results.write_history_xml()
+        self.database_accessor.manage_results.write_updates_xml()
+        self.root.after(0, self.update_stats_gui)
+        logger.info(
+            f"play end metrics applied: notes={played_notes}, elapsedSeconds={elapsed_seconds}, "
+            f"quickRetry={data.get('quickRetry')}"
         )
 
     def search_difficulties_from_hashes(self, *hashes):
@@ -553,6 +581,8 @@ class MainWindow:
 
         if new_state:
             self.execute_obs_trigger(f"{new_state}_start")
+            if new_state == "play":
+                self.play_end_metrics_received_for_current_play = False
 
         self.current_game_state = new_state
         self.root.after(0, self.update_game_state_display)
@@ -660,6 +690,9 @@ class MainWindow:
         if new_state == 'play':
             self.play_st = current_time
         elif old_state == 'play' and self.play_st is not None:
+            if self.play_end_metrics_received_for_current_play:
+                self.play_st = None
+                return
             # プレイ終了時に時間を加算
             play_duration = current_time - self.play_st
             self.database_accessor.manage_results.playtime += play_duration
