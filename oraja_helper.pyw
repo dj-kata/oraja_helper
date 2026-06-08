@@ -461,7 +461,7 @@ class MainWindow:
             difficulties=difficulties,
             score=int(data.get("score", 0)),
             score_rate=f"{float(data.get('scoreRate', 0.0)):.2f}",
-            lamp=int(data.get("clearLampId", 0)),
+            lamp=self.clear_lamp_id_from_event(data),
             bp=int(data.get("missCount", 0)),
             judge=judge,
             sha256=sha256,
@@ -486,7 +486,7 @@ class MainWindow:
             difficulties=difficulties,
             score=score,
             score_rate=f"{score_rate:.2f}",
-            lamp=int(data.get("clearLampId", 0)),
+            lamp=self.clear_lamp_id_from_event(data),
             bp=judge[3] + judge[4] + judge[5],
             judge=judge,
             sha256=sha256,
@@ -513,14 +513,6 @@ class MainWindow:
             int(datetime.datetime.now().timestamp()),
             judge,
         )
-        result = self.create_play_end_result_from_pipe_event(data, judge, played_notes)
-        if result and result.is_valid():
-            key = self.play_log_key_from_pipe_event(data)
-            self.remove_pending_play_end_result(data)
-            self.database_accessor.manage_results.add_result(result)
-            self.pending_play_end_results[key] = result
-            self.database_accessor.manage_results.update_stats()
-            self.database_accessor.manage_results.save()
         self.database_accessor.manage_results.write_history_xml()
         self.database_accessor.manage_results.write_updates_xml()
         self.root.after(0, self.update_stats_gui)
@@ -568,6 +560,32 @@ class MainWindow:
                     seen.add(difficulty)
         return difficulties
 
+    def clear_lamp_id_from_event(self, data):
+        """clearLampIdが無い場合もclearLamp文字列からランプIDを補完する"""
+        try:
+            return int(data.get("clearLampId", 0) or 0)
+        except (TypeError, ValueError):
+            pass
+
+        lamp_name = str(data.get("clearLamp") or "").strip().lower().replace(" ", "").replace("-", "")
+        lamp_ids = {
+            "failed": 1,
+            "assistclear": 3,
+            "easyclear": 4,
+            "easy": 4,
+            "clear": 5,
+            "normalclear": 5,
+            "hardclear": 6,
+            "hard": 6,
+            "exhardclear": 7,
+            "exhard": 7,
+            "fullcombo": 8,
+            "fullcomboclear": 8,
+            "perfect": 9,
+            "max": 10,
+        }
+        return lamp_ids.get(lamp_name, 0)
+
     def format_option(self, data):
         """表示・保存用のオプション文字列を作る"""
         option = data.get("option") or "?"
@@ -591,22 +609,42 @@ class MainWindow:
         difficulties = self.search_difficulties_from_hashes(sha256, md5)
         results = [
             r for r in self.database_accessor.manage_results.all_results
-            if r.is_valid() and r.sha256 == sha256
+            if r.is_valid() and r.sha256 == sha256 and int(r.lamp or 0) > 0
         ]
         results.sort(reverse=True)
 
         lamps = ['', '', '', '', 'E', 'C', 'H', 'EXH', 'FC', 'P', 'MAX']
         history = []
+        best_score_before = {}
+        best_bp_before = {}
+        for r in reversed(results):
+            score = int(r.score or 0)
+            bp = int(r.bp or 0)
+            best_score = best_score_before.get(r.sha256, 0)
+            best_bp = best_bp_before.get(r.sha256)
+            r.history_pre_score = best_score
+            r.history_diff_score = score - best_score if best_score > 0 else None
+            r.history_pre_bp = best_bp
+            r.history_diff_bp = bp - best_bp if best_bp is not None else None
+            if score > best_score:
+                best_score_before[r.sha256] = score
+            if best_bp is None or bp < best_bp:
+                best_bp_before[r.sha256] = bp
+
         for r in results[:20]:
             lamp = int(r.lamp) if r.lamp is not None else 0
             history.append({
                 "title": r.title or "",
                 "difficulty": ", ".join(r.difficulties or []),
                 "score": int(r.score or 0),
+                "preScore": int(getattr(r, "history_pre_score", 0) or 0),
+                "diffScore": getattr(r, "history_diff_score", None),
                 "scoreRate": float(r.score_rate or 0),
                 "lamp": lamps[lamp] if 0 <= lamp < len(lamps) else str(lamp),
                 "lampId": lamp,
                 "bp": int(r.bp or 0),
+                "preBp": getattr(r, "history_pre_bp", None),
+                "diffBp": getattr(r, "history_diff_bp", None),
                 "option": getattr(r, "option", "?") or "?",
                 "timestamp": datetime.datetime.fromtimestamp(r.date).strftime("%Y/%m/%d %H:%M:%S") if r.date else "",
             })
