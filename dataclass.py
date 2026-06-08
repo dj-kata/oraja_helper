@@ -455,7 +455,45 @@ class ManageResults:
                 else:
                     self.today_updates[today_result.sha256] += today_result
 
+    def fill_missing_previous_records(self):
+        """pre_*が無いnamed pipe由来ログへ過去自己ベストを補完する。"""
+        best_score = {}
+        best_lamp = {}
+        best_bp = {}
+        valid_results = [
+            r for r in self.all_results
+            if r.is_valid() and int(r.lamp or 0) > 0
+        ]
+        for r in sorted(valid_results, key=lambda result: result.date or 0):
+            sha256 = r.sha256
+            if int(r.pre_score or 0) <= 0 and best_score.get(sha256, 0) > 0:
+                r.pre_score = best_score[sha256]
+            if int(r.pre_lamp or 0) <= 0 and best_lamp.get(sha256, 0) > 0:
+                r.pre_lamp = best_lamp[sha256]
+            if int(r.pre_bp or 999999) >= 100000 and sha256 in best_bp:
+                r.pre_bp = best_bp[sha256]
+
+            score = int(r.score or 0)
+            lamp = int(r.lamp or 0)
+            bp = int(r.bp or 999999)
+            if score > best_score.get(sha256, 0):
+                best_score[sha256] = score
+            if lamp > best_lamp.get(sha256, 0):
+                best_lamp[sha256] = lamp
+            if sha256 not in best_bp or bp < best_bp[sha256]:
+                best_bp[sha256] = bp
+
+        self.today_updates = {}
+        for today_result in self.today_results:
+            if not today_result.is_valid():
+                continue
+            if today_result.sha256 not in self.today_updates:
+                self.today_updates[today_result.sha256] = today_result
+            else:
+                self.today_updates[today_result.sha256] += today_result
+
     def write_history_xml(self, outfile='history.xml'):
+        self.fill_missing_previous_records()
         with open(outfile, 'w', encoding='utf-8') as f:
             f.write(f'<?xml version="1.0" encoding="utf-8"?>\n')
             f.write("<Items>\n")
@@ -501,6 +539,7 @@ class ManageResults:
             f.write("</Items>\n")
 
     def write_updates_xml(self, outfile='updates.xml'):
+        self.fill_missing_previous_records()
         with open(outfile, 'w', encoding='utf-8') as f:
             f.write(f'<?xml version="1.0" encoding="utf-8"?>\n')
             f.write("<Items>\n")

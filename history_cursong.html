@@ -137,7 +137,7 @@
         .history-header,
         .row {
             display: grid;
-            grid-template-columns: 180px 100px 120px 90px 120px 90px 1fr;
+            grid-template-columns: 180px 120px 140px 130px 100px 1fr;
             gap: 12px;
             align-items: center;
         }
@@ -168,41 +168,12 @@
             color: #ffffff;
         }
 
-        .diff {
-            font-weight: 800;
-            color: #94a3b8;
-        }
-
-        .diff-positive {
-            color: #facc15;
-            text-shadow: 2px 2px 0 #000;
-        }
-
-        .diff-negative {
-            color: #fca5a5;
-        }
-
         .rate {
             color: #a7f3d0;
         }
 
         .bp {
             color: #fca5a5;
-        }
-
-        .bp-diff {
-            display: block;
-            margin-top: 2px;
-            font-size: 16px;
-            color: #94a3b8;
-        }
-
-        .bp-diff.diff-positive {
-            color: #fb7185;
-        }
-
-        .bp-diff.diff-negative {
-            color: #67e8f9;
         }
 
         .lamp {
@@ -325,7 +296,6 @@
                 <div>Time</div>
                 <div>Lamp</div>
                 <div>Score</div>
-                <div>Diff</div>
                 <div>Rate</div>
                 <div>BP</div>
                 <div>Option</div>
@@ -428,19 +398,6 @@
             return '<span class="lamp ' + lampClass + '" aria-label="' + escapeHtml(lampName || "") + '"></span>';
         }
 
-        function signedNumberHtml(value, goodDirection, baseClass) {
-            const numeric = Number(value);
-            const rootClass = baseClass || "diff";
-            if (!Number.isFinite(numeric) || numeric === 0) {
-                return '<span class="' + rootClass + '">-</span>';
-            }
-            const text = (numeric > 0 ? "+" : "") + numeric;
-            const improved = goodDirection === "up" ? numeric > 0 : numeric < 0;
-            const worsened = goodDirection === "up" ? numeric < 0 : numeric > 0;
-            const cls = improved ? "diff-positive" : (worsened ? "diff-negative" : "");
-            return '<span class="' + rootClass + (cls ? " " + cls : "") + '">' + escapeHtml(text) + '</span>';
-        }
-
         function difficultyText(data) {
             if (Array.isArray(data.difficulties) && data.difficulties.length > 0) {
                 return data.difficulties.map(function (difficulty) {
@@ -468,15 +425,13 @@
 
             body.innerHTML = history.map(function (r) {
                 const lampId = Number(r.lampId) || 0;
-                const bpDiff = signedNumberHtml(r.diffBp, "down", "bp-diff");
                 return [
                     '<div class="row">',
                     '<div>' + escapeHtml(r.timestamp || "") + '</div>',
                     '<div>' + lampHtml(lampId, r.lamp || "") + '</div>',
                     '<div class="score">' + escapeHtml(r.score || 0) + '</div>',
-                    '<div>' + signedNumberHtml(r.diffScore, "up") + '</div>',
                     '<div class="rate">' + Number(r.scoreRate || 0).toFixed(2) + '%</div>',
-                    '<div class="bp">' + escapeHtml(r.bp || 0) + bpDiff + '</div>',
+                    '<div class="bp">' + escapeHtml(r.bp || 0) + '</div>',
                     '<div class="history-option">' + optionHtml(r.option || "?", true) + '</div>',
                     '</div>'
                 ].join("");

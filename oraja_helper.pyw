@@ -154,7 +154,6 @@ class MainWindow:
         self.file_exists = False
         self.current_game_state = None  # None, "select", "play", "result"
         self.play_end_metrics_received_for_current_play = False
-        self.pending_play_end_results = {}
         
         # OBS WebSocket管理クラス初期化
         self.obs_manager = OBSWebSocketManager(status_callback=self.on_obs_status_changed)
@@ -415,9 +414,9 @@ class MainWindow:
             self.apply_game_state(scene, "named pipe")
 
         if event == "song_result":
-            self.remove_pending_play_end_result(data)
             result = self.create_result_from_pipe_event(data)
             if result and result.is_valid():
+                self.populate_previous_record(result)
                 self.database_accessor.manage_results.add_result(result)
                 self.database_accessor.manage_results.update_stats()
                 self.database_accessor.manage_results.save()
@@ -470,30 +469,18 @@ class MainWindow:
             option=self.format_option(data),
         )
 
-    def create_play_end_result_from_pipe_event(self, data, judge, played_notes):
-        """song_play_endイベントを履歴用のOneResultへ変換"""
-        sha256 = data.get("sha256") or ""
-        md5 = data.get("md5") or ""
-        if judge is None:
-            judge = [0, 0, 0, 0, max(0, played_notes), 0]
+    def populate_previous_record(self, result):
+        """named pipeの正式リザルトに前回自己ベストを補完する"""
+        previous_results = [
+            r for r in self.database_accessor.manage_results.all_results
+            if r.is_valid() and r.sha256 == result.sha256 and int(r.lamp or 0) > 0
+        ]
+        if not previous_results:
+            return
 
-        notes = max(0, int(played_notes))
-        score = judge[0] * 2 + judge[1]
-        score_rate = (100 * score / notes / 2) if notes > 0 else 0
-        difficulties = self.search_difficulties_from_hashes(sha256, md5) or [""]
-        return OneResult(
-            title=data.get("title") or "",
-            difficulties=difficulties,
-            score=score,
-            score_rate=f"{score_rate:.2f}",
-            lamp=self.clear_lamp_id_from_event(data),
-            bp=judge[3] + judge[4] + judge[5],
-            judge=judge,
-            sha256=sha256,
-            date=int(datetime.datetime.now().timestamp()),
-            notes=notes,
-            option=self.format_option(data),
-        )
+        result.pre_score = max(int(r.score or 0) for r in previous_results)
+        result.pre_lamp = max(int(r.lamp or 0) for r in previous_results)
+        result.pre_bp = min(int(r.bp or 999999) for r in previous_results)
 
     def apply_play_end_metrics(self, data):
         """named pipeのプレー終了メトリクスを統計へ反映"""
@@ -520,21 +507,6 @@ class MainWindow:
             f"play end metrics applied: notes={played_notes}, elapsedSeconds={elapsed_seconds}, "
             f"quickRetry={data.get('quickRetry')}"
         )
-
-    def play_log_key_from_pipe_event(self, data):
-        """play_end仮ログとsong_result正式ログを対応付けるキーを作る"""
-        return (
-            data.get("sha256") or "",
-            data.get("md5") or "",
-            self.format_option(data),
-        )
-
-    def remove_pending_play_end_result(self, data):
-        """同じプレーのplay_end仮ログがあれば取り除く"""
-        key = self.play_log_key_from_pipe_event(data)
-        result = self.pending_play_end_results.pop(key, None)
-        if result is not None:
-            self.database_accessor.manage_results.remove_result(result)
 
     def play_end_judge_from_event(self, data):
         """song_play_endの判定内訳をリザルトと同じ形式へ変換する"""
@@ -615,36 +587,16 @@ class MainWindow:
 
         lamps = ['', '', '', '', 'E', 'C', 'H', 'EXH', 'FC', 'P', 'MAX']
         history = []
-        best_score_before = {}
-        best_bp_before = {}
-        for r in reversed(results):
-            score = int(r.score or 0)
-            bp = int(r.bp or 0)
-            best_score = best_score_before.get(r.sha256, 0)
-            best_bp = best_bp_before.get(r.sha256)
-            r.history_pre_score = best_score
-            r.history_diff_score = score - best_score if best_score > 0 else None
-            r.history_pre_bp = best_bp
-            r.history_diff_bp = bp - best_bp if best_bp is not None else None
-            if score > best_score:
-                best_score_before[r.sha256] = score
-            if best_bp is None or bp < best_bp:
-                best_bp_before[r.sha256] = bp
-
         for r in results[:20]:
             lamp = int(r.lamp) if r.lamp is not None else 0
             history.append({
                 "title": r.title or "",
                 "difficulty": ", ".join(r.difficulties or []),
                 "score": int(r.score or 0),
-                "preScore": int(getattr(r, "history_pre_score", 0) or 0),
-                "diffScore": getattr(r, "history_diff_score", None),
                 "scoreRate": float(r.score_rate or 0),
                 "lamp": lamps[lamp] if 0 <= lamp < len(lamps) else str(lamp),
                 "lampId": lamp,
                 "bp": int(r.bp or 0),
-                "preBp": getattr(r, "history_pre_bp", None),
-                "diffBp": getattr(r, "history_diff_bp", None),
                 "option": getattr(r, "option", "?") or "?",
                 "timestamp": datetime.datetime.fromtimestamp(r.date).strftime("%Y/%m/%d %H:%M:%S") if r.date else "",
             })
