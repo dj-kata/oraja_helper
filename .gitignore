@@ -5,3 +5,4 @@ build/*
 *.json
 *.egg-info/*
 */*.egg-info/*
+.venv/*

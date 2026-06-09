@@ -365,16 +365,23 @@ class ManageResults:
         result_notes = sum_judge[0]+sum_judge[1]+sum_judge[2]+sum_judge[3]+sum_judge[4]
         self.notes = result_notes
         self.notes_month = 0
+        play_end_notes_month_base = 0
+        play_end_cutoff = datetime.datetime.fromtimestamp(
+            int(self.start_time.timestamp()) - self.config.autoload_offset*3600
+        ) if self.config is not None else None
         for r in reversed(self.all_results):
             result_date = datetime.datetime.fromtimestamp(r.date)
             if (result_date.month == self.start_time.month) and (result_date.year == self.start_time.year):
                 for i in range(5):
-                    self.notes_month += r.judge[i]
+                    result_note = r.judge[i]
+                    self.notes_month += result_note
+                    if play_end_cutoff is not None and result_date <= play_end_cutoff:
+                        play_end_notes_month_base += result_note
         if result_notes > 0:
             self.score_rate = 100*(sum_judge[0]*2+sum_judge[1]) / result_notes / 2
         if self.play_end_metrics_received:
             self.notes = self.play_end_notes
-            self.notes_month = self.play_end_notes_month
+            self.notes_month = play_end_notes_month_base + self.play_end_notes_month
             if self.play_end_notes > 0:
                 self.score_rate = 100*(self.play_end_judge[0]*2+self.play_end_judge[1]) / self.play_end_notes / 2
             else:
