@@ -29,9 +29,9 @@ https://x.com/cold_planet_/status/1964573250895434226
   - その日の成果まとめビューを追加する場合はreceipt.htmlを利用(幅2400，高さ3000)
 7. シーン(選曲、プレー、リザルト)ごとにOBSソースやシーンを自動制御したい場合は[wiki](https://github.com/dj-kata/oraja_helper/wiki/OBS%E9%80%A3%E6%90%BA%E6%A9%9F%E8%83%BD%E3%81%AE%E8%A8%AD%E5%AE%9A%E6%96%B9%E6%B3%95)を参考に設定する。一度上記設定を行っていれば、それ以降はoraja_helper.exeを実行するだけでOKですメイン画面に```db state: OK```と出ていれば動いています。  
 8. rianIR用Endless Dream版をお使いの場合、以下のビューも利用可能です
-  - now_playing.html: 難易度+曲名を表示
+  - now_playing.html: 難易度+曲名を表示(幅1000，高さ40)
   - history_cursong.html: その曲のプレーログを表示
-  - random_pattern.html: ランダムの配置を表示
+  - random_pattern.html: ランダムの配置を表示(幅440，高さ100)
 
 <img width="546" alt="Image" src="https://github.com/user-attachments/assets/4d13ade7-aa34-4e66-8e12-5d0e7bf0aa76" />
 
