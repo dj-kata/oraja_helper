@@ -553,7 +553,7 @@ class MainWindow:
                 self.database_accessor.manage_results.save()
                 self.database_accessor.manage_results.write_history_xml()
                 self.database_accessor.manage_results.write_updates_xml()
-                self.root.after(0, self.update_stats_gui)
+                self.post_to_gui(self.update_stats_gui)
                 self.database_accessor.reload_db()
                 self.request_nexus_skill_update()
 
@@ -635,7 +635,7 @@ class MainWindow:
         )
         self.database_accessor.manage_results.write_history_xml()
         self.database_accessor.manage_results.write_updates_xml()
-        self.root.after(0, self.update_stats_gui)
+        self.post_to_gui(self.update_stats_gui)
         logger.info(
             f"play end metrics applied: notes={played_notes}, elapsedSeconds={elapsed_seconds}, "
             f"quickRetry={data.get('quickRetry')}"
@@ -789,6 +789,12 @@ class MainWindow:
             if not sha256 and not md5:
                 return None
             user_skill = self.database_accessor.manage_results.nexus_skill
+            if user_skill is None:
+                user_skill = self.nexus_calculator.load_cached_user_skill()
+                if user_skill is not None and user_skill != 0:
+                    self.database_accessor.manage_results.nexus_skill = user_skill
+            if not self.nexus_calculator.skill_chart_index:
+                self.nexus_calculator.get_skill_chart_index()
             nexus_info = self.nexus_calculator.get_cached_chart_nexus_info(
                 user_skill, sha256, md5
             )
@@ -815,7 +821,7 @@ class MainWindow:
                 self.play_end_metrics_received_for_current_play = False
 
         self.current_game_state = new_state
-        self.root.after(0, self.update_game_state_display)
+        self.post_to_gui(self.update_game_state_display)
         print(f"ゲーム状態変化（{source}）: {self.current_game_state}")
     
     def start_db_monitoring(self):
@@ -1142,7 +1148,7 @@ class MainWindow:
                     self.status_var.set("OBS WebSocket切断")
         
         # メインスレッドでUI更新を実行
-        self.root.after(0, update_ui)
+        self.post_to_gui(update_ui)
     
     def restore_window_position(self):
         """ウィンドウ位置を復元"""
