@@ -336,12 +336,15 @@ class NexusCalculator:
                 chart_stats = ir_data.get(md5, ir_data.get(sha256, {}))
                 rates = get_rates(chart_stats)
                 chart_id = f"{table_name}:{level_str}:{md5 or sha256}"
+                actual_difficulties = {
+                    "easy": chart_stats.get("diff_easy", 99.0) < 99.0,
+                    "normal": chart_stats.get("diff_normal", 99.0) < 99.0,
+                    "hard": chart_stats.get("diff_hard", 99.0) < 99.0,
+                    "fc": chart_stats.get("diff_fc", 99.0) < 99.0,
+                }
                 params = {
                     "chart_id": chart_id,
-                    "has_actual_difficulty": all(
-                        chart_stats.get(key, 99.0) < 99.0
-                        for key in ("diff_easy", "diff_normal", "diff_hard", "diff_fc")
-                    ),
+                    "actual_difficulties": actual_difficulties,
                     "b_easy": get_target_difficulty(
                         chart_stats, folder_medians, table_name, level_str, base_star, "diff_easy", -1.0, rates["easy"], "e"
                     ),
@@ -377,13 +380,18 @@ class NexusCalculator:
             if not key:
                 continue
             params = chart_index.get(key)
-            if params and params.get("has_actual_difficulty"):
-                return {
-                    "easy": params["b_easy"],
-                    "normal": params["b_normal"],
-                    "hard": params["b_hard"],
-                    "fc": params["b_fc"],
-                }
+            if params:
+                result = {}
+                actual = params.get("actual_difficulties", {})
+                for lamp, param_key in (
+                    ("easy", "b_easy"),
+                    ("normal", "b_normal"),
+                    ("hard", "b_hard"),
+                    ("fc", "b_fc"),
+                ):
+                    if actual.get(lamp):
+                        result[lamp] = params[param_key]
+                return result or None
         return None
 
     def get_cached_chart_nexus_info(self, user_skill, *hashes):
@@ -395,17 +403,21 @@ class NexusCalculator:
             if not key:
                 continue
             params = chart_index.get(key)
-            if params and params.get("has_actual_difficulty"):
-                return {
-                    "easy": params["b_easy"],
-                    "normal": params["b_normal"],
-                    "hard": params["b_hard"],
-                    "fc": params["b_fc"],
-                    "easyRate": probability(user_skill, params["b_easy"], params["a"]) * 100.0,
-                    "normalRate": probability(user_skill, params["b_normal"], params["a"]) * 100.0,
-                    "hardRate": probability(user_skill, params["b_hard"], params["a"]) * 100.0,
-                    "fcRate": probability(user_skill, params["b_fc"], params["a"]) * 100.0,
-                }
+            if params:
+                result = {}
+                actual = params.get("actual_difficulties", {})
+                for lamp, param_key, rate_key in (
+                    ("easy", "b_easy", "easyRate"),
+                    ("normal", "b_normal", "normalRate"),
+                    ("hard", "b_hard", "hardRate"),
+                    ("fc", "b_fc", "fcRate"),
+                ):
+                    if actual.get(lamp):
+                        result[lamp] = params[param_key]
+                        result[rate_key] = probability(
+                            user_skill, params[param_key], params["a"]
+                        ) * 100.0
+                return result or None
         return None
 
     def calculate_from_database_accessor(self, database_accessor):
