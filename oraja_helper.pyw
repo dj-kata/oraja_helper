@@ -17,6 +17,7 @@ from obs_control import OBSControlWindow, ImageRecognitionData, OBSWebSocketMana
 from dataclass import *
 from pickle_converter import *
 from named_pipe_receiver import NamedPipeLineReceiver
+from nexus_core import NexusCalculator
 import requests
 from bs4 import BeautifulSoup
 
@@ -269,8 +270,8 @@ class MainWindow:
     def setup_ui(self):
         """UIの初期設定"""
         self.root.title(f"oraja_helper")
-        self.root.geometry("550x350")
-        self.root.minsize(550,350)    # 最小サイズも調整
+        self.root.geometry("550x380")
+        self.root.minsize(550,380)    # 最小サイズも調整
         
         # メニューバー
         menubar = tk.Menu(self.root)
@@ -286,6 +287,9 @@ class MainWindow:
         menubar.add_cascade(label='Tweet', menu=tweet_menu)
         tweet_menu.add_command(label='daily', command=self.database_accessor.manage_results.tweet_summary)
         tweet_menu.add_command(label='history', command=self.database_accessor.manage_results.tweet_history)
+        nexus_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label='BMS Nexus', menu=nexus_menu)
+        nexus_menu.add_command(label='リコメンド計算', command=self.calculate_nexus_recommendations_async)
         
         # メインフレーム
         main_frame = ttk.Frame(self.root, padding="10")
@@ -336,6 +340,12 @@ class MainWindow:
         self.score_rate_var = tk.StringVar(value='0.00%')
         self.score_rate_label = ttk.Label(main_frame, textvariable=self.score_rate_var, font=("Arial", 12, "bold"))
         self.score_rate_label.grid(row=7, column=1, sticky=tk.W, padx=(10, 0), pady=5)
+
+        # BMS Nexus skill
+        ttk.Label(main_frame, text="nexus skill:").grid(row=8, column=0, sticky=tk.W, pady=5)
+        self.nexus_skill_var = tk.StringVar(value='-')
+        self.nexus_skill_label = ttk.Label(main_frame, textvariable=self.nexus_skill_var, font=("Arial", 12, "bold"))
+        self.nexus_skill_label.grid(row=8, column=1, sticky=tk.W, padx=(10, 0), pady=5)
         
         # ステータスバー
         status_frame = ttk.Frame(self.root)
@@ -349,6 +359,54 @@ class MainWindow:
         main_frame.columnconfigure(1, weight=1)
         
         self.update_config_display()
+
+    def calculate_nexus_recommendations_async(self):
+        self.status_var.set("BMS Nexusリコメンドを計算中...")
+        thread = threading.Thread(target=self.calculate_nexus_recommendations_worker, daemon=True)
+        thread.start()
+
+    def calculate_nexus_recommendations_worker(self):
+        try:
+            if not self.database_accessor.is_valid():
+                raise FileNotFoundError("beatorajaのDBファイルが見つかりません。設定を確認してください。")
+
+            self.database_accessor.reload_db()
+            calculator = NexusCalculator()
+            result = calculator.calculate_from_database_accessor(self.database_accessor)
+            output_path = "nexus_recommendations.json"
+            with open(output_path, "w", encoding="utf-8") as f:
+                json.dump(result, f, ensure_ascii=False, indent=2)
+
+            self.root.after(0, lambda: self.on_nexus_recommendations_done(result, output_path))
+        except Exception as e:
+            logger.error(traceback.format_exc())
+            self.root.after(0, lambda error=e: self.on_nexus_recommendations_failed(error))
+
+    def on_nexus_recommendations_done(self, result, output_path):
+        user_skill = result.get("user_skill", 0.0)
+        recommend = result.get("recommend", [])
+        top_lines = []
+        for row in recommend[:5]:
+            top_lines.append(
+                f'{row["table"]} {row["title"]}: {row["recommend_percent"]:.1f}%'
+            )
+        top_text = "\n".join(top_lines) if top_lines else "リコメンド対象がありません。"
+        self.status_var.set(
+            f'BMS Nexus計算完了: skill {user_skill:.2f}, recommend {len(recommend)}件'
+        )
+        if user_skill != 0:
+            self.nexus_skill_var.set(f"{user_skill:.2f}")
+        messagebox.showinfo(
+            "BMS Nexus",
+            f"総合リコメンド値: {user_skill:.2f}\n"
+            f"譜面別リコメンド: {len(recommend)}件\n\n"
+            f"{top_text}\n\n"
+            f"出力: {output_path}",
+        )
+
+    def on_nexus_recommendations_failed(self, error):
+        self.status_var.set("BMS Nexus計算失敗")
+        messagebox.showerror("BMS Nexus", f"リコメンド計算に失敗しました。\n\n{error}")
     
     def start_all_threads(self):
         """全スレッドを開始"""

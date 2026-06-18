@@ -62,6 +62,7 @@ build_exe_options = {
         "config",
         "dataclass",
         "named_pipe_receiver",
+        "nexus_core",
         "obs_control",
         "pickle_converter",
         "settings",
