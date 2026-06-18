@@ -15,6 +15,8 @@ TABLES = {
     "satellite": "https://stellabms.xyz/sl/header.json",
 }
 
+IR_DATA_URL = "https://raw.githubusercontent.com/c-ikeda123/bms-nexus/refs/heads/main/static/ir_data.json"
+
 
 def safe_float(value, default=99.0):
     try:
@@ -109,14 +111,16 @@ def parse_score_db(db_path):
 
 
 class NexusCalculator:
-    def __init__(self, ir_data_path=None, table_urls=None, cache_dir=".cache"):
+    def __init__(self, ir_data_path=None, table_urls=None, cache_dir=".cache", ir_data_url=IR_DATA_URL):
         self.ir_data_path = ir_data_path
+        self.ir_data_url = ir_data_url
         self.table_urls = table_urls or TABLES
         self.cache_dir = Path(cache_dir)
         self.table_cache_path = self.cache_dir / "bms_nexus_tables.json"
         self.skill_cache_path = self.cache_dir / "bms_nexus_skill.json"
         self.table_data_cache = {}
         self.ir_data_cache = None
+        self.ir_data_remote_checked = False
         self.skill_chart_index = None
 
     def fetch_table_data(self):
@@ -206,7 +210,6 @@ class NexusCalculator:
         candidates.extend(
             [
                 base_dir / "static" / "ir_data.json",
-                base_dir.parent / "bms-nexus" / "static" / "ir_data.json",
             ]
         )
 
@@ -214,6 +217,46 @@ class NexusCalculator:
             if path.exists():
                 return path
         return None
+
+    def default_ir_data_path(self):
+        if self.ir_data_path:
+            return Path(self.ir_data_path)
+        return Path(__file__).resolve().parent / "static" / "ir_data.json"
+
+    def update_ir_data_from_remote_once(self):
+        if self.ir_data_remote_checked:
+            return False
+        self.ir_data_remote_checked = True
+        return self.update_ir_data_from_remote()
+
+    def update_ir_data_from_remote(self):
+        if not self.ir_data_url:
+            return False
+
+        response = requests.get(self.ir_data_url, timeout=30)
+        response.raise_for_status()
+        remote_data = response.json()
+
+        target_path = self.default_ir_data_path()
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+
+        current_text = None
+        if target_path.exists():
+            try:
+                current_text = target_path.read_text(encoding="utf-8")
+            except Exception:
+                current_text = None
+
+        remote_text = json.dumps(remote_data, ensure_ascii=False, indent=4) + "\n"
+        if current_text == remote_text:
+            self.ir_data_cache = remote_data
+            return False
+
+        with open(target_path, "w", encoding="utf-8") as f:
+            f.write(remote_text)
+        self.ir_data_cache = remote_data
+        self.skill_chart_index = None
+        return True
 
     def fetch_ir_data(self):
         if self.ir_data_cache is not None:
@@ -228,7 +271,7 @@ class NexusCalculator:
         url = os.environ.get("BMS_NEXUS_IR_DATA_URL")
         if not url:
             raise FileNotFoundError(
-                "ir_data.json was not found. Set BMS_NEXUS_IR_DATA or place bms-nexus next to oraja_helper."
+                "ir_data.json was not found. Set BMS_NEXUS_IR_DATA or place static/ir_data.json in oraja_helper."
             )
         response = requests.get(url, timeout=15)
         response.raise_for_status()

@@ -3,6 +3,7 @@ __pycache__/*
 build/*
 *oraja_helper/*
 *.json
+!static/ir_data.json
 *.egg-info/*
 */*.egg-info/*
 .venv/*

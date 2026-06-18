@@ -436,6 +436,12 @@ class MainWindow:
         try:
             if not self.database_accessor.is_valid():
                 raise FileNotFoundError("beatorajaのDBファイルが見つかりません。")
+            try:
+                updated = self.nexus_calculator.update_ir_data_from_remote_once()
+                if updated:
+                    logger.info("BMS Nexus ir_data.json updated from remote.")
+            except Exception:
+                logger.error(traceback.format_exc())
             user_skill = self.nexus_calculator.calculate_user_skill_from_database_accessor(
                 self.database_accessor
             )
