@@ -338,6 +338,10 @@ class NexusCalculator:
                 chart_id = f"{table_name}:{level_str}:{md5 or sha256}"
                 params = {
                     "chart_id": chart_id,
+                    "has_actual_difficulty": all(
+                        chart_stats.get(key, 99.0) < 99.0
+                        for key in ("diff_easy", "diff_normal", "diff_hard", "diff_fc")
+                    ),
                     "b_easy": get_target_difficulty(
                         chart_stats, folder_medians, table_name, level_str, base_star, "diff_easy", -1.0, rates["easy"], "e"
                     ),
@@ -373,7 +377,7 @@ class NexusCalculator:
             if not key:
                 continue
             params = chart_index.get(key)
-            if params:
+            if params and params.get("has_actual_difficulty"):
                 return {
                     "easy": params["b_easy"],
                     "normal": params["b_normal"],
@@ -391,7 +395,7 @@ class NexusCalculator:
             if not key:
                 continue
             params = chart_index.get(key)
-            if params:
+            if params and params.get("has_actual_difficulty"):
                 return {
                     "easy": params["b_easy"],
                     "normal": params["b_normal"],
