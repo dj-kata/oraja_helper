@@ -303,6 +303,7 @@ class ManageResults:
         self.play_end_playcount = 0
         self.play_end_playtime = datetime.timedelta(seconds=0)
         self.notes = 0
+        self.nexus_skill = None
         self.config = None
         self.load()
         self.save()
@@ -580,6 +581,8 @@ class ManageResults:
             msg += f"uptime: {str(ontime).split('.')[0]}, playtime: {str(self.playtime).split('.')[0]}, pace: {pace:,}notes/h\n"
         else:
             msg += f"uptime: {str(ontime).split('.')[0]}\n"
+        if self.nexus_skill is not None and self.nexus_skill != 0:
+            msg += f"Nexus skill: ★{self.nexus_skill:.2f}\n"
         # フォルダごとのランプ更新数
         if self.config.enable_folder_updates:
             lamps = ['', '', '', '', 'E', 'C', 'H', 'EXH', 'FC', 'P', 'MAX']

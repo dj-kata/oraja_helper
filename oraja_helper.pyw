@@ -158,6 +158,7 @@ class MainWindow:
         # 監視データ
         self.file_exists = False
         self.current_game_state = None  # None, "select", "play", "result"
+        self.current_song_data = {}
         self.play_end_metrics_received_for_current_play = False
         
         # OBS WebSocket管理クラス初期化
@@ -174,13 +175,14 @@ class MainWindow:
         self.write_current_song_history({})
         
         self.setup_ui()
+        self.load_cached_nexus_skill_to_gui()
         self.set_embedded_icon()
         self.restore_window_position()
         self.start_all_threads()
         self.update_display()
         self.check_updates()
         self.update_db_status()
-        self.request_nexus_skill_update()
+        self.root.after(500, self.request_nexus_skill_update)
         
         # WebSocket自動接続開始
         if self.config.enable_websocket:
@@ -381,10 +383,10 @@ class MainWindow:
             with open(output_path, "w", encoding="utf-8") as f:
                 json.dump(result, f, ensure_ascii=False, indent=2)
 
-            self.root.after(0, lambda: self.on_nexus_recommendations_done(result, output_path))
+            self.post_to_gui(lambda: self.on_nexus_recommendations_done(result, output_path))
         except Exception as e:
             logger.error(traceback.format_exc())
-            self.root.after(0, lambda error=e: self.on_nexus_recommendations_failed(error))
+            self.post_to_gui(lambda error=e: self.on_nexus_recommendations_failed(error))
 
     def on_nexus_recommendations_done(self, result, output_path):
         user_skill = result.get("user_skill", 0.0)
@@ -399,7 +401,9 @@ class MainWindow:
             f'BMS Nexus計算完了: skill {user_skill:.2f}, recommend {len(recommend)}件'
         )
         if user_skill != 0:
-            self.nexus_skill_var.set(f"{user_skill:.2f}")
+            self.nexus_skill_var.set(self.format_nexus_skill(user_skill))
+            self.database_accessor.manage_results.nexus_skill = user_skill
+            self.nexus_calculator.save_cached_user_skill(user_skill)
         messagebox.showinfo(
             "BMS Nexus",
             f"総合リコメンド値: {user_skill:.2f}\n"
@@ -422,6 +426,12 @@ class MainWindow:
         thread = threading.Thread(target=self.update_nexus_skill_worker, daemon=True)
         thread.start()
 
+    def load_cached_nexus_skill_to_gui(self):
+        user_skill = self.nexus_calculator.load_cached_user_skill()
+        if user_skill is not None and user_skill != 0:
+            self.nexus_skill_var.set(self.format_nexus_skill(user_skill))
+            self.database_accessor.manage_results.nexus_skill = user_skill
+
     def update_nexus_skill_worker(self):
         try:
             if not self.database_accessor.is_valid():
@@ -429,10 +439,16 @@ class MainWindow:
             user_skill = self.nexus_calculator.calculate_user_skill_from_database_accessor(
                 self.database_accessor
             )
-            self.root.after(0, lambda: self.on_nexus_skill_update_done(user_skill))
+            self.post_to_gui(lambda: self.on_nexus_skill_update_done(user_skill))
         except Exception as e:
             logger.error(traceback.format_exc())
-            self.root.after(0, lambda error=e: self.on_nexus_skill_update_failed(error))
+            self.post_to_gui(lambda error=e: self.on_nexus_skill_update_failed(error))
+
+    def post_to_gui(self, callback):
+        try:
+            self.root.after(0, callback)
+        except RuntimeError:
+            logger.warning("Tk mainloop is not available; skipped GUI callback.")
 
     def finish_nexus_skill_update(self):
         with self.nexus_skill_update_lock:
@@ -445,12 +461,19 @@ class MainWindow:
 
     def on_nexus_skill_update_done(self, user_skill):
         if user_skill != 0:
-            self.nexus_skill_var.set(f"{user_skill:.2f}")
+            self.nexus_skill_var.set(self.format_nexus_skill(user_skill))
+            self.database_accessor.manage_results.nexus_skill = user_skill
+            self.nexus_calculator.save_cached_user_skill(user_skill)
+            if self.current_song_data:
+                self.write_current_song_history(self.current_song_data)
         self.finish_nexus_skill_update()
 
     def on_nexus_skill_update_failed(self, error):
         logger.warning(f"BMS Nexus skill update failed: {error}")
         self.finish_nexus_skill_update()
+
+    def format_nexus_skill(self, user_skill):
+        return f"★{user_skill:.2f}"
     
     def start_all_threads(self):
         """全スレッドを開始"""
@@ -680,6 +703,8 @@ class MainWindow:
 
     def write_current_song_history(self, data, outfile='history_cursong.json'):
         """現在曲と、その曲のoraja_helper内プレーログ履歴を書き出す"""
+        data = data or {}
+        self.current_song_data = data
         sha256 = data.get("sha256") or ""
         md5 = data.get("md5") or ""
         difficulties = self.search_difficulties_from_hashes(sha256, md5)
@@ -705,6 +730,9 @@ class MainWindow:
                 "timestamp": datetime.datetime.fromtimestamp(r.date).strftime("%Y/%m/%d %H:%M:%S") if r.date else "",
             })
 
+        best = self.current_song_best_info(results, lamps)
+        nexus = self.current_song_nexus_info(sha256, md5)
+
         output = {
             "scene": data.get("scene") or "",
             "event": data.get("event") or "",
@@ -721,6 +749,8 @@ class MainWindow:
             "option2PRaw": data.get("option2P") or "",
             "option2PId": data.get("option2PId", ""),
             "randomPlacement2P": data.get("randomPlacement2P") or "",
+            "best": best,
+            "nexus": nexus,
             "history": history,
         }
         with open(outfile, 'w', encoding='utf-8') as f:
@@ -728,6 +758,34 @@ class MainWindow:
         js = "window.__ORAJA_HELPER_CURRENT_SONG__ = " + json.dumps(output, ensure_ascii=False) + ";\n"
         with open(os.path.splitext(outfile)[0] + "_data.js", 'w', encoding='utf-8') as f:
             f.write(js.replace("</script", "<\\/script"))
+
+    def current_song_best_info(self, results, lamps):
+        if not results:
+            return None
+
+        best_lamp_id = max(int(r.lamp or 0) for r in results)
+        best_score_result = max(results, key=lambda r: int(r.score or 0))
+        best_bp_result = min(results, key=lambda r: int(r.bp if r.bp is not None else 999999))
+        best_score = int(best_score_result.score or 0)
+        best_bp = int(best_bp_result.bp if best_bp_result.bp is not None else 0)
+        return {
+            "lamp": lamps[best_lamp_id] if 0 <= best_lamp_id < len(lamps) else str(best_lamp_id),
+            "lampId": best_lamp_id,
+            "score": best_score,
+            "rate": float(best_score_result.score_rate or 0),
+            "bp": best_bp,
+            "bestScoreOption": getattr(best_score_result, "option", "?") or "?",
+            "bestBpOption": getattr(best_bp_result, "option", "?") or "?",
+        }
+
+    def current_song_nexus_info(self, sha256, md5):
+        try:
+            if not sha256 and not md5:
+                return None
+            return self.nexus_calculator.get_cached_chart_skill_difficulties(sha256, md5)
+        except Exception:
+            logger.error(traceback.format_exc())
+            return None
 
     def apply_game_state(self, new_state, source):
         """ゲーム状態変更時の共通処理"""
@@ -969,7 +1027,7 @@ class MainWindow:
         self.database_accessor.set_config(self.config, reload_db=not self.use_named_pipe)
         logger.info(f"added! len(all_results):{len(self.database_accessor.manage_results.all_results)}, len(today_results):{len(self.database_accessor.manage_results.today_results)}")
         self.update_db_status()
-        self.request_nexus_skill_update()
+        self.root.after(100, self.request_nexus_skill_update)
 
         # 設定画面で更新される可能性があるため、DataBaseAccessorをリロードしておく
         self.database_accessor.manage_results.load()
@@ -1224,6 +1282,7 @@ class MainWindow:
 
         # tweet
         if self.config.enable_autotweet:
+            self.sync_nexus_skill_to_manage_results()
             self.database_accessor.manage_results.tweet_summary()
         
         # ウィンドウ位置を保存
@@ -1260,6 +1319,16 @@ class MainWindow:
         print("アプリケーション終了処理完了")
         self.root.destroy()
         logger.info('closed')
+
+    def sync_nexus_skill_to_manage_results(self):
+        try:
+            value = self.nexus_skill_var.get()
+            if value and value != "-":
+                skill = float(value.replace("★", "").strip())
+                if skill != 0:
+                    self.database_accessor.manage_results.nexus_skill = skill
+        except Exception:
+            logger.error(traceback.format_exc())
     
     def run(self):
         """アプリケーションを実行"""

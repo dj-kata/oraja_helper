@@ -86,6 +86,56 @@
             min-height: 30px;
         }
 
+        .info-panel {
+            display: none;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(148, 163, 184, 0.28);
+        }
+
+        .info-panel.visible {
+            display: block;
+        }
+
+        .info-row {
+            display: grid;
+            grid-template-columns: 92px repeat(5, minmax(0, auto));
+            gap: 12px;
+            align-items: center;
+            margin-top: 6px;
+            font-size: 20px;
+        }
+
+        .info-title {
+            color: #bae6fd;
+            font-weight: 800;
+        }
+
+        .info-item {
+            min-width: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .info-label {
+            color: #94a3b8;
+            margin-right: 4px;
+        }
+
+        .info-value {
+            color: #f8fbff;
+            font-weight: 800;
+        }
+
+        .best-option {
+            color: #86efac;
+        }
+
+        .nexus-value {
+            color: #facc15;
+        }
+
         .option-line {
             display: flex;
             align-items: center;
@@ -289,6 +339,8 @@
             </div>
             <div class="artist" id="artist"></div>
             <div class="option" id="option"></div>
+            <div class="info-panel" id="best-panel"></div>
+            <div class="info-panel" id="nexus-panel"></div>
         </section>
 
         <section class="history">
@@ -407,6 +459,50 @@
             return String(data.difficulty || "").trim();
         }
 
+        function renderBestInfo(best) {
+            const panel = document.getElementById("best-panel");
+            if (!best) {
+                panel.className = "info-panel";
+                panel.innerHTML = "";
+                return;
+            }
+            const lampId = Number(best.lampId) || 0;
+            panel.className = "info-panel visible";
+            panel.innerHTML = [
+                '<div class="info-row">',
+                '<div class="info-title">BEST</div>',
+                '<div class="info-item"><span class="info-label">Lamp</span>' + lampHtml(lampId, best.lamp || "") + '</div>',
+                '<div class="info-item"><span class="info-label">Score</span><span class="info-value">' + escapeHtml(best.score || 0) + '</span></div>',
+                '<div class="info-item"><span class="info-label">Rate</span><span class="info-value">' + Number(best.rate || 0).toFixed(2) + '%</span></div>',
+                '<div class="info-item"><span class="info-label">BP</span><span class="info-value">' + escapeHtml(best.bp || 0) + '</span></div>',
+                '</div>',
+                '<div class="info-row">',
+                '<div></div>',
+                '<div class="info-item best-option"><span class="info-label">Score opt</span>' + optionHtml(best.bestScoreOption || "?", true) + '</div>',
+                '<div class="info-item best-option"><span class="info-label">BP opt</span>' + optionHtml(best.bestBpOption || "?", true) + '</div>',
+                '</div>'
+            ].join("");
+        }
+
+        function renderNexusInfo(nexus) {
+            const panel = document.getElementById("nexus-panel");
+            if (!nexus) {
+                panel.className = "info-panel";
+                panel.innerHTML = "";
+                return;
+            }
+            panel.className = "info-panel visible";
+            panel.innerHTML = [
+                '<div class="info-row">',
+                '<div class="info-title">NEXUS</div>',
+                '<div class="info-item"><span class="info-label">Easy</span><span class="info-value nexus-value">' + Number(nexus.easy || 0).toFixed(2) + '</span></div>',
+                '<div class="info-item"><span class="info-label">Clear</span><span class="info-value nexus-value">' + Number(nexus.normal || 0).toFixed(2) + '</span></div>',
+                '<div class="info-item"><span class="info-label">Hard</span><span class="info-value nexus-value">' + Number(nexus.hard || 0).toFixed(2) + '</span></div>',
+                '<div class="info-item"><span class="info-label">FC</span><span class="info-value nexus-value">' + Number(nexus.fc || 0).toFixed(2) + '</span></div>',
+                '</div>'
+            ].join("");
+        }
+
         function update(data) {
             document.getElementById("title").textContent = data.title || "No song";
             document.getElementById("artist").textContent = data.artist || "";
@@ -415,6 +511,8 @@
             document.getElementById("option").innerHTML = data.option
                 ? '<span class="option-line"><span class="option-label">OPTION:</span>' + optionHtml(data.option, false) + '</span>'
                 : "";
+            renderBestInfo(data.best);
+            renderNexusInfo(data.nexus);
 
             const body = document.getElementById("history-body");
             const history = Array.isArray(data.history) ? data.history : [];

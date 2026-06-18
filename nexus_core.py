@@ -114,6 +114,7 @@ class NexusCalculator:
         self.table_urls = table_urls or TABLES
         self.cache_dir = Path(cache_dir)
         self.table_cache_path = self.cache_dir / "bms_nexus_tables.json"
+        self.skill_cache_path = self.cache_dir / "bms_nexus_skill.json"
         self.table_data_cache = {}
         self.ir_data_cache = None
         self.skill_chart_index = None
@@ -166,6 +167,29 @@ class NexusCalculator:
                 "tables": tables,
             }
             with open(self.table_cache_path, "w", encoding="utf-8") as f:
+                json.dump(payload, f, ensure_ascii=False)
+        except Exception:
+            pass
+
+    def load_cached_user_skill(self):
+        if not self.skill_cache_path.exists():
+            return None
+        try:
+            with open(self.skill_cache_path, "r", encoding="utf-8") as f:
+                payload = json.load(f)
+            value = payload.get("user_skill")
+            return float(value) if value is not None else None
+        except Exception:
+            return None
+
+    def save_cached_user_skill(self, user_skill):
+        try:
+            self.cache_dir.mkdir(exist_ok=True)
+            payload = {
+                "created_at": int(time.time()),
+                "user_skill": float(user_skill),
+            }
+            with open(self.skill_cache_path, "w", encoding="utf-8") as f:
                 json.dump(payload, f, ensure_ascii=False)
         except Exception:
             pass
@@ -292,6 +316,28 @@ class NexusCalculator:
 
         self.skill_chart_index = chart_index
         return self.skill_chart_index
+
+    def get_chart_skill_difficulties(self, *hashes):
+        chart_index = self.get_skill_chart_index()
+        return self.get_cached_chart_skill_difficulties(*hashes, chart_index=chart_index)
+
+    def get_cached_chart_skill_difficulties(self, *hashes, chart_index=None):
+        chart_index = chart_index if chart_index is not None else self.skill_chart_index
+        if not chart_index:
+            return None
+        for hash_value in hashes:
+            key = str(hash_value or "").lower()
+            if not key:
+                continue
+            params = chart_index.get(key)
+            if params:
+                return {
+                    "easy": params["b_easy"],
+                    "normal": params["b_normal"],
+                    "hard": params["b_hard"],
+                    "fc": params["b_fc"],
+                }
+        return None
 
     def calculate_from_database_accessor(self, database_accessor):
         user_lamps = build_user_lamps_from_dataframes(
