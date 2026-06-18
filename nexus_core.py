@@ -3,6 +3,7 @@ import math
 import os
 import sqlite3
 import statistics
+import sys
 import time
 from pathlib import Path
 
@@ -16,6 +17,17 @@ TABLES = {
 }
 
 IR_DATA_URL = "https://raw.githubusercontent.com/c-ikeda123/bms-nexus/refs/heads/main/static/ir_data.json"
+
+
+def get_application_base_dir():
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+
+    module_path = Path(__file__).resolve()
+    if any(part.endswith(".zip") for part in module_path.parts):
+        return Path(sys.executable).resolve().parent
+
+    return module_path.parent
 
 
 def safe_float(value, default=99.0):
@@ -70,6 +82,52 @@ def build_user_lamps_from_dataframes(df_score, df_songdata=None):
     return user_lamps
 
 
+def build_user_lamps_from_db_files(score_db_path, songdata_db_path=None):
+    score_db_path = Path(score_db_path) if score_db_path else None
+    if not score_db_path or not score_db_path.exists():
+        raise FileNotFoundError(f"score.db was not found: {score_db_path}")
+
+    user_lamps = {}
+    conn = sqlite3.connect(score_db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT sha256, clear FROM score")
+        for row in cursor.fetchall():
+            sha256 = row["sha256"]
+            if not sha256:
+                continue
+            lamp = map_beatoraja_clear(int(row["clear"] or 0))
+            if lamp != -1:
+                key = str(sha256).lower()
+                user_lamps[key] = max(user_lamps.get(key, -1), lamp)
+    finally:
+        conn.close()
+
+    songdata_db_path = Path(songdata_db_path) if songdata_db_path else None
+    if songdata_db_path and songdata_db_path.exists():
+        md5_by_sha256 = {}
+        conn = sqlite3.connect(songdata_db_path)
+        conn.row_factory = sqlite3.Row
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT sha256, md5 FROM song")
+            for row in cursor.fetchall():
+                sha256 = row["sha256"]
+                md5 = row["md5"]
+                if sha256 and md5:
+                    md5_by_sha256[str(sha256).lower()] = str(md5).lower()
+        finally:
+            conn.close()
+
+        for sha256, lamp in list(user_lamps.items()):
+            md5 = md5_by_sha256.get(sha256)
+            if md5:
+                user_lamps[md5] = max(user_lamps.get(md5, -1), lamp)
+
+    return user_lamps
+
+
 def parse_score_db(db_path):
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
@@ -112,10 +170,13 @@ def parse_score_db(db_path):
 
 class NexusCalculator:
     def __init__(self, ir_data_path=None, table_urls=None, cache_dir=".cache", ir_data_url=IR_DATA_URL):
+        self.base_dir = get_application_base_dir()
         self.ir_data_path = ir_data_path
         self.ir_data_url = ir_data_url
         self.table_urls = table_urls or TABLES
         self.cache_dir = Path(cache_dir)
+        if not self.cache_dir.is_absolute():
+            self.cache_dir = self.base_dir / self.cache_dir
         self.table_cache_path = self.cache_dir / "bms_nexus_tables.json"
         self.skill_cache_path = self.cache_dir / "bms_nexus_skill.json"
         self.table_data_cache = {}
@@ -206,14 +267,23 @@ class NexusCalculator:
         if env_path:
             candidates.append(Path(env_path))
 
-        base_dir = Path(__file__).resolve().parent
         candidates.extend(
             [
-                base_dir / "static" / "ir_data.json",
+                self.base_dir / "static" / "ir_data.json",
+                self.cache_dir / "ir_data.json",
+                Path.cwd() / "static" / "ir_data.json",
             ]
         )
 
+        seen = set()
         for path in candidates:
+            try:
+                path = path.resolve()
+            except Exception:
+                pass
+            if path in seen:
+                continue
+            seen.add(path)
             if path.exists():
                 return path
         return None
@@ -221,7 +291,10 @@ class NexusCalculator:
     def default_ir_data_path(self):
         if self.ir_data_path:
             return Path(self.ir_data_path)
-        return Path(__file__).resolve().parent / "static" / "ir_data.json"
+        env_path = os.environ.get("BMS_NEXUS_IR_DATA")
+        if env_path:
+            return Path(env_path)
+        return self.base_dir / "static" / "ir_data.json"
 
     def update_ir_data_from_remote_once(self):
         if self.ir_data_remote_checked:
@@ -435,6 +508,17 @@ class NexusCalculator:
             getattr(database_accessor, "df_score", None),
             getattr(database_accessor, "df_songdata", None),
         )
+        return self.calculate_user_skill_from_lamps(user_lamps)
+
+    def calculate_from_db_files(self, score_db_path, songdata_db_path=None):
+        user_lamps = build_user_lamps_from_db_files(score_db_path, songdata_db_path)
+        result = self.calculate_from_lamps(user_lamps)
+        result["parsed_scores"] = len(user_lamps)
+        result["db_type"] = "beatoraja"
+        return result
+
+    def calculate_user_skill_from_db_files(self, score_db_path, songdata_db_path=None):
+        user_lamps = build_user_lamps_from_db_files(score_db_path, songdata_db_path)
         return self.calculate_user_skill_from_lamps(user_lamps)
 
 

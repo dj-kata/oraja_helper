@@ -154,6 +154,8 @@ class MainWindow:
         self.nexus_skill_update_running = False
         self.nexus_skill_update_pending = False
         self.nexus_skill_update_lock = threading.Lock()
+        self.pending_gui_callbacks = []
+        self.pending_gui_callbacks_lock = threading.Lock()
         
         # 監視データ
         self.file_exists = False
@@ -294,9 +296,6 @@ class MainWindow:
         menubar.add_cascade(label='Tweet', menu=tweet_menu)
         tweet_menu.add_command(label='daily', command=self.database_accessor.manage_results.tweet_summary)
         tweet_menu.add_command(label='history', command=self.database_accessor.manage_results.tweet_history)
-        nexus_menu = tk.Menu(menubar, tearoff=0)
-        menubar.add_cascade(label='BMS Nexus', menu=nexus_menu)
-        nexus_menu.add_command(label='リコメンド計算', command=self.calculate_nexus_recommendations_async)
         
         # メインフレーム
         main_frame = ttk.Frame(self.root, padding="10")
@@ -374,11 +373,10 @@ class MainWindow:
 
     def calculate_nexus_recommendations_worker(self):
         try:
-            if not self.database_accessor.is_valid():
-                raise FileNotFoundError("beatorajaのDBファイルが見つかりません。設定を確認してください。")
-
-            self.database_accessor.reload_db()
-            result = self.nexus_calculator.calculate_from_database_accessor(self.database_accessor)
+            score_db_path, songdata_db_path = self.get_nexus_db_paths()
+            result = self.nexus_calculator.calculate_from_db_files(
+                score_db_path, songdata_db_path
+            )
             output_path = "nexus_recommendations.json"
             with open(output_path, "w", encoding="utf-8") as f:
                 json.dump(result, f, ensure_ascii=False, indent=2)
@@ -420,9 +418,13 @@ class MainWindow:
         with self.nexus_skill_update_lock:
             if self.nexus_skill_update_running:
                 self.nexus_skill_update_pending = True
+                logger.info("BMS Nexus skill update is already running; queued rerun.")
                 return
             self.nexus_skill_update_running = True
 
+        if self.nexus_skill_var.get() == "-":
+            self.nexus_skill_var.set("計算中...")
+        logger.info("BMS Nexus skill update started.")
         thread = threading.Thread(target=self.update_nexus_skill_worker, daemon=True)
         thread.start()
 
@@ -431,20 +433,49 @@ class MainWindow:
         if user_skill is not None and user_skill != 0:
             self.nexus_skill_var.set(self.format_nexus_skill(user_skill))
             self.database_accessor.manage_results.nexus_skill = user_skill
+            logger.info(f"Loaded cached BMS Nexus skill: {user_skill:.2f}")
+        else:
+            logger.info("Cached BMS Nexus skill was not found.")
+
+    def get_nexus_db_paths(self):
+        player_path = getattr(self.config, "player_path", "") or ""
+        if not player_path:
+            raise FileNotFoundError("beatorajaのplayerフォルダが設定されていません。")
+
+        score_db_path = os.path.join(player_path, "score.db")
+        if not os.path.exists(score_db_path):
+            raise FileNotFoundError(f"score.dbが見つかりません: {score_db_path}")
+
+        oraja_path = getattr(self.config, "oraja_path", "") or ""
+        songdata_db_path = os.path.join(oraja_path, "songdata.db") if oraja_path else None
+        if songdata_db_path and not os.path.exists(songdata_db_path):
+            logger.warning(f"songdata.db was not found for BMS Nexus: {songdata_db_path}")
+            songdata_db_path = None
+
+        return score_db_path, songdata_db_path
 
     def update_nexus_skill_worker(self):
+        started_at = time.time()
         try:
-            if not self.database_accessor.is_valid():
-                raise FileNotFoundError("beatorajaのDBファイルが見つかりません。")
+            score_db_path, songdata_db_path = self.get_nexus_db_paths()
+            logger.info(
+                f"BMS Nexus DB paths: score_db={score_db_path}, songdata_db={songdata_db_path or 'None'}"
+            )
             try:
+                logger.info("Checking BMS Nexus ir_data.json update.")
                 updated = self.nexus_calculator.update_ir_data_from_remote_once()
                 if updated:
                     logger.info("BMS Nexus ir_data.json updated from remote.")
+                else:
+                    logger.info("BMS Nexus ir_data.json update was not needed.")
             except Exception:
                 logger.error(traceback.format_exc())
-            user_skill = self.nexus_calculator.calculate_user_skill_from_database_accessor(
-                self.database_accessor
+            logger.info("Calculating BMS Nexus skill from db files.")
+            user_skill = self.nexus_calculator.calculate_user_skill_from_db_files(
+                score_db_path, songdata_db_path
             )
+            elapsed = time.time() - started_at
+            logger.info(f"BMS Nexus skill calculated: {user_skill:.2f} ({elapsed:.1f}s)")
             self.post_to_gui(lambda: self.on_nexus_skill_update_done(user_skill))
         except Exception as e:
             logger.error(traceback.format_exc())
@@ -454,7 +485,23 @@ class MainWindow:
         try:
             self.root.after(0, callback)
         except RuntimeError:
-            logger.warning("Tk mainloop is not available; skipped GUI callback.")
+            with self.pending_gui_callbacks_lock:
+                self.pending_gui_callbacks.append(callback)
+            logger.warning("Tk mainloop is not available; queued GUI callback.")
+
+    def drain_pending_gui_callbacks(self):
+        with self.pending_gui_callbacks_lock:
+            callbacks = self.pending_gui_callbacks
+            self.pending_gui_callbacks = []
+
+        for callback in callbacks:
+            try:
+                callback()
+            except Exception:
+                logger.error(traceback.format_exc())
+
+        if self.is_running:
+            self.root.after(250, self.drain_pending_gui_callbacks)
 
     def finish_nexus_skill_update(self):
         with self.nexus_skill_update_lock:
@@ -470,12 +517,17 @@ class MainWindow:
             self.nexus_skill_var.set(self.format_nexus_skill(user_skill))
             self.database_accessor.manage_results.nexus_skill = user_skill
             self.nexus_calculator.save_cached_user_skill(user_skill)
+            logger.info(f"Saved BMS Nexus skill cache: {user_skill:.2f}")
             if self.current_song_data:
                 self.write_current_song_history(self.current_song_data)
+        elif self.nexus_skill_var.get() == "計算中...":
+            self.nexus_skill_var.set("-")
         self.finish_nexus_skill_update()
 
     def on_nexus_skill_update_failed(self, error):
         logger.warning(f"BMS Nexus skill update failed: {error}")
+        if self.nexus_skill_var.get() == "計算中...":
+            self.nexus_skill_var.set("取得失敗")
         self.finish_nexus_skill_update()
 
     def format_nexus_skill(self, user_skill):
@@ -1352,6 +1404,7 @@ class MainWindow:
         """アプリケーションを実行"""
         try:
             self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+            self.root.after(0, self.drain_pending_gui_callbacks)
             self.root.mainloop()
         except Exception as e:
             print(f"アプリケーション実行エラー: {e}")

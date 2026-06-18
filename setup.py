@@ -16,10 +16,16 @@ for html_file in Path(".").glob("*.html"):
 # HTMLから参照する静的素材
 for asset_file in [
     Path("src/random_pattern.png"),
-    Path("static/ir_data.json"),
 ]:
     if asset_file.exists():
         include_files.append((str(asset_file), str(asset_file)))
+
+# Nexus関連など、static配下のファイルを自動で同梱
+static_dir = Path("static")
+if static_dir.exists():
+    for asset_file in static_dir.rglob("*"):
+        if asset_file.is_file():
+            include_files.append((str(asset_file), str(asset_file)))
 
 # アイコンファイル
 if os.path.exists("src/icon.ico"):
