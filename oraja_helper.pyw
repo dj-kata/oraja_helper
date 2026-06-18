@@ -782,6 +782,12 @@ class MainWindow:
         try:
             if not sha256 and not md5:
                 return None
+            user_skill = self.database_accessor.manage_results.nexus_skill
+            nexus_info = self.nexus_calculator.get_cached_chart_nexus_info(
+                user_skill, sha256, md5
+            )
+            if nexus_info:
+                return nexus_info
             return self.nexus_calculator.get_cached_chart_skill_difficulties(sha256, md5)
         except Exception:
             logger.error(traceback.format_exc())

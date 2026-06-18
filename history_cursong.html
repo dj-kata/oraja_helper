@@ -136,6 +136,14 @@
             color: #facc15;
         }
 
+        .nexus-rate {
+            display: block;
+            margin-top: 2px;
+            color: #a7f3d0;
+            font-size: 16px;
+            font-weight: 800;
+        }
+
         .option-line {
             display: flex;
             align-items: center;
@@ -491,14 +499,21 @@
                 panel.innerHTML = "";
                 return;
             }
+            function nexusItem(label, skill, rate) {
+                const rateMarkup = rate === undefined || rate === null
+                    ? ""
+                    : '<span class="nexus-rate">' + Number(rate || 0).toFixed(1) + '%</span>';
+                return '<div class="info-item"><span class="info-label">' + label + '</span><span class="info-value nexus-value">' +
+                    Number(skill || 0).toFixed(2) + '</span>' + rateMarkup + '</div>';
+            }
             panel.className = "info-panel visible";
             panel.innerHTML = [
                 '<div class="info-row">',
                 '<div class="info-title">NEXUS</div>',
-                '<div class="info-item"><span class="info-label">Easy</span><span class="info-value nexus-value">' + Number(nexus.easy || 0).toFixed(2) + '</span></div>',
-                '<div class="info-item"><span class="info-label">Clear</span><span class="info-value nexus-value">' + Number(nexus.normal || 0).toFixed(2) + '</span></div>',
-                '<div class="info-item"><span class="info-label">Hard</span><span class="info-value nexus-value">' + Number(nexus.hard || 0).toFixed(2) + '</span></div>',
-                '<div class="info-item"><span class="info-label">FC</span><span class="info-value nexus-value">' + Number(nexus.fc || 0).toFixed(2) + '</span></div>',
+                nexusItem("Easy", nexus.easy, nexus.easyRate),
+                nexusItem("Clear", nexus.normal, nexus.normalRate),
+                nexusItem("Hard", nexus.hard, nexus.hardRate),
+                nexusItem("FC", nexus.fc, nexus.fcRate),
                 '</div>'
             ].join("");
         }

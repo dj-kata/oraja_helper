@@ -339,6 +339,28 @@ class NexusCalculator:
                 }
         return None
 
+    def get_cached_chart_nexus_info(self, user_skill, *hashes):
+        chart_index = self.skill_chart_index
+        if not chart_index or user_skill is None:
+            return None
+        for hash_value in hashes:
+            key = str(hash_value or "").lower()
+            if not key:
+                continue
+            params = chart_index.get(key)
+            if params:
+                return {
+                    "easy": params["b_easy"],
+                    "normal": params["b_normal"],
+                    "hard": params["b_hard"],
+                    "fc": params["b_fc"],
+                    "easyRate": probability(user_skill, params["b_easy"], params["a"]) * 100.0,
+                    "normalRate": probability(user_skill, params["b_normal"], params["a"]) * 100.0,
+                    "hardRate": probability(user_skill, params["b_hard"], params["a"]) * 100.0,
+                    "fcRate": probability(user_skill, params["b_fc"], params["a"]) * 100.0,
+                }
+        return None
+
     def calculate_from_database_accessor(self, database_accessor):
         user_lamps = build_user_lamps_from_dataframes(
             getattr(database_accessor, "df_score", None),
