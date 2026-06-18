@@ -21,15 +21,15 @@ for asset_file in [
         include_files.append((str(asset_file), str(asset_file)))
 
 # アイコンファイル
-if os.path.exists('src/icon.ico'):
-    include_files.append(('src/icon.ico', 'src/icon.ico'))
+if os.path.exists("src/icon.ico"):
+    include_files.append(("src/icon.ico", "src/icon.ico"))
 
 # ビルドオプション
 build_exe_options = {
     # 含めるパッケージ
     "packages": [
         "obsws_python",  # OBS WebSocket連携に必要
-        "websocket",     # obsws_pythonの依存関係（websocket-client）
+        "websocket",  # obsws_pythonの依存関係（websocket-client）
         "http",
         "PIL",
         "numpy",
@@ -53,10 +53,9 @@ build_exe_options = {
         "typing",
         "ctypes",
         "ctypes.wintypes",
-        "tkinter",      # GUIに必要
-        "winsound",     # サウンド再生に必要
+        "tkinter",  # GUIに必要
+        "winsound",  # サウンド再生に必要
     ],
-    
     # 含めるモジュール
     "includes": [
         "icon",
@@ -65,7 +64,6 @@ build_exe_options = {
         "named_pipe_receiver",
         "obs_control",
         "pickle_converter",
-        "tooltip",
         "settings",
         # ctypes関連（Windows APIアクセスに必要）
         "ctypes",
@@ -75,12 +73,11 @@ build_exe_options = {
         "tkinter",
         "winsound",
         # obsws_pythonはpackagesで指定
-        "obsws_python.events", 
+        "obsws_python.events",
         "obsws_python.subs",
         # "obsws_python.base"
         # 認識用
     ],
-    
     # 除外するパッケージ（サイズ削減のため）
     "excludes": [
         # 認証情報の平文版は除外（暗号化版を使用）
@@ -106,21 +103,16 @@ build_exe_options = {
         "obsws_python.requests",
         "obsws_python.events",
     ],
-    
     # 含めるファイル
     "include_files": include_files,
-    
     # MSVCランタイムを含める
     "include_msvcr": True,
-    
     # zip圧縮の設定
     # zip圧縮を完全に無効化
     "zip_include_packages": [],  # 全て展開
     "zip_exclude_packages": ["obsws_python"],
-    
     # 最適化レベル（2が最大）
     "optimize": 2,
-    
     # ビルドディレクトリ名
     "build_exe": "oraja_helper",
 }
@@ -140,7 +132,7 @@ executables = [
         script="oraja_helper.pyw",
         base=base,
         target_name="oraja_helper.exe" if sys.platform == "win32" else "oraja_helper",
-        icon='src/icon.ico',  # アイコンファイルがあれば指定: "resources/icon.ico"
+        icon="src/icon.ico",  # アイコンファイルがあれば指定: "resources/icon.ico"
         shortcut_name="oraja_helper",
         shortcut_dir="DesktopFolder",
     ),
@@ -148,7 +140,7 @@ executables = [
         script="update.py",
         base=base,
         target_name="update.exe" if sys.platform == "win32" else "update",
-        icon='src/icon.ico',
+        icon="src/icon.ico",
     ),
 ]
 
