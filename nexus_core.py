@@ -3,6 +3,7 @@ import math
 import os
 import sqlite3
 import statistics
+import time
 from pathlib import Path
 
 import requests
@@ -108,14 +109,22 @@ def parse_score_db(db_path):
 
 
 class NexusCalculator:
-    def __init__(self, ir_data_path=None, table_urls=None):
+    def __init__(self, ir_data_path=None, table_urls=None, cache_dir=".cache"):
         self.ir_data_path = ir_data_path
         self.table_urls = table_urls or TABLES
+        self.cache_dir = Path(cache_dir)
+        self.table_cache_path = self.cache_dir / "bms_nexus_tables.json"
         self.table_data_cache = {}
         self.ir_data_cache = None
+        self.skill_chart_index = None
 
     def fetch_table_data(self):
         if self.table_data_cache:
+            return self.table_data_cache
+
+        cached = self.load_table_data_cache()
+        if cached:
+            self.table_data_cache = cached
             return self.table_data_cache
 
         for name, url in self.table_urls.items():
@@ -136,7 +145,30 @@ class NexusCalculator:
                 "charts": data_response.json(),
             }
 
+        self.save_table_data_cache(self.table_data_cache)
         return self.table_data_cache
+
+    def load_table_data_cache(self):
+        if not self.table_cache_path.exists():
+            return {}
+        try:
+            with open(self.table_cache_path, "r", encoding="utf-8") as f:
+                payload = json.load(f)
+            return payload.get("tables", {})
+        except Exception:
+            return {}
+
+    def save_table_data_cache(self, tables):
+        try:
+            self.cache_dir.mkdir(exist_ok=True)
+            payload = {
+                "created_at": int(time.time()),
+                "tables": tables,
+            }
+            with open(self.table_cache_path, "w", encoding="utf-8") as f:
+                json.dump(payload, f, ensure_ascii=False)
+        except Exception:
+            pass
 
     def find_default_ir_data_path(self):
         candidates = []
@@ -185,6 +217,82 @@ class NexusCalculator:
         result = calculate_recommendations(user_lamps, ir_data, tables)
         return format_result(result)
 
+    def calculate_user_skill_from_lamps(self, user_lamps):
+        chart_index = self.get_skill_chart_index()
+        played_by_chart_id = {}
+        for key, lamp in user_lamps.items():
+            params = chart_index.get(str(key).lower())
+            if not params:
+                continue
+            chart_id = params["chart_id"]
+            if chart_id not in played_by_chart_id:
+                played_by_chart_id[chart_id] = dict(params)
+                played_by_chart_id[chart_id]["lamp"] = lamp
+            else:
+                played_by_chart_id[chart_id]["lamp"] = max(
+                    played_by_chart_id[chart_id]["lamp"], lamp
+                )
+
+        played_charts = []
+        for params in played_by_chart_id.values():
+            played_charts.append(
+                {
+                    "lamp": params["lamp"],
+                    "b_easy": params["b_easy"],
+                    "b_normal": params["b_normal"],
+                    "b_hard": params["b_hard"],
+                    "b_fc": params["b_fc"],
+                    "a": params["a"],
+                }
+            )
+        return estimate_user_skill(played_charts)
+
+    def get_skill_chart_index(self):
+        if self.skill_chart_index is not None:
+            return self.skill_chart_index
+
+        tables = self.fetch_table_data()
+        ir_data = self.fetch_ir_data()
+        folder_medians = build_folder_medians(ir_data, tables)
+        chart_index = {}
+
+        for table_name, table_data in tables.items():
+            for chart in table_data["charts"]:
+                level_str = str(chart.get("level", "0"))
+                if "?" in level_str:
+                    continue
+
+                md5 = chart.get("md5", "").lower()
+                sha256 = chart.get("sha256", "").lower()
+                level = safe_float(level_str)
+                base_star = get_base_star(table_name, level)
+                chart_stats = ir_data.get(md5, ir_data.get(sha256, {}))
+                rates = get_rates(chart_stats)
+                chart_id = f"{table_name}:{level_str}:{md5 or sha256}"
+                params = {
+                    "chart_id": chart_id,
+                    "b_easy": get_target_difficulty(
+                        chart_stats, folder_medians, table_name, level_str, base_star, "diff_easy", -1.0, rates["easy"], "e"
+                    ),
+                    "b_normal": get_target_difficulty(
+                        chart_stats, folder_medians, table_name, level_str, base_star, "diff_normal", 0.0, rates["normal"], "n"
+                    ),
+                    "b_hard": get_target_difficulty(
+                        chart_stats, folder_medians, table_name, level_str, base_star, "diff_hard", 2.0, rates["hard"], "h"
+                    ),
+                    "b_fc": get_target_difficulty(
+                        chart_stats, folder_medians, table_name, level_str, base_star, "diff_fc", 13.0, rates["fc"], "f"
+                    ),
+                    "a": get_discrimination(chart_stats, folder_medians, table_name, level_str),
+                }
+                if md5:
+                    chart_index[md5] = params
+                if sha256:
+                    chart_index[sha256] = params
+
+        self.skill_chart_index = chart_index
+        return self.skill_chart_index
+
     def calculate_from_database_accessor(self, database_accessor):
         user_lamps = build_user_lamps_from_dataframes(
             getattr(database_accessor, "df_score", None),
@@ -195,12 +303,15 @@ class NexusCalculator:
         result["db_type"] = "beatoraja"
         return result
 
+    def calculate_user_skill_from_database_accessor(self, database_accessor):
+        user_lamps = build_user_lamps_from_dataframes(
+            getattr(database_accessor, "df_score", None),
+            getattr(database_accessor, "df_songdata", None),
+        )
+        return self.calculate_user_skill_from_lamps(user_lamps)
 
-def calculate_recommendations(user_lamps, ir_data, tables):
-    recommend = []
-    weapon = []
-    all_charts = []
 
+def build_folder_medians(ir_data, tables):
     folder_medians = {}
     for table_name, table_data in tables.items():
         for chart in table_data["charts"]:
@@ -225,6 +336,10 @@ def calculate_recommendations(user_lamps, ir_data, tables):
             values = folder_medians[key][metric]
             folder_medians[key][metric] = statistics.median(values) if values else 99.0
 
+    return folder_medians
+
+
+def build_played_charts(user_lamps, ir_data, tables, folder_medians):
     played_charts = []
     for table_name, table_data in tables.items():
         for chart in table_data["charts"]:
@@ -259,6 +374,16 @@ def calculate_recommendations(user_lamps, ir_data, tables):
                         "a": get_discrimination(chart_stats, folder_medians, table_name, level_str),
                     }
                 )
+    return played_charts
+
+
+def calculate_recommendations(user_lamps, ir_data, tables):
+    recommend = []
+    weapon = []
+    all_charts = []
+
+    folder_medians = build_folder_medians(ir_data, tables)
+    played_charts = build_played_charts(user_lamps, ir_data, tables, folder_medians)
 
     user_skill = estimate_user_skill(played_charts)
 

@@ -150,6 +150,10 @@ class MainWindow:
         self.screen_monitoring_thread = None
         self.named_pipe_receiver = None
         self.use_named_pipe = False
+        self.nexus_calculator = NexusCalculator()
+        self.nexus_skill_update_running = False
+        self.nexus_skill_update_pending = False
+        self.nexus_skill_update_lock = threading.Lock()
         
         # 監視データ
         self.file_exists = False
@@ -176,6 +180,7 @@ class MainWindow:
         self.update_display()
         self.check_updates()
         self.update_db_status()
+        self.request_nexus_skill_update()
         
         # WebSocket自動接続開始
         if self.config.enable_websocket:
@@ -371,8 +376,7 @@ class MainWindow:
                 raise FileNotFoundError("beatorajaのDBファイルが見つかりません。設定を確認してください。")
 
             self.database_accessor.reload_db()
-            calculator = NexusCalculator()
-            result = calculator.calculate_from_database_accessor(self.database_accessor)
+            result = self.nexus_calculator.calculate_from_database_accessor(self.database_accessor)
             output_path = "nexus_recommendations.json"
             with open(output_path, "w", encoding="utf-8") as f:
                 json.dump(result, f, ensure_ascii=False, indent=2)
@@ -407,6 +411,46 @@ class MainWindow:
     def on_nexus_recommendations_failed(self, error):
         self.status_var.set("BMS Nexus計算失敗")
         messagebox.showerror("BMS Nexus", f"リコメンド計算に失敗しました。\n\n{error}")
+
+    def request_nexus_skill_update(self):
+        with self.nexus_skill_update_lock:
+            if self.nexus_skill_update_running:
+                self.nexus_skill_update_pending = True
+                return
+            self.nexus_skill_update_running = True
+
+        thread = threading.Thread(target=self.update_nexus_skill_worker, daemon=True)
+        thread.start()
+
+    def update_nexus_skill_worker(self):
+        try:
+            if not self.database_accessor.is_valid():
+                raise FileNotFoundError("beatorajaのDBファイルが見つかりません。")
+            user_skill = self.nexus_calculator.calculate_user_skill_from_database_accessor(
+                self.database_accessor
+            )
+            self.root.after(0, lambda: self.on_nexus_skill_update_done(user_skill))
+        except Exception as e:
+            logger.error(traceback.format_exc())
+            self.root.after(0, lambda error=e: self.on_nexus_skill_update_failed(error))
+
+    def finish_nexus_skill_update(self):
+        with self.nexus_skill_update_lock:
+            rerun = self.nexus_skill_update_pending
+            self.nexus_skill_update_running = False
+            self.nexus_skill_update_pending = False
+
+        if rerun:
+            self.request_nexus_skill_update()
+
+    def on_nexus_skill_update_done(self, user_skill):
+        if user_skill != 0:
+            self.nexus_skill_var.set(f"{user_skill:.2f}")
+        self.finish_nexus_skill_update()
+
+    def on_nexus_skill_update_failed(self, error):
+        logger.warning(f"BMS Nexus skill update failed: {error}")
+        self.finish_nexus_skill_update()
     
     def start_all_threads(self):
         """全スレッドを開始"""
@@ -481,6 +525,8 @@ class MainWindow:
                 self.database_accessor.manage_results.write_history_xml()
                 self.database_accessor.manage_results.write_updates_xml()
                 self.root.after(0, self.update_stats_gui)
+                self.database_accessor.reload_db()
+                self.request_nexus_skill_update()
 
         if event == "song_play_end" and data.get("playEndMetrics"):
             self.apply_play_end_metrics(data)
@@ -731,6 +777,7 @@ class MainWindow:
                         self.database_accessor.manage_results.write_updates_xml()
                         logger.info(f"added! len(all_results):{len(self.database_accessor.manage_results.all_results)}, len(today_results):{len(self.database_accessor.manage_results.today_results)}")
                         self.update_stats_gui()
+                        self.request_nexus_skill_update()
                         logger.info(f"added! len(all_results):{len(self.database_accessor.manage_results.all_results)}, len(today_results):{len(self.database_accessor.manage_results.today_results)}")
                     
                 else:
@@ -922,6 +969,7 @@ class MainWindow:
         self.database_accessor.set_config(self.config, reload_db=not self.use_named_pipe)
         logger.info(f"added! len(all_results):{len(self.database_accessor.manage_results.all_results)}, len(today_results):{len(self.database_accessor.manage_results.today_results)}")
         self.update_db_status()
+        self.request_nexus_skill_update()
 
         # 設定画面で更新される可能性があるため、DataBaseAccessorをリロードしておく
         self.database_accessor.manage_results.load()
