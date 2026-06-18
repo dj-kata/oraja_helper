@@ -152,5 +152,12 @@ playerフォルダはdbファイルが入っているフォルダを指定して
 ```
 
 # その他
+## Credits / Contributors
+
+- BMS Nexus integration is based on ideas, data, and recommendation logic from [c-ikeda123/bms-nexus](https://github.com/c-ikeda123/bms-nexus).  
+  The integrated Nexus-related code is adapted for oraja_helper without the original Flask UI/server layer.
+
+Third-party license notices are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
 今後追加するかもしれない機能
 - リザルト画像の自動保存
