@@ -162,7 +162,7 @@ class MainWindow:
         # データアクセス用クラス初期化
         self.database_accessor = DataBaseAccessor()
         self.init_named_pipe_receiver()
-        self.database_accessor.set_config(self.config, reload_db=not self.use_named_pipe)
+        self.database_accessor.set_config(self.config, reload_db=True)
         # self.database_accessor.read_old_results()
         self.database_accessor.manage_results.write_history_xml()
         self.database_accessor.manage_results.write_updates_xml()
@@ -352,10 +352,9 @@ class MainWindow:
     
     def start_all_threads(self):
         """全スレッドを開始"""
+        self.start_db_monitoring()
         if self.use_named_pipe:
             self.start_named_pipe_monitoring()
-        else:
-            self.start_db_monitoring()
         self.start_screen_monitoring()
 
     def init_named_pipe_receiver(self):
@@ -417,12 +416,13 @@ class MainWindow:
             result = self.create_result_from_pipe_event(data)
             if result and result.is_valid():
                 self.populate_previous_record(result)
-                self.database_accessor.manage_results.add_result(result)
+                self.database_accessor.manage_results.add_result(result, replace_duplicate=True)
                 self.database_accessor.manage_results.update_stats()
                 self.database_accessor.manage_results.save()
                 self.database_accessor.manage_results.write_history_xml()
                 self.database_accessor.manage_results.write_updates_xml()
                 self.root.after(0, self.update_stats_gui)
+                self.database_accessor.reload_db()
 
         if event == "song_play_end" and data.get("playEndMetrics"):
             self.apply_play_end_metrics(data)
@@ -861,7 +861,7 @@ class MainWindow:
         self.config.load_config()
         self.obs_manager.set_config(self.config)
         logger.info(f"added! len(all_results):{len(self.database_accessor.manage_results.all_results)}, len(today_results):{len(self.database_accessor.manage_results.today_results)}")
-        self.database_accessor.set_config(self.config, reload_db=not self.use_named_pipe)
+        self.database_accessor.set_config(self.config, reload_db=True)
         logger.info(f"added! len(all_results):{len(self.database_accessor.manage_results.all_results)}, len(today_results):{len(self.database_accessor.manage_results.today_results)}")
         self.update_db_status()
 
@@ -896,17 +896,12 @@ class MainWindow:
     def update_db_status(self):
         """dbfile状態の表示を更新"""
         try:
-            if self.use_named_pipe:
-                self.file_status_var.set("PIPE")
-                self.file_status_label.config(foreground="green")
-                return
-
             if self.database_accessor.is_valid():
-                self.file_status_var.set("OK")
-                self.file_status_label.config(foreground="blue")
+                self.file_status_var.set("OK+PIPE" if self.use_named_pipe else "OK")
+                self.file_status_label.config(foreground="green" if self.use_named_pipe else "blue")
             else:
-                self.file_status_var.set("NG")
-                self.file_status_label.config(foreground="red")
+                self.file_status_var.set("PIPE/DB NG" if self.use_named_pipe else "NG")
+                self.file_status_label.config(foreground="orange" if self.use_named_pipe else "red")
         except Exception:
             pass
     

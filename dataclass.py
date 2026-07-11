@@ -428,14 +428,57 @@ class ManageResults:
         ret.sha256 = pre.sha256
         return ret
 
-    def add_result(self, result:OneResult):
+    def find_near_duplicate_result(self, result:OneResult, seconds:int=300):
+        """DB監視とnamed pipeの二重受信で同じリザルトを重複登録しないための近接判定。"""
+        if not result or not result.is_valid():
+            return None
+        for registered in reversed(self.all_results):
+            if not registered.is_valid():
+                continue
+            if registered.sha256 != result.sha256:
+                continue
+            if registered.score != result.score:
+                continue
+            if registered.lamp != result.lamp:
+                continue
+            if abs(int(registered.date) - int(result.date)) <= seconds:
+                return registered
+        return None
+
+    def rebuild_today_results(self):
+        self.today_results = []
+        self.today_updates = {}
+        for registered in self.all_results:
+            if not registered.is_valid():
+                continue
+            if registered.date > int(self.start_time.timestamp()) - self.config.autoload_offset*3600:
+                self.today_results.append(registered)
+                if registered.sha256 not in self.today_updates:
+                    self.today_updates[registered.sha256] = registered
+                else:
+                    self.today_updates[registered.sha256] += registered
+
+    def add_result(self, result:OneResult, replace_duplicate:bool=False):
         """parse後のリザルトを受け取り、本クラス内の配列に登録する。
         all_resultsには全て登録、today_resultsとupdatesにはオフセット条件を満たすもののみ追加。
 
         Args:
             result (OneResult): _description_
+            replace_duplicate (bool, optional): 近接重複がある場合、新しいresultで置き換える。
         """
         logger.info(f"add_result() called. title:{result.title}")
+        duplicate = self.find_near_duplicate_result(result)
+        if duplicate is not None:
+            logger.info(
+                f"near duplicate result skipped. title:{result.title}, "
+                f"sha256:{result.sha256[:10]}, score:{result.score}, replace:{replace_duplicate}"
+            )
+            if replace_duplicate:
+                if duplicate in self.all_results:
+                    self.all_results[self.all_results.index(duplicate)] = result
+                self.rebuild_today_results()
+                return True
+            return False
         if result not in self.all_results:
             self.all_results.append(result)
             logger.debug(f"all_results updated! -> len:{len(self.all_results)}")
@@ -448,6 +491,7 @@ class ManageResults:
                 self.today_updates[result.sha256] = result
             else:
                 self.today_updates[result.sha256] += result
+        return True
 
     def remove_result(self, result:OneResult):
         """指定したリザルトを管理対象から取り除く。"""
