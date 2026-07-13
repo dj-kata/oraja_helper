@@ -86,6 +86,54 @@
             min-height: 30px;
         }
 
+        .best-summary {
+            display: grid;
+            grid-template-columns: 170px 1fr 1fr 1fr;
+            gap: 12px;
+            align-items: center;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(148, 163, 184, 0.28);
+            font-size: 20px;
+        }
+
+        .best-label {
+            color: #bae6fd;
+        }
+
+        .best-item {
+            display: grid;
+            grid-template-columns: auto minmax(0, 1fr);
+            gap: 8px;
+            align-items: center;
+            min-width: 0;
+        }
+
+        .best-name {
+            color: #94a3b8;
+            font-size: 16px;
+        }
+
+        .best-value {
+            font-weight: 800;
+            color: #ffffff;
+            white-space: nowrap;
+        }
+
+        .best-value.bp {
+            color: #fca5a5;
+        }
+
+        .best-option {
+            grid-column: 1 / -1;
+            min-width: 0;
+            color: #86efac;
+            font-size: 18px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
         .option-line {
             display: flex;
             align-items: center;
@@ -289,6 +337,7 @@
             </div>
             <div class="artist" id="artist"></div>
             <div class="option" id="option"></div>
+            <div class="best-summary" id="best-summary"></div>
         </section>
 
         <section class="history">
@@ -407,6 +456,64 @@
             return String(data.difficulty || "").trim();
         }
 
+        function bestFromHistory(history) {
+            if (!Array.isArray(history) || history.length === 0) {
+                return { score: null, bp: null, lamp: null };
+            }
+            const validScore = history.filter(function (r) { return r.score !== undefined && r.score !== null; });
+            const validBp = history.filter(function (r) { return r.bp !== undefined && r.bp !== null; });
+            const validLamp = history.filter(function (r) { return r.lampId !== undefined && r.lampId !== null; });
+            return {
+                score: validScore.length ? validScore.reduce(function (best, r) {
+                    return Number(r.score || 0) > Number(best.score || 0) ? r : best;
+                }) : null,
+                bp: validBp.length ? validBp.reduce(function (best, r) {
+                    const currentBp = r.bp === undefined || r.bp === null ? 999999 : Number(r.bp);
+                    const bestBp = best.bp === undefined || best.bp === null ? 999999 : Number(best.bp);
+                    return currentBp < bestBp ? r : best;
+                }) : null,
+                lamp: validLamp.length ? validLamp.reduce(function (best, r) {
+                    return Number(r.lampId || 0) > Number(best.lampId || 0) ? r : best;
+                }) : null
+            };
+        }
+
+        function bestItemHtml(name, valueHtml, optionText, extraClass) {
+            const valueClass = extraClass ? "best-value " + extraClass : "best-value";
+            return [
+                '<div class="best-item">',
+                '<div class="best-name">' + escapeHtml(name) + '</div>',
+                '<div class="' + valueClass + '">' + valueHtml + '</div>',
+                '<div class="best-option">' + optionHtml(optionText || "?", true) + '</div>',
+                '</div>'
+            ].join("");
+        }
+
+        function updateBestSummary(data, history) {
+            const summary = document.getElementById("best-summary");
+            const best = data.best || bestFromHistory(history);
+            if (!best || (!best.score && !best.bp && !best.lamp)) {
+                summary.innerHTML = "";
+                return;
+            }
+
+            const score = best.score;
+            const bp = best.bp;
+            const lamp = best.lamp;
+            summary.innerHTML = [
+                '<div class="best-label">BEST</div>',
+                score
+                    ? bestItemHtml("Score", escapeHtml(score.score || 0) + ' <span class="rate">' + Number(score.scoreRate || 0).toFixed(2) + '%</span>', score.option, "")
+                    : bestItemHtml("Score", "-", "?", ""),
+                bp
+                    ? bestItemHtml("BP", escapeHtml(bp.bp || 0), bp.option, "bp")
+                    : bestItemHtml("BP", "-", "?", "bp"),
+                lamp
+                    ? bestItemHtml("Lamp", lampHtml(Number(lamp.lampId) || 0, lamp.lamp || ""), lamp.option, "")
+                    : bestItemHtml("Lamp", "-", "?", "")
+            ].join("");
+        }
+
         function update(data) {
             document.getElementById("title").textContent = data.title || "No song";
             document.getElementById("artist").textContent = data.artist || "";
@@ -418,6 +525,7 @@
 
             const body = document.getElementById("history-body");
             const history = Array.isArray(data.history) ? data.history : [];
+            updateBestSummary(data, history);
             if (history.length === 0) {
                 body.innerHTML = '<div class="empty">No play history for this chart</div>';
                 return;

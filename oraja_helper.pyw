@@ -601,6 +601,29 @@ class MainWindow:
                 "timestamp": datetime.datetime.fromtimestamp(r.date).strftime("%Y/%m/%d %H:%M:%S") if r.date else "",
             })
 
+        def result_entry(r):
+            if not r:
+                return None
+            lamp = int(r.lamp) if r.lamp is not None else 0
+            return {
+                "score": int(r.score or 0),
+                "scoreRate": float(r.score_rate or 0),
+                "lamp": lamps[lamp] if 0 <= lamp < len(lamps) else str(lamp),
+                "lampId": lamp,
+                "bp": int(r.bp or 0),
+                "option": getattr(r, "option", "?") or "?",
+                "timestamp": datetime.datetime.fromtimestamp(r.date).strftime("%Y/%m/%d %H:%M:%S") if r.date else "",
+            }
+
+        score_results = [r for r in results if r.score is not None]
+        bp_results = [r for r in results if r.bp is not None]
+        lamp_results = [r for r in results if r.lamp is not None]
+        best = {
+            "score": result_entry(max(score_results, key=lambda r: int(r.score or 0))) if score_results else None,
+            "bp": result_entry(min(bp_results, key=lambda r: int(r.bp) if r.bp is not None else 999999)) if bp_results else None,
+            "lamp": result_entry(max(lamp_results, key=lambda r: int(r.lamp or 0))) if lamp_results else None,
+        }
+
         output = {
             "scene": data.get("scene") or "",
             "event": data.get("event") or "",
@@ -617,6 +640,7 @@ class MainWindow:
             "option2PRaw": data.get("option2P") or "",
             "option2PId": data.get("option2PId", ""),
             "randomPlacement2P": data.get("randomPlacement2P") or "",
+            "best": best,
             "history": history,
         }
         with open(outfile, 'w', encoding='utf-8') as f:
