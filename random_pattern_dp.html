@@ -1,0 +1,493 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Random Pattern DP</title>
+  <style>
+    :root {
+      --digit-gap: 2px;
+      --side-gap: 28px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: transparent;
+    }
+
+    #dp-pattern {
+      display: none;
+      align-items: center;
+      gap: var(--side-gap);
+      width: max-content;
+      height: 100px;
+      line-height: 0;
+    }
+
+    .side-pattern {
+      display: flex;
+      position: relative;
+      align-items: center;
+      gap: var(--digit-gap);
+      width: max-content;
+      height: 100px;
+    }
+
+    .side-pattern[hidden] { display: none; }
+
+    .random-digit {
+      display: inline-block;
+      flex: 0 0 auto;
+      width: 60.875px;
+      height: 100px;
+      background-image: url("./src/random_pattern.png");
+      background-repeat: no-repeat;
+      background-size: 487px 100px;
+      /* スプライトは左から 1,2,3,4,5,6,7,(予備) の8コマ */
+      background-position: calc(var(--digit-index) * -60.875px) 0;
+    }
+
+    .lane-invalid {
+      display: inline-block;
+      flex: 0 0 auto;
+      width: 61px;
+      height: 100px;
+      background-image: url("./src/lane_invalid.png");
+      background-repeat: no-repeat;
+      background-size: 61px 100px;
+    }
+
+    .s-random-label {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      color: #fff3a6;
+      font: 700 34px/1 Arial, Helvetica, sans-serif;
+      letter-spacing: 0;
+      white-space: nowrap;
+      pointer-events: none;
+      text-shadow:
+        -2px -2px 0 #000,
+        0 -2px 0 #000,
+        2px -2px 0 #000,
+        -2px 0 0 #000,
+        2px 0 0 #000,
+        -2px 2px 0 #000,
+        0 2px 0 #000,
+        2px 2px 0 #000;
+    }
+  </style>
+</head>
+<body>
+  <main id="dp-pattern" aria-label="">
+    <div id="pattern-1p" class="side-pattern" aria-label="1P"></div>
+    <div id="pattern-2p" class="side-pattern" aria-label="2P"></div>
+  </main>
+
+  <script>
+    "use strict";
+
+    const S_RANDOM_PATTERN = "__S_RANDOM__";
+
+    function unwrap(value) {
+      let current = value;
+      for (let i = 0; i < 5; i += 1) {
+        if (
+          current &&
+          typeof current === "object" &&
+          !Array.isArray(current) &&
+          Object.prototype.hasOwnProperty.call(current, "value") &&
+          (Object.keys(current).length <= 2 ||
+            Object.prototype.hasOwnProperty.call(current, "class"))
+        ) {
+          current = current.value;
+        } else {
+          break;
+        }
+      }
+      return current;
+    }
+
+    function isLocalPattern(text) {
+      return /^[1-7]{7}$/.test(String(text || ""));
+    }
+
+    function isUniqueLocal(numbers) {
+      return (
+        numbers.length === 7 &&
+        numbers.every(function (n) { return n >= 1 && n <= 7; }) &&
+        new Set(numbers).size === 7
+      );
+    }
+
+    function isUniqueGlobal2P(numbers) {
+      return (
+        numbers.length === 7 &&
+        numbers.every(function (n) { return n >= 9 && n <= 15; }) &&
+        new Set(numbers).size === 7
+      );
+    }
+
+    function toLocalPattern(numbers) {
+      return numbers.join("");
+    }
+
+    function globalToLocal(numbers) {
+      return numbers.map(function (n) { return n - 8; }).join("");
+    }
+
+    /**
+     * 1P向け: ちょうど7桁の1-7のみを受け付ける。
+     * 長い数字列からの部分一致はしない（2Pの9-15連結を壊すため）。
+     */
+    function patternFromValue(value) {
+      const current = unwrap(value);
+      if (current === null || current === undefined) return "";
+
+      if (Array.isArray(current)) {
+        const numbers = current.map(function (item) { return Number(unwrap(item)); });
+        if (isUniqueLocal(numbers)) return toLocalPattern(numbers);
+        return "";
+      }
+
+      if (typeof current === "object") {
+        const fields = ["pattern", "placement", "lanes", "keys", "randomPlacement"];
+        for (let i = 0; i < fields.length; i += 1) {
+          if (Object.prototype.hasOwnProperty.call(current, fields[i])) {
+            const nested = patternFromValue(current[fields[i]]);
+            if (nested) return nested;
+          }
+        }
+        return "";
+      }
+
+      const text = String(current).trim();
+      return isLocalPattern(text) ? text : "";
+    }
+
+    /**
+     * 2Pの randomPlacement2P は DP全体キー 9-15 が区切りなしで連結される。
+     * 例: 11,9,15,14,12,10,13 → "1191514121013" → 3176425
+     *
+     * 注意: この文字列の途中には偶然 [1-7]{7} が含まれることがある。
+     * 例: "1191514121013" 内の "1514121"。部分一致してはいけない。
+     */
+    function parseGlobal2PString(text) {
+      const raw = String(text || "").trim();
+      if (!raw) return "";
+
+      // "11,9,15,14,12,10,13" / "11 9 15 14 12 10 13"
+      if (/[\s,;|/]/.test(raw)) {
+        const numbers = raw.match(/\d+/g).map(Number);
+        if (isUniqueGlobal2P(numbers)) return globalToLocal(numbers);
+        if (isUniqueLocal(numbers)) return toLocalPattern(numbers);
+        return "";
+      }
+
+      if (isLocalPattern(raw)) return raw;
+      if (!/^\d+$/.test(raw)) return "";
+
+      function parse(position, numbers) {
+        if (numbers.length === 7) {
+          return position === raw.length && new Set(numbers).size === 7
+            ? numbers
+            : null;
+        }
+        // 2桁(10-15)を先に試し、1桁の9と誤分割しない
+        const candidates = [15, 14, 13, 12, 11, 10, 9];
+        for (let i = 0; i < candidates.length; i += 1) {
+          const number = candidates[i];
+          const token = String(number);
+          if (raw.startsWith(token, position) && numbers.indexOf(number) === -1) {
+            const result = parse(position + token.length, numbers.concat(number));
+            if (result) return result;
+          }
+        }
+        return null;
+      }
+
+      const parsed = parse(0, []);
+      return parsed ? globalToLocal(parsed) : "";
+    }
+
+    function patternFrom2PValue(value) {
+      const current = unwrap(value);
+      if (current === null || current === undefined) return "";
+
+      if (Array.isArray(current)) {
+        const numbers = current.map(function (item) { return Number(unwrap(item)); });
+        if (isUniqueGlobal2P(numbers)) return globalToLocal(numbers);
+        if (isUniqueLocal(numbers)) return toLocalPattern(numbers);
+        return "";
+      }
+
+      if (typeof current === "object") {
+        const fields = ["pattern", "placement", "lanes", "keys", "randomPlacement"];
+        for (let i = 0; i < fields.length; i += 1) {
+          if (Object.prototype.hasOwnProperty.call(current, fields[i])) {
+            const nested = patternFrom2PValue(current[fields[i]]);
+            if (nested) return nested;
+          }
+        }
+        return "";
+      }
+
+      return parseGlobal2PString(current);
+    }
+
+    function pairFromValue(value) {
+      const current = unwrap(value);
+
+      if (Array.isArray(current) && current.length === 2) {
+        return {
+          oneP: patternFromValue(current[0]),
+          twoP: patternFrom2PValue(current[1])
+        };
+      }
+
+      if (current && typeof current === "object" && !Array.isArray(current)) {
+        return {
+          oneP: patternFromValue(
+            current.oneP || current["1P"] || current.player1 || current.left
+          ),
+          twoP: patternFrom2PValue(
+            current.twoP || current["2P"] || current.player2 || current.right
+          )
+        };
+      }
+
+      const text = String(current || "").trim();
+      if (/^[1-7]{14}$/.test(text)) {
+        return {
+          oneP: text.slice(0, 7),
+          twoP: text.slice(7, 14)
+        };
+      }
+
+      return { oneP: "", twoP: "" };
+    }
+
+    function patternFromText(optionText) {
+      const text = String(unwrap(optionText) || "").trim();
+      // オプション文言中の配置は空白等で区切られている前提で、厳密な7桁のみ採用
+      const exact = text.match(/(?:^|[^0-9])([1-7]{7})(?![0-9])/);
+      if (exact) return exact[1];
+
+      const upper = text.toUpperCase();
+      if (
+        upper.includes("S-RANDOM") ||
+        upper.includes("S RANDOM") ||
+        upper.includes("S-RAN") ||
+        upper.includes("SRANDOM") ||
+        upper.includes("SUPER RANDOM") ||
+        text.includes("S乱")
+      ) {
+        return S_RANDOM_PATTERN;
+      }
+      if (upper.includes("MIRROR")) return "7654321";
+      if (
+        upper.includes("RANDOM") ||
+        upper.includes("R-RAN") ||
+        upper.includes("H-RAN")
+      ) {
+        return "";
+      }
+      if (
+        !text ||
+        upper.includes("NORMAL") ||
+        upper.includes("REGULAR") ||
+        upper.includes("OFF") ||
+        text.includes("正規")
+      ) {
+        return "1234567";
+      }
+      return "";
+    }
+
+    function splitSideOptions(data) {
+      let option1P = data.option1PRaw || data.option1P || data.option1p || "";
+      let option2P = data.option2PRaw || data.option2P || data.option2p || "";
+      const combined = data.optionRaw || data.option || "";
+
+      if (typeof combined === "string" && combined.includes("/")) {
+        const parts = combined.split("/");
+        if (!option1P) option1P = parts[0] || "";
+        if (!option2P) option2P = parts.slice(1).join("/") || "";
+      }
+      if (!option1P) option1P = combined;
+
+      return { oneP: option1P, twoP: option2P };
+    }
+
+    function firstPattern(data, keys, parser) {
+      const parsePattern = parser || patternFromValue;
+      for (let i = 0; i < keys.length; i += 1) {
+        if (Object.prototype.hasOwnProperty.call(data, keys[i])) {
+          const pattern = parsePattern(data[keys[i]]);
+          if (pattern) return pattern;
+        }
+      }
+      return "";
+    }
+
+    function patternsFromData(rawData) {
+      const data = unwrap(rawData);
+      if (!data || typeof data !== "object" || data.scene !== "play") {
+        return { oneP: "", twoP: "" };
+      }
+
+      let oneP = firstPattern(data, [
+        "randomPlacement",
+        "randomPlacement1P",
+        "randomPlacement1p",
+        "randomPlacementP1",
+        "placement1P",
+        "placement1p"
+      ]);
+      let twoP = firstPattern(
+        data,
+        [
+          "randomPlacement2P",
+          "randomPlacement2p",
+          "randomPlacementP2",
+          "placement2P",
+          "placement2p"
+        ],
+        patternFrom2PValue
+      );
+
+      // randomPlacement 自体を14桁/配列とみなす補完は、1Pが未取得のときだけ行う
+      if (!oneP || !twoP) {
+        const pairCandidates = [
+          data.randomPlacements,
+          data.randomPlacementDP,
+          data.dpRandomPlacement
+        ];
+        // 1Pがまだ無いときだけ randomPlacement をペア候補に使う
+        if (!oneP) pairCandidates.push(data.randomPlacement);
+
+        for (let i = 0; i < pairCandidates.length && (!oneP || !twoP); i += 1) {
+          const pair = pairFromValue(pairCandidates[i]);
+          if (!oneP && pair.oneP) oneP = pair.oneP;
+          if (!twoP && pair.twoP) twoP = pair.twoP;
+        }
+      }
+
+      const player1 = unwrap(data.player1 || data.oneP || data["1P"]);
+      const player2 = unwrap(data.player2 || data.twoP || data["2P"]);
+      if (!oneP && player1 && typeof player1 === "object") {
+        oneP = firstPattern(player1, ["randomPlacement", "placement", "pattern"]);
+      }
+      if (!twoP && player2 && typeof player2 === "object") {
+        twoP = firstPattern(
+          player2,
+          ["randomPlacement", "placement", "pattern"],
+          patternFrom2PValue
+        );
+      }
+
+      const sideOptions = splitSideOptions(data);
+
+      if (!oneP) oneP = patternFromText(sideOptions.oneP);
+      if (!twoP) twoP = patternFromText(sideOptions.twoP);
+
+      return { oneP: oneP, twoP: twoP };
+    }
+
+    function digitMarkup(pattern) {
+      return pattern.split("").map(function (digit) {
+        // 画像は index0=「1」… index6=「7」。値1→index0 なので -1 する。
+        const index = Number(digit) - 1;
+        return (
+          '<span class="random-digit" style="--digit-index:' +
+          index +
+          '" aria-hidden="true"></span>'
+        );
+      }).join("");
+    }
+
+    function invalidLaneMarkup() {
+      return Array.from({ length: 7 }, function () {
+        return '<span class="lane-invalid" aria-hidden="true"></span>';
+      }).join("") + '<span class="s-random-label" aria-hidden="true">S-RANDOM</span>';
+    }
+
+    function renderSide(element, sideName, pattern) {
+      const valid = isLocalPattern(pattern);
+      const sRandom = pattern === S_RANDOM_PATTERN;
+      element.hidden = !valid && !sRandom;
+      element.innerHTML = valid ? digitMarkup(pattern) : sRandom ? invalidLaneMarkup() : "";
+      element.setAttribute(
+        "aria-label",
+        valid ? sideName + " " + pattern : sRandom ? sideName + " S-RANDOM" : sideName
+      );
+      return valid || sRandom;
+    }
+
+    function sideLabel(sideName, pattern) {
+      return pattern === S_RANDOM_PATTERN ? sideName + " S-RANDOM" : sideName + " " + pattern;
+    }
+
+    function render(patterns) {
+      const root = document.getElementById("dp-pattern");
+      const has1P = renderSide(
+        document.getElementById("pattern-1p"),
+        "1P",
+        patterns.oneP
+      );
+      const has2P = renderSide(
+        document.getElementById("pattern-2p"),
+        "2P",
+        patterns.twoP
+      );
+
+      if (!has1P && !has2P) {
+        root.style.display = "none";
+        root.setAttribute("aria-label", "");
+        return;
+      }
+
+      root.style.display = "flex";
+      root.setAttribute(
+        "aria-label",
+        [
+          has1P ? sideLabel("1P", patterns.oneP) : "",
+          has2P ? sideLabel("2P", patterns.twoP) : ""
+        ]
+          .filter(Boolean)
+          .join(", ")
+      );
+    }
+
+    function load() {
+      const oldScript = document.getElementById("history-cursong-data");
+      if (oldScript) oldScript.remove();
+
+      const script = document.createElement("script");
+      script.id = "history-cursong-data";
+      script.src = "./history_cursong_data.js?ts=" + Date.now();
+      script.onload = function () {
+        render(patternsFromData(window.__ORAJA_HELPER_CURRENT_SONG__));
+      };
+      script.onerror = function () {
+        render({ oneP: "", twoP: "" });
+      };
+      document.body.appendChild(script);
+    }
+
+    // テストやコンソール確認用
+    window.__ORAJA_DP_PATTERNS_FROM_DATA__ = patternsFromData;
+
+    load();
+    setInterval(load, 500);
+  </script>
+</body>
+</html>

@@ -20,6 +20,7 @@
 
         #pattern {
             display: none;
+            position: relative;
             align-items: center;
             gap: 2px;
             width: max-content;
@@ -37,12 +38,45 @@
             background-size: 487px 100px;
             background-position: calc(var(--digit-index) * -60.875px) 0;
         }
+
+        .lane-invalid {
+            display: inline-block;
+            flex: 0 0 auto;
+            width: 61px;
+            height: 100px;
+            background-image: url("./src/lane_invalid.png");
+            background-repeat: no-repeat;
+            background-size: 61px 100px;
+        }
+
+        .s-random-label {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            color: #fff3a6;
+            font: 700 34px/1 Arial, Helvetica, sans-serif;
+            letter-spacing: 0;
+            white-space: nowrap;
+            pointer-events: none;
+            text-shadow:
+                -2px -2px 0 #000,
+                0 -2px 0 #000,
+                2px -2px 0 #000,
+                -2px 0 0 #000,
+                2px 0 0 #000,
+                -2px 2px 0 #000,
+                0 2px 0 #000,
+                2px 2px 0 #000;
+        }
     </style>
 </head>
 <body>
     <div id="pattern" aria-label=""></div>
 
     <script>
+        const S_RANDOM_PATTERN = "__S_RANDOM__";
+
         function patternFromText(optionText) {
             const text = String(optionText || "").trim();
             const upper = text.toUpperCase();
@@ -50,11 +84,18 @@
             if (explicit) {
                 return explicit[0];
             }
+            if (
+                upper.includes("S-RANDOM") ||
+                upper.includes("S RANDOM") ||
+                upper.includes("S-RAN") ||
+                upper.includes("SRANDOM") ||
+                upper.includes("SUPER RANDOM") ||
+                text.includes("S乱")
+            ) {
+                return S_RANDOM_PATTERN;
+            }
             if (upper.includes("MIRROR")) {
                 return "7654321";
-            }
-            if (upper.includes("S-RANDOM") || upper.includes("S RANDOM") || upper.includes("SUPER RANDOM")) {
-                return "";
             }
             if (!text || upper.includes("NORMAL") || upper.includes("REGULAR") || upper.includes("OFF") || text.includes("正規")) {
                 return "1234567";
@@ -75,6 +116,15 @@
 
         function render(pattern) {
             const root = document.getElementById("pattern");
+            if (pattern === S_RANDOM_PATTERN) {
+                root.innerHTML = Array.from({ length: 7 }, function () {
+                    return '<span class="lane-invalid" aria-hidden="true"></span>';
+                }).join("") + '<span class="s-random-label" aria-hidden="true">S-RANDOM</span>';
+                root.setAttribute("aria-label", "S-RANDOM");
+                root.style.display = "flex";
+                return;
+            }
+
             if (!/^[1-7]{7}$/.test(pattern || "")) {
                 root.style.display = "none";
                 root.innerHTML = "";
