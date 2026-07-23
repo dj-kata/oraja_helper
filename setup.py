@@ -16,6 +16,7 @@ for html_file in Path(".").glob("*.html"):
 # HTMLから参照する静的素材
 for asset_file in [
     Path("src/random_pattern.png"),
+    Path("src/lane_invalid.png"),
 ]:
     if asset_file.exists():
         include_files.append((str(asset_file), str(asset_file)))
