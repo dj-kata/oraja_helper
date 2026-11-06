@@ -297,7 +297,8 @@ class MainWindow:
         ttk.Label(main_frame, textvariable=self.elapsed_time_var, font=("Arial", 12, "bold")).grid(row=0, column=1, sticky=tk.W, padx=(10, 0), pady=5)
         
         # 監視対象フォルダ表示
-        ttk.Label(main_frame, text="beatoraja path:").grid(row=1, column=0, sticky=tk.W, pady=5)
+        self.game_path_label = ttk.Label(main_frame, text="beatoraja path:")
+        self.game_path_label.grid(row=1, column=0, sticky=tk.W, pady=5)
         self.oraja_path_var = tk.StringVar()
         ttk.Label(main_frame, textvariable=self.oraja_path_var, wraplength=300).grid(row=1, column=1, sticky=tk.W, padx=(10, 0), pady=5)
         
@@ -359,6 +360,10 @@ class MainWindow:
 
     def init_named_pipe_receiver(self):
         """lr2orajaからのnamed pipe受信が使えるか確認"""
+        if self.config.player_mode == "bmz":
+            self.named_pipe_receiver = None
+            self.use_named_pipe = False
+            return
         try:
             self.named_pipe_receiver = NamedPipeLineReceiver("oraja_helper")
             self.use_named_pipe = self.named_pipe_receiver.is_available()
@@ -879,10 +884,13 @@ class MainWindow:
 
     def update_config_display(self):
         """設定情報の表示を更新"""
-        self.oraja_path_var.set(self.config.oraja_path or "未設定")
-        
         # 設定の更新
         self.config.load_config()
+        player_name = "BMZ Player" if self.config.player_mode == "bmz" else "beatoraja"
+        self.game_path_label.config(text=f"{player_name} path:")
+        self.oraja_path_var.set(
+            f"{player_name}: {self.config.oraja_path}" if self.config.oraja_path else "未設定"
+        )
         self.obs_manager.set_config(self.config)
         logger.info(f"added! len(all_results):{len(self.database_accessor.manage_results.all_results)}, len(today_results):{len(self.database_accessor.manage_results.today_results)}")
         self.database_accessor.set_config(self.config, reload_db=True)

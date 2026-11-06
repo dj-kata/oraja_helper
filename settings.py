@@ -20,6 +20,7 @@ class SettingsWindow:
         self.window.grab_set()
 
         # 変数の初期化
+        self.player_mode_var = tk.StringVar(value=self.config.player_mode)
         self.oraja_path_var = tk.StringVar(value=self.config.oraja_path)
         self.player_path_var = tk.StringVar(value=self.config.player_path)
         self.websocket_host_var = tk.StringVar(value=self.config.websocket_host)
@@ -108,8 +109,27 @@ class SettingsWindow:
         )
         folder_frame.pack(fill=tk.X, pady=(0, 15))
 
+        mode_frame = ttk.Frame(folder_frame)
+        mode_frame.pack(fill=tk.X, pady=(0, 10))
+        ttk.Label(mode_frame, text="プレイヤー:").pack(side=tk.LEFT)
+        ttk.Radiobutton(
+            mode_frame,
+            text="beatoraja",
+            variable=self.player_mode_var,
+            value="beatoraja",
+            command=self.on_player_mode_changed,
+        ).pack(side=tk.LEFT, padx=(10, 5))
+        ttk.Radiobutton(
+            mode_frame,
+            text="BMZ Player",
+            variable=self.player_mode_var,
+            value="bmz",
+            command=self.on_player_mode_changed,
+        ).pack(side=tk.LEFT, padx=5)
+
         # フォルダパス設定
-        ttk.Label(folder_frame, text="beatorajaインストール先:").pack(anchor=tk.W)
+        self.oraja_path_label = ttk.Label(folder_frame)
+        self.oraja_path_label.pack(anchor=tk.W)
 
         oraja_path_frame = ttk.Frame(folder_frame)
         oraja_path_frame.pack(fill=tk.X, pady=(5, 0))
@@ -124,7 +144,8 @@ class SettingsWindow:
         )
 
         # フォルダパス設定
-        ttk.Label(folder_frame, text="playerフォルダ:").pack(anchor=tk.W)
+        self.player_path_label = ttk.Label(folder_frame, text="playerフォルダ:")
+        self.player_path_label.pack(anchor=tk.W)
 
         player_path_frame = ttk.Frame(folder_frame)
         player_path_frame.pack(fill=tk.X, pady=(5, 0))
@@ -134,9 +155,11 @@ class SettingsWindow:
         )
         self.player_path_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
 
-        ttk.Button(
+        self.player_path_button = ttk.Button(
             player_path_frame, text="変更", command=self.change_player_path
-        ).pack(side=tk.RIGHT)
+        )
+        self.player_path_button.pack(side=tk.RIGHT)
+        self.on_player_mode_changed(refresh=False)
 
         # WebSocket設定セクション
         websocket_frame = ttk.LabelFrame(
@@ -278,7 +301,7 @@ class SettingsWindow:
             # 難易度表データが読み込めない場合
             ttk.Label(
                 self.nglist_section,
-                text="難易度表データを読み込めません。\nbeatorajaのインストール先が正しく設定されているか確認してください。",
+                text="難易度表データを読み込めません。\nプレイヤーのインストール先が正しく設定されているか確認してください。",
                 foreground="red",
             ).pack(anchor=tk.W, pady=10)
             return
@@ -345,6 +368,7 @@ class SettingsWindow:
             # 現在のoraja_pathを使用して一時的なConfigを作成
             temp_config = type("TempConfig", (), {})()
             temp_config.oraja_path = self.oraja_path_var.get()
+            temp_config.player_mode = self.player_mode_var.get()
             temp_config.difftable_nglist = self.config.difftable_nglist
 
             # DiffTableを新しいパスで初期化
@@ -394,8 +418,9 @@ class SettingsWindow:
 
     def change_oraja_path(self):
         """フォルダ選択ダイアログを開く"""
+        player_name = "BMZ Player" if self.player_mode_var.get() == "bmz" else "beatoraja"
         oraja_path = filedialog.askdirectory(
-            title="beatorajaのインストール先を選択してください",
+            title=f"{player_name}のインストール先を選択してください",
             initialdir=self.oraja_path_var.get() or "/",
         )
 
@@ -407,6 +432,19 @@ class SettingsWindow:
             self.window.after(
                 100, self.refresh_difftable_ui
             )  # 少し遅延させて確実に更新
+
+    def on_player_mode_changed(self, refresh=True):
+        """プレイヤー種別に応じてパス設定欄を切り替える。"""
+        is_bmz = self.player_mode_var.get() == "bmz"
+        self.oraja_path_label.config(
+            text="BMZ Playerインストール先:" if is_bmz else "beatorajaインストール先:"
+        )
+        state = tk.DISABLED if is_bmz else tk.NORMAL
+        self.player_path_entry.config(state=state if is_bmz else "readonly")
+        self.player_path_button.config(state=state)
+        self.player_path_label.config(foreground="gray" if is_bmz else "black")
+        if refresh:
+            self.refresh_difftable_ui()
 
     def change_player_path(self):
         """フォルダ選択ダイアログを開く"""
@@ -430,6 +468,7 @@ class SettingsWindow:
     def load_oraja_log(self):
         # 現在のUI状態でconfigを更新してからDataBaseAccessorを作成
         temp_config = Config()
+        temp_config.player_mode = self.player_mode_var.get()
         temp_config.oraja_path = self.oraja_path_var.get()
         temp_config.player_path = self.player_path_var.get()
         temp_config.autoload_offset = self.autoload_offset_var.get()
@@ -472,6 +511,7 @@ class SettingsWindow:
 
         try:
             # 設定を保存
+            self.config.player_mode = self.player_mode_var.get()
             self.config.oraja_path = self.oraja_path_var.get()
             self.config.player_path = self.player_path_var.get()
             self.config.websocket_host = self.websocket_host_var.get().strip()

@@ -1,6 +1,6 @@
 # oraja_helperとは？
-beatorajaのプレーログ及び、その日に叩いたノーツ数をOBSで表示するツールです。  
-ゲーム画面のキャプチャではなく、beatorajaのdbファイルを監視してデータを取得しています。  
+beatoraja・BMZ Playerのプレーログ及び、その日に叩いたノーツ数をOBSで表示するツールです。
+ゲーム画面のキャプチャではなく、プレイヤーのdbファイルを監視してデータを取得しています。
 
 リザルトからノーツ数を割り出しているので、選曲画面での空打ちがカウントされず、正確なノーツ数が出ます。  
 (pg+gr+gd+bd+見逃しprのみ加算)
@@ -19,8 +19,8 @@ https://x.com/cold_planet_/status/1964573250895434226
 # 設定方法
 1. [releaseページ](https://github.com/dj-kata/oraja_helper/releases)から一番上のoraja_helper.zipをDLし、好きなフォルダに解凍する
 2. oraja_helper.exeを実行する
-3. メニューバー->settingsよりbeatorajaのパス(本体、プレーヤーフォルダ)を指定する
-4. 必要に応じて、beatorajaの過去ログを取得する。(月のノーツ数計算などに利用可能だが、連奏した曲などは取得不可)
+3. メニューバー->settingsで使用するプレイヤーを選び、パスを指定する。beatorajaは本体とプレーヤーフォルダ、BMZ Playerは本体フォルダを指定する
+4. 必要に応じて、過去ログを取得する。(beatorajaでは月のノーツ数計算などに利用可能だが、連奏した曲などは取得不可。BMZ Playerでは`score_history`の全履歴を取得可能)
 5. 必要に応じて、ツイート設定を変更する。
 6. 必要に応じて、難易度表選択の欄で表示したくない難易度表のチェックを外す。
 7. OBSに情報表示用HTMLをドラッグ&ドロップで挿入する。(ソース→追加→ブラウザからでも出来ます)  - 配信画面を想定したレイアウトを使いたい場合はwhole_layout.htmlを利用(幅1920，高さ1080)
@@ -38,6 +38,8 @@ https://x.com/cold_planet_/status/1964573250895434226
 beatorajaのパス設定は以下のようになっていればOKです。
 playerフォルダはdbファイルが入っているフォルダを指定してください。  
 <img width="591" alt="Image" src="https://github.com/user-attachments/assets/405c5d73-de60-41e7-81be-790acf61df70" />
+
+BMZ Playerを使用する場合はプレイヤー欄で「BMZ Player」を選択し、`bmz-player.exe`があるフォルダを指定してください。アクティブプロファイル、スコアDB、曲情報、難易度表はBMZ Playerの設定とDBから自動取得します。
 
 自動ツイート設定により、oraja_helper終了時にブラウザ上で以下のようなツイート画面が出ます。  
 こちらの機能は```メニューバー内のTweet->daily```からも利用できます。  

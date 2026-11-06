@@ -8,6 +8,8 @@ import datetime
 import os
 import re
 import sqlite3
+import tomllib
+from pathlib import Path
 import pandas as pd
 import copy
 import webbrowser, urllib
@@ -64,7 +66,11 @@ class DiffTable:
                 return
         
         self.config = config
-        self.nglist = list(set(self.nglist + getattr(config, 'difftable_nglist', [])))
+        self.nglist = list(set(['BMS Search'] + getattr(config, 'difftable_nglist', [])))
+
+        if getattr(config, 'player_mode', 'beatoraja') == 'bmz':
+            self.parse_bmz_database()
+            return
         
         # oraja_pathが設定されていない場合は空の状態で初期化
         if not hasattr(config, 'oraja_path') or not config.oraja_path:
@@ -74,7 +80,7 @@ class DiffTable:
             self.difftable = {}
             self.songtable = {}
             return
-        
+
         try:
             self.parse_bmtfiles()
             self.update_tables()
@@ -86,6 +92,51 @@ class DiffTable:
             self.tables = []
             self.difftable = {}
             self.songtable = {}
+
+    def parse_bmz_database(self):
+        """BMZ Playerのlibrary.dbから難易度表を構築する。"""
+        library_db = os.path.join(self.config.oraja_path, 'data', 'library.db')
+        if not os.path.exists(library_db):
+            self.table_names = []
+            self.tables = []
+            self.difftable = {}
+            self.songtable = {}
+            return
+
+        difftable = defaultdict(list)
+        songtable = {}
+        with self._connect_readonly(library_db) as conn:
+            tables = conn.execute(
+                'SELECT id, name, symbol FROM difficulty_tables ORDER BY id'
+            ).fetchall()
+            self.table_names = sorted({row[1] for row in tables})
+            self.tables = [
+                {'id': row[0], 'name': row[1], 'symbol': row[2]}
+                for row in tables if row[1] not in self.nglist
+            ]
+            enabled_ids = [table['id'] for table in self.tables]
+            if enabled_ids:
+                placeholders = ','.join('?' for _ in enabled_ids)
+                rows = conn.execute(
+                    f'''SELECT e.sha256, e.md5, e.title, e.level, t.symbol
+                        FROM difficulty_table_entries e
+                        JOIN difficulty_tables t ON t.id = e.table_id
+                        WHERE e.table_id IN ({placeholders})''',
+                    enabled_ids,
+                )
+                for sha256, md5, title, level, symbol in rows:
+                    difficulty = f'{symbol}{level}' if symbol else str(level)
+                    for hash_value in (sha256, md5):
+                        if hash_value and difficulty not in difftable[hash_value]:
+                            difftable[hash_value].append(difficulty)
+                            songtable[hash_value] = (difficulty, title)
+        self.difftable = difftable
+        self.songtable = songtable
+        print(f'BMZ難易度表辞書を構築しました (楽曲数: {len(songtable)})')
+
+    @staticmethod
+    def _connect_readonly(dbpath):
+        return sqlite3.connect(f'{Path(dbpath).resolve().as_uri()}?mode=ro', uri=True)
 
     def parse_gzfile_to_json(self, filepath) -> json:
         """bmt(gz)ファイルからjsonへパース
@@ -682,10 +733,33 @@ class ManageResults:
         webbrowser.open(f"https://twitter.com/intent/tweet?text={encoded_msg}")
 
 class DataBaseAccessor:
+    BMZ_LAMP_IDS = {
+        'NoPlay': 0,
+        'Failed': 1,
+        'AssistEasy': 2,
+        'LightAssistEasy': 3,
+        'Easy': 4,
+        'Normal': 5,
+        'Hard': 6,
+        'ExHard': 7,
+        'FullCombo': 8,
+        'Perfect': 9,
+        'Max': 10,
+    }
+
     def __init__(self):
         self.difftable = DiffTable() # 難易度情報を取得するために持っておく
         self.manage_results = ManageResults() # xml出力向けにOneResultの配列を持っておく
         self.db_updated_date = {} # 各dbfileの最終更新日時を覚えておく、必要なものだけ読み込む
+        self.player_mode = 'beatoraja'
+        self.bmz_last_history_id = None
+        self.pending_bmz_results = []
+        self.bmz_chart_cache = None
+        self.df_scorelog = pd.DataFrame()
+        self.df_score = pd.DataFrame()
+        self.df_scoredatalog = pd.DataFrame()
+        self.df_songdata = pd.DataFrame()
+        self.df_songinfo = pd.DataFrame()
 
     def is_valid(self):
         """すべての設定ファイルが存在すればTrue,無効な設定があればFalseを返す
@@ -693,6 +767,8 @@ class DataBaseAccessor:
         Returns:
             bool: 判定結果
         """
+        if self.player_mode == 'bmz':
+            return os.path.exists(self.db_score) and os.path.exists(self.db_library)
         ret = True
         ret &= os.path.exists(self.db_score)
         ret &= os.path.exists(self.db_scoredatalog)
@@ -710,13 +786,27 @@ class DataBaseAccessor:
         """
         logger.info('config updated')
         self.config = config
+        self.player_mode = getattr(config, 'player_mode', 'beatoraja')
+        self.bmz_last_history_id = None
+        self.pending_bmz_results = []
+        self.bmz_chart_cache = None
         self.difftable.set_config(config)
         self.manage_results.set_config(config)
-        self.db_songdata     = os.path.join(self.config.oraja_path, 'songdata.db')
-        self.db_songinfo     = os.path.join(self.config.oraja_path, 'songinfo.db')
-        self.db_score        = os.path.join(self.config.player_path, 'score.db')
-        self.db_scorelog     = os.path.join(self.config.player_path, 'scorelog.db')
-        self.db_scoredatalog = os.path.join(self.config.player_path, 'scoredatalog.db')
+        if self.player_mode == 'bmz':
+            profile_name = self._resolve_bmz_profile_name()
+            profile_dir = os.path.join(self.config.oraja_path, 'data', 'profiles', profile_name)
+            self.db_library = os.path.join(self.config.oraja_path, 'data', 'library.db')
+            self.db_score = os.path.join(profile_dir, 'score.db')
+            self.db_scorelog = ''
+            self.db_scoredatalog = ''
+            self.db_songdata = self.db_library
+            self.db_songinfo = self.db_library
+        else:
+            self.db_songdata     = os.path.join(self.config.oraja_path, 'songdata.db')
+            self.db_songinfo     = os.path.join(self.config.oraja_path, 'songinfo.db')
+            self.db_score        = os.path.join(self.config.player_path, 'score.db')
+            self.db_scorelog     = os.path.join(self.config.player_path, 'scorelog.db')
+            self.db_scoredatalog = os.path.join(self.config.player_path, 'scoredatalog.db')
 
         # configが確定した時点でdbをリロード
         if reload_db:
@@ -725,6 +815,24 @@ class DataBaseAccessor:
         else:
             logger.info("db reload skipped")
         self.manage_results.set_config(config)
+
+    def _resolve_bmz_profile_name(self):
+        config_path = os.path.join(self.config.oraja_path, 'data', 'config.toml')
+        try:
+            with open(config_path, 'rb') as f:
+                profile_name = tomllib.load(f).get('active_profile', 'default')
+            return os.path.basename(str(profile_name)) or 'default'
+        except (OSError, tomllib.TOMLDecodeError):
+            logger.warning('BMZのactive_profileを取得できないためdefaultを使用します')
+            return 'default'
+
+    @staticmethod
+    def _connect_readonly(dbpath):
+        return sqlite3.connect(
+            f'{Path(dbpath).resolve().as_uri()}?mode=ro',
+            uri=True,
+            timeout=5,
+        )
 
     def load_one_dbfile(self, dbpath:str, dbname:str) -> pd.DataFrame:
         """1つのdbfileをロードする。最終更新時刻を用いて、更新のないものはスキップする。
@@ -758,6 +866,8 @@ class DataBaseAccessor:
         if not self.is_valid():
             print('dbfiles invalid! skipped')
             return False
+        if self.player_mode == 'bmz':
+            return self._reload_bmz_db()
         tmp_df_scorelog = self.load_one_dbfile(self.db_scorelog, 'scorelog')
         self.df_scorelog = tmp_df_scorelog if tmp_df_scorelog is not None else self.df_scorelog
         tmp_df_score = self.load_one_dbfile(self.db_score, 'score')
@@ -772,6 +882,104 @@ class DataBaseAccessor:
 
         #return (tmp_df_scorelog is not None) or (tmp_df_score is not None) or (tmp_df_scoredatalog is not None) or (tmp_df_songdata is not None) or (tmp_df_songinfo is not None)
         return (tmp_df_score is not None) and (tmp_df_scoredatalog is not None)
+
+    def _reload_bmz_db(self):
+        """score_historyの連番IDでBMZの新規リザルトを検出する。"""
+        with self._connect_readonly(self.db_score) as conn:
+            conn.row_factory = sqlite3.Row
+            if self.bmz_last_history_id is None:
+                row = conn.execute('SELECT COALESCE(MAX(id), 0) FROM score_history').fetchone()
+                self.bmz_last_history_id = int(row[0])
+                logger.info(f'BMZ履歴監視をid={self.bmz_last_history_id}から開始します')
+                return False
+            rows = conn.execute(
+                'SELECT * FROM score_history WHERE id > ? ORDER BY id',
+                (self.bmz_last_history_id,),
+            ).fetchall()
+        if not rows:
+            return False
+
+        parsed_results = []
+        for row in rows:
+            result = self._parse_bmz_history(row)
+            if result is None:
+                # library.dbへの反映待ちの可能性があるため、次の監視周期で再試行する。
+                break
+            parsed_results.append(result)
+            self.bmz_last_history_id = int(row['id'])
+        self.pending_bmz_results.extend(parsed_results)
+        logger.info(f'BMZ新規履歴を{len(parsed_results)}件読み込みました')
+        return bool(parsed_results)
+
+    def _load_bmz_chart(self, sha256):
+        if self.bmz_chart_cache is None:
+            self.bmz_chart_cache = {}
+            with self._connect_readonly(self.db_library) as conn:
+                conn.row_factory = sqlite3.Row
+                for chart in conn.execute(
+                    'SELECT sha256, md5, title, length_ms FROM charts ORDER BY id'
+                ):
+                    if chart['sha256'] not in self.bmz_chart_cache:
+                        self.bmz_chart_cache[chart['sha256']] = dict(chart)
+        chart = self.bmz_chart_cache.get(sha256)
+        if chart is None:
+            # BMZ起動中のライブラリ再スキャンで追加された譜面も拾う。
+            with self._connect_readonly(self.db_library) as conn:
+                conn.row_factory = sqlite3.Row
+                row = conn.execute(
+                    '''SELECT sha256, md5, title, length_ms FROM charts
+                       WHERE sha256 = ? ORDER BY id LIMIT 1''',
+                    (sha256,),
+                ).fetchone()
+            if row is not None:
+                chart = dict(row)
+                self.bmz_chart_cache[sha256] = chart
+        return chart
+
+    def _parse_bmz_history(self, row):
+        sha256 = row['chart_sha256']
+        chart = self._load_bmz_chart(sha256)
+        if chart is None:
+            logger.warning(f'BMZ曲情報が見つかりません: {sha256}')
+            return None
+
+        judge = [
+            int(row['fast_pgreat']) + int(row['slow_pgreat']),
+            int(row['fast_great']) + int(row['slow_great']),
+            int(row['fast_good']) + int(row['slow_good']),
+            int(row['fast_bad']) + int(row['slow_bad']),
+            int(row['fast_poor']) + int(row['slow_poor']),
+            int(row['fast_empty_poor']) + int(row['slow_empty_poor']),
+        ]
+        notes = int(row['total_notes'])
+        score = int(row['ex_score'])
+        difficulties = sorted(set(
+            self.difftable.search_from_hash(sha256)
+            + self.difftable.search_from_hash(chart['md5'])
+        ))
+        option_parts = [row['arrange'] or 'Normal']
+        if row['arrange_2p'] and row['arrange_2p'] != 'Normal':
+            option_parts.append(f"2P:{row['arrange_2p']}")
+        if row['applied_double_option'] and row['applied_double_option'] != 'Off':
+            option_parts.append(row['applied_double_option'])
+        result = OneResult(
+            title=chart['title'],
+            difficulties=difficulties,
+            score=score,
+            score_rate=f'{score / (notes * 2) * 100:.2f}' if notes else '0.00',
+            lamp=self.BMZ_LAMP_IDS.get(row['clear_type'], 0),
+            bp=int(row['bp']),
+            judge=judge,
+            sha256=sha256,
+            date=int(row['played_at']),
+            notes=notes,
+            length=chart['length_ms'],
+            option=' / '.join(option_parts),
+        )
+        result.pre_score = int(row['old_ex_score'] or 0)
+        result.pre_bp = int(row['old_bp']) if row['old_bp'] is not None else 999999
+        result.pre_lamp = self.BMZ_LAMP_IDS.get(row['old_clear_type'], 0)
+        return result
 
     def parse(self, tmpdat) -> OneResult:
         """df_dataの1エントリを受けてOneResultに格納して返す。難易度の取得もここで行う。
@@ -826,6 +1034,14 @@ class DataBaseAccessor:
     def read_one_result(self):
         """最新のリザルト1つを受け取って処理する。manage_results及びplaylogに登録する。
         """
+        if self.player_mode == 'bmz':
+            results = self.pending_bmz_results
+            self.pending_bmz_results = []
+            for result in results:
+                logger.info(f'BMZ result: title={result.title}, difficulties={result.difficulties}')
+                result.disp()
+                self.manage_results.add_result(result)
+            return len(results)
         idx = len(self.df_scoredatalog) - 1
         tmp_song = self.df_scoredatalog.iloc[idx, :]
         tmp_result = self.parse(tmp_song)
@@ -840,6 +1056,19 @@ class DataBaseAccessor:
         self.manage_results.load() # orh(ログ)を読み出した状態にしておく
         logger.info(f'現在の曲数:{len(self.manage_results.all_results)}, この時刻以降のリザルトを読み込む: {datetime.datetime.fromtimestamp(int(datetime.datetime.now().timestamp()) - self.config.autoload_offset*3600)}')
         if self.is_valid():
+            if self.player_mode == 'bmz':
+                with self._connect_readonly(self.db_score) as conn:
+                    conn.row_factory = sqlite3.Row
+                    rows = conn.execute('SELECT * FROM score_history ORDER BY id').fetchall()
+                logger.info(f'len(BMZ score_history): {len(rows)}')
+                for row in rows:
+                    tmp_result = self._parse_bmz_history(row)
+                    if tmp_result:
+                        self.manage_results.add_result(tmp_result)
+                self.manage_results.update_stats()
+                self.manage_results.all_results.sort()
+                self.manage_results.save()
+                return
             #log = self.df_scoredatalog[self.df_scoredatalog['date'] > cur_time.timestamp()]
             log = self.df_score
             logger.info(f'len(df_score): {len(log)}')

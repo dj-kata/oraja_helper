@@ -19,6 +19,7 @@ logger.addHandler(hdl)
 class Config:
     def __init__(self, config_file="config.json"):
         self.config_file = config_file
+        self.player_mode = "beatoraja"
         self.oraja_path = ""
         self.player_path = ""
         self.websocket_host = "localhost"
@@ -56,6 +57,7 @@ class Config:
             try:
                 with open(self.config_file, 'r', encoding='utf-8') as f:
                     config_data = json.load(f)
+                    self.player_mode = config_data.get("player_mode", "beatoraja")
                     self.oraja_path = config_data.get("oraja_path", "")
                     self.player_path = config_data.get("player_path", "")
                     self.websocket_host = config_data.get("websocket_host", "localhost")
@@ -88,6 +90,7 @@ class Config:
     def save_config(self):
         """設定ファイルに設定を保存する"""
         config_data = {
+            "player_mode": self.player_mode,
             "oraja_path": self.oraja_path,
             "player_path": self.player_path,
             "websocket_host": self.websocket_host,
