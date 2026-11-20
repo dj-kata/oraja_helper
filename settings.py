@@ -21,7 +21,9 @@ class SettingsWindow:
 
         # 変数の初期化
         self.player_mode_var = tk.StringVar(value=self.config.player_mode)
-        self.oraja_path_var = tk.StringVar(value=self.config.oraja_path)
+        self.beatoraja_path_var = tk.StringVar(value=self.config.beatoraja_path)
+        self.bmz_path_var = tk.StringVar(value=self.config.bmz_path)
+        self.oraja_path_var = self._selected_main_path_var()
         self.player_path_var = tk.StringVar(value=self.config.player_path)
         self.websocket_host_var = tk.StringVar(value=self.config.websocket_host)
         self.websocket_port_var = tk.IntVar(value=self.config.websocket_port)
@@ -436,6 +438,8 @@ class SettingsWindow:
     def on_player_mode_changed(self, refresh=True):
         """プレイヤー種別に応じてパス設定欄を切り替える。"""
         is_bmz = self.player_mode_var.get() == "bmz"
+        self.oraja_path_var = self._selected_main_path_var()
+        self.oraja_path_entry.config(textvariable=self.oraja_path_var)
         self.oraja_path_label.config(
             text="BMZ Playerインストール先:" if is_bmz else "beatorajaインストール先:"
         )
@@ -445,6 +449,12 @@ class SettingsWindow:
         self.player_path_label.config(foreground="gray" if is_bmz else "black")
         if refresh:
             self.refresh_difftable_ui()
+
+    def _selected_main_path_var(self):
+        """現在選択中のプレイヤーに対応するインストール先を返す。"""
+        if self.player_mode_var.get() == "bmz":
+            return self.bmz_path_var
+        return self.beatoraja_path_var
 
     def change_player_path(self):
         """フォルダ選択ダイアログを開く"""
@@ -470,6 +480,8 @@ class SettingsWindow:
         temp_config = Config()
         temp_config.player_mode = self.player_mode_var.get()
         temp_config.oraja_path = self.oraja_path_var.get()
+        temp_config.beatoraja_path = self.beatoraja_path_var.get()
+        temp_config.bmz_path = self.bmz_path_var.get()
         temp_config.player_path = self.player_path_var.get()
         temp_config.autoload_offset = self.autoload_offset_var.get()
 
@@ -513,6 +525,8 @@ class SettingsWindow:
             # 設定を保存
             self.config.player_mode = self.player_mode_var.get()
             self.config.oraja_path = self.oraja_path_var.get()
+            self.config.beatoraja_path = self.beatoraja_path_var.get()
+            self.config.bmz_path = self.bmz_path_var.get()
             self.config.player_path = self.player_path_var.get()
             self.config.websocket_host = self.websocket_host_var.get().strip()
             self.config.websocket_port = self.websocket_port_var.get()

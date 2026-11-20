@@ -63,6 +63,7 @@ build_exe_options = {
         "config",
         "dataclass",
         "named_pipe_receiver",
+        "pipe_events",
         "obs_control",
         "pickle_converter",
         "settings",

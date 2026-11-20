@@ -20,6 +20,8 @@ class Config:
     def __init__(self, config_file="config.json"):
         self.config_file = config_file
         self.player_mode = "beatoraja"
+        self.beatoraja_path = ""
+        self.bmz_path = ""
         self.oraja_path = ""
         self.player_path = ""
         self.websocket_host = "localhost"
@@ -58,7 +60,16 @@ class Config:
                 with open(self.config_file, 'r', encoding='utf-8') as f:
                     config_data = json.load(f)
                     self.player_mode = config_data.get("player_mode", "beatoraja")
-                    self.oraja_path = config_data.get("oraja_path", "")
+                    legacy_oraja_path = config_data.get("oraja_path", "")
+                    self.beatoraja_path = config_data.get(
+                        "beatoraja_path",
+                        legacy_oraja_path if self.player_mode == "beatoraja" else "",
+                    )
+                    self.bmz_path = config_data.get(
+                        "bmz_path",
+                        legacy_oraja_path if self.player_mode == "bmz" else "",
+                    )
+                    self.select_player_path()
                     self.player_path = config_data.get("player_path", "")
                     self.websocket_host = config_data.get("websocket_host", "localhost")
                     self.websocket_port = config_data.get("websocket_port", 4444)
@@ -89,8 +100,12 @@ class Config:
     
     def save_config(self):
         """設定ファイルに設定を保存する"""
+        self.store_active_player_path()
         config_data = {
             "player_mode": self.player_mode,
+            "beatoraja_path": self.beatoraja_path,
+            "bmz_path": self.bmz_path,
+            # 旧バージョンとの互換用。選択中プレイヤーのパスを保存する。
             "oraja_path": self.oraja_path,
             "player_path": self.player_path,
             "websocket_host": self.websocket_host,
@@ -120,6 +135,20 @@ class Config:
         except Exception as e:
             logger.error(traceback.format_exc())
             print(f"設定ファイル保存エラー: {e}")
+
+    def store_active_player_path(self):
+        """互換用のoraja_pathを、選択中プレイヤー固有のパスへ反映する。"""
+        if self.player_mode == "bmz":
+            self.bmz_path = self.oraja_path
+        else:
+            self.beatoraja_path = self.oraja_path
+
+    def select_player_path(self):
+        """選択中プレイヤー固有のパスを互換用のoraja_pathへ反映する。"""
+        if self.player_mode == "bmz":
+            self.oraja_path = self.bmz_path
+        else:
+            self.oraja_path = self.beatoraja_path
     
     def save_window_position(self, x, y, width, height):
         """ウィンドウ位置を保存"""

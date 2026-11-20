@@ -17,6 +17,7 @@ from obs_control import OBSControlWindow, ImageRecognitionData, OBSWebSocketMana
 from dataclass import *
 from pickle_converter import *
 from named_pipe_receiver import NamedPipeLineReceiver
+from pipe_events import accepts_pipe_event
 import requests
 from bs4 import BeautifulSoup
 
@@ -255,6 +256,7 @@ class MainWindow:
                 self.config.main_window_x = data.get('lx', self.config.main_window_x)
                 self.config.main_window_y = data.get('ly', self.config.main_window_y)
                 self.config.oraja_path = data.get('dir_oraja', self.config.oraja_path)
+                self.config.beatoraja_path = self.config.oraja_path
                 self.config.player_path = data.get('dir_player', self.config.player_path)
                 self.config.enable_autotweet = data.get('tweet_on_exit', self.config.enable_autotweet)
                 self.config.monitor_source_name = data.get('obs_source', self.config.monitor_source_name)
@@ -359,11 +361,7 @@ class MainWindow:
         self.start_screen_monitoring()
 
     def init_named_pipe_receiver(self):
-        """lr2orajaからのnamed pipe受信が使えるか確認"""
-        if self.config.player_mode == "bmz":
-            self.named_pipe_receiver = None
-            self.use_named_pipe = False
-            return
+        """lr2oraja / BMZ Playerからのnamed pipe受信が使えるか確認"""
         try:
             self.named_pipe_receiver = NamedPipeLineReceiver("oraja_helper")
             self.use_named_pipe = self.named_pipe_receiver.is_available()
@@ -374,6 +372,16 @@ class MainWindow:
             self.use_named_pipe = False
             logger.warning(f"named pipe受信初期化失敗。DB監視にフォールバックします: {e}")
 
+    def refresh_named_pipe_monitoring(self):
+        """プレイヤー切替後のモードに合わせてnamed pipe受信状態を更新する。"""
+        if self.named_pipe_receiver is None:
+            self.init_named_pipe_receiver()
+        else:
+            self.use_named_pipe = self.named_pipe_receiver.is_available()
+
+        if self.use_named_pipe:
+            self.start_named_pipe_monitoring()
+
     def start_named_pipe_monitoring(self):
         """named pipe受信スレッドを開始"""
         if self.named_pipe_thread is None or not self.named_pipe_thread.is_alive():
@@ -382,15 +390,18 @@ class MainWindow:
             print("named pipe受信スレッドを開始しました")
 
     def named_pipe_worker(self):
-        """lr2orajaからのJSON Linesを受信するワーカースレッド"""
+        """プレイヤーからのJSON Linesを受信するワーカースレッド"""
         print("named pipe受信スレッド開始")
         while self.is_running:
             try:
                 line = self.named_pipe_receiver.read_line()
                 if line:
+                    data = self.normalize_pipe_data(json.loads(line))
+                    if not accepts_pipe_event(data, self.config.player_mode):
+                        continue
                     self.dump_named_pipe_receive(line)
                     logger.info(f"named pipe受信: {line}")
-                    self.handle_oraja_helper_event(self.normalize_pipe_data(json.loads(line)))
+                    self.handle_oraja_helper_event(data)
             except Exception as e:
                 logger.error(traceback.format_exc())
                 print(f"named pipe受信エラー: {e}")
@@ -414,6 +425,10 @@ class MainWindow:
         """lr2orajaから受け取ったイベントを処理"""
         event = data.get("event")
         scene = data.get("scene")
+        if event == "song_play":
+            # Quick retry starts another attempt without leaving the Play scene.
+            self.play_end_metrics_received_for_current_play = False
+            self.play_st = datetime.datetime.now()
         if scene in ("select", "play", "result"):
             self.apply_game_state(scene, "named pipe")
 
@@ -886,6 +901,7 @@ class MainWindow:
         """設定情報の表示を更新"""
         # 設定の更新
         self.config.load_config()
+        self.refresh_named_pipe_monitoring()
         player_name = "BMZ Player" if self.config.player_mode == "bmz" else "beatoraja"
         self.game_path_label.config(text=f"{player_name} path:")
         self.oraja_path_var.set(

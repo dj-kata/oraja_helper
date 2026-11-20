@@ -156,3 +156,11 @@ BMZ Playerを使用する場合はプレイヤー欄で「BMZ Player」を選択
 # その他
 今後追加するかもしれない機能
 - リザルト画像の自動保存
+
+## BMZ Player の named pipe 連携
+
+対応版の BMZ Player は、選曲譜面・プレイ開始時の配置・終了判定・リザルトを named pipe で送信します。設定で BMZ Player を選ぶと受信が有効になります。now_playing.html、history_cursong.html、random_pattern.html でも利用できます。実行ファイル版では、この変更を含めて再ビルドしてください。
+
+従来の DB 監視を併用し、同じ結果は既存の重複判定でまとめます。クイックリトライの終了イベントはメトリクスだけを統計に反映し、pipe 経由の正式リザルトには追加しません。BMZ の DB に保存済みの結果は従来どおり読み込みます。source が bmz-player のイベントだけを BMZ モードで受け付け、beatoraja のイベントと履歴を混ぜません。
+
+開発時の受信回帰テスト: .codex-venv/bin/python -B -m unittest test_pipe_events.py
